@@ -6,7 +6,8 @@ export default function LogoBhost({ hauteur = 16 }: { hauteur?: number }) {
       className="logo-bhost"
       viewBox="10 -630 2596 660"
       height={hauteur}
-      width={(hauteur * 2596) / 660}
+      width={Math.round((hauteur * 2596) / 660)}
+      shapeRendering="geometricPrecision"
       role="img"
       aria-label="BHOST"
     >

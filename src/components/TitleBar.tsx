@@ -30,7 +30,7 @@ export default function TitleBar({ sousTitre }: { sousTitre?: string }) {
     // et un double-clic l'agrandit, comme une fenêtre Windows normale.
     <header className="titlebar" data-tauri-drag-region>
       <div className="tb-app">
-        <LogoBhost hauteur={15} />
+        <LogoBhost hauteur={18} />
         {sousTitre && <span>{sousTitre}</span>}
       </div>
 
