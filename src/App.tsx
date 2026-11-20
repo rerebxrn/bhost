@@ -13,6 +13,7 @@ import Supprimer from "./components/Supprimer";
 import DemandePop from "./components/DemandePop";
 import Reglages from "./pages/Reglages";
 import NouveauServeur from "./pages/NouveauServeur";
+import PremierLancement from "./pages/PremierLancement";
 import Console from "./pages/Console";
 import Accueil from "./pages/Accueil";
 import Parametres from "./pages/Parametres";
@@ -62,6 +63,31 @@ const garder = (serie: number[], valeur: number) => [...serie, valeur].slice(-PO
 // Onglets en une seule colonne : la page est plus étroite et reste au centre.
 const ETROITES: string[] = ["joueurs", "extensions", "sauvegardes", "parametres"];
 
+// Le premier lancement (choix « ce PC » ou « machine dédiée ») n'est montré qu'une fois.
+const CLE_ACCUEIL = "bhost.accueil";
+// Réglages › « Revoir » met « revoir » : l'écran revient, même avec des serveurs.
+const revoirAccueil = () => {
+  try {
+    return localStorage.getItem(CLE_ACCUEIL) === "revoir";
+  } catch {
+    return false;
+  }
+};
+const accueilDejaVu = () => {
+  try {
+    return localStorage.getItem(CLE_ACCUEIL) !== null && !revoirAccueil();
+  } catch {
+    return true;
+  }
+};
+const retenirAccueil = () => {
+  try {
+    localStorage.setItem(CLE_ACCUEIL, "local");
+  } catch {
+    // Pas de stockage : l'écran reviendra au prochain lancement, ce n'est pas grave.
+  }
+};
+
 // Ce qu'on affiche à droite de la barre latérale.
 type Vue = "serveur" | "nouveau" | "reglages";
 
@@ -73,6 +99,7 @@ export default function App() {
   const [onglet, setOnglet] = useState<Onglet>("accueil");
   const [erreur, setErreur] = useState("");
   const [defile, setDefile] = useState(false); // la page a défilé : effet de bord sous les onglets
+  const [accueilVu, setAccueilVu] = useState(accueilDejaVu);
   const theme = useTheme();
   useLiquidGlass(theme.reel, theme.teinte, theme.sombre);
 
@@ -83,6 +110,11 @@ export default function App() {
         setServeurs(liste);
         setIdActif(liste[0]?.id ?? null);
         if (liste.length === 0) setVue("nouveau");
+        // Déjà des serveurs (mise à jour depuis une ancienne version) : pas d'écran d'accueil.
+        else if (!revoirAccueil()) {
+          retenirAccueil();
+          setAccueilVu(true);
+        }
       })
       .catch(() => {
         setServeurs([]);
@@ -321,6 +353,24 @@ export default function App() {
   const avecConsole = onglet === "accueil" || onglet === "console"; // la console remplit la page
   const avecExtensions = onglet === "extensions" && !!serveur && ["Paper", "Purpur", "Spigot", "Fabric", "Forge", "NeoForge", "Vanilla", "Youer", "Arclight", "Mohist"].includes(serveur.logiciel);
   const sousTitre = vue === "reglages" ? "Réglages" : surServeur ? serveur.nom : "Nouveau serveur";
+  // Premier lancement : rien à gauche, seulement le choix (on attend la liste pour ne rien faire clignoter).
+  const accueil = !accueilVu && (serveurs === null || serveurs.length === 0 || revoirAccueil());
+
+  if (accueil) {
+    return (
+      <div className="fenetre">
+        <TitleBar />
+        {serveurs !== null && (
+          <PremierLancement
+            onLocal={() => {
+              retenirAccueil();
+              setAccueilVu(true);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="fenetre">

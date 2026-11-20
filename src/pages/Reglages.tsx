@@ -329,8 +329,27 @@ export default function Reglages() {
               </button>
             )}
           </div>
+          <div className="row">
+            <div className="lbl">
+              <span>Écran de bienvenue</span>
+              <span className="t2">Revoir le choix entre ce PC et une machine dédiée.</span>
+            </div>
+            <button type="button" className="btn" onClick={revoirBienvenue}>
+              Revoir
+            </button>
+          </div>
         </section>
       </div>
     </div>
   );
+}
+
+// L'appli se recharge et remontre l'écran du premier lancement (voir App.tsx).
+function revoirBienvenue() {
+  try {
+    localStorage.setItem("bhost.accueil", "revoir");
+  } catch {
+    return;
+  }
+  window.location.reload();
 }
