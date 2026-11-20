@@ -1,0 +1,202 @@
+/* Onglet Paramètres d'un serveur */
+.params {
+  padding-bottom: calc(var(--h-dock) + 40px); /* la capsule ne cache pas la Zone sensible */
+}
+
+.params .surf {
+  max-width: none;
+}
+
+.grp-t {
+  margin: 22px 0 8px 2px;
+  font: var(--f-titre-section);
+  color: var(--text2);
+}
+
+.params .grp-t:first-child {
+  margin-top: 4px;
+}
+
+.params .lbl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.params .field.texte {
+  width: 260px;
+  font: var(--f-corps);
+}
+
+.params .field.chemin {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  text-overflow: ellipsis;
+  color: var(--text2);
+}
+
+.ps-ram {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ps-ram b {
+  min-width: 44px;
+  text-align: right;
+}
+
+/* Joueurs Bedrock : l'adresse à donner (lecture seule) */
+.params .field.ps-bedrock {
+  width: 220px;
+  font: var(--f-corps);
+}
+
+/* Ouvert à tes amis : la box refuse */
+.params .t2.ps-err {
+  color: var(--danger);
+}
+
+.btn.danger {
+  color: var(--danger);
+}
+
+/* Aperçu de la commande lancée */
+.ps-cmd {
+  padding: var(--space-10) var(--space-14) var(--space-14);
+  border-top: 1px solid var(--sep);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ps-cmd span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.ps-cmd code {
+  display: block;
+  padding: 8px 10px;
+  border-radius: var(--r-ctl);
+  background: var(--field);
+  box-shadow: 0 0 0 1px var(--surf-edge);
+  font: var(--f-champ-mono);
+  color: var(--text);
+  word-break: break-all;
+  user-select: text;
+}
+
+/* Règles du jeu */
+.ps-pct b {
+  display: inline-block;
+  min-width: 48px;
+  text-align: center;
+}
+
+.ps-note {
+  margin: 0;
+  padding: var(--space-8) var(--space-14) var(--space-10);
+  border-top: 1px solid var(--sep);
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+/* Mondes : une ligne par monde, le monde joué en premier. */
+.wrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.w-ic {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hover);
+  color: var(--text2);
+}
+
+.wrow.cur .w-ic {
+  background: color-mix(in srgb, var(--acc) 15%, transparent);
+  color: var(--acc-text);
+}
+
+.mod-txt {
+  flex: 1;
+  min-width: 0;
+  margin-left: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mod-txt b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font: var(--f-corps-fort);
+}
+
+.w-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-txt > span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.icb {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--dur-fade) var(--ease-spring);
+}
+
+.icb:hover:not([disabled]) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.icb:active:not([disabled]) {
+  transform: scale(0.88);
+}
+
+.icb.del:hover:not([disabled]) {
+  color: var(--danger);
+}
+
+.icb[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.params .row.w-acts {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.params .row .avance {
+  flex: 1;
+  margin: 2px 0;
+}

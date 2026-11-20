@@ -1,0 +1,5 @@
+/target
+/noms.json
+/noms.tmp
+# Clé SSH du serveur Oracle et script d installation : jamais dans Git.
+/deploiement

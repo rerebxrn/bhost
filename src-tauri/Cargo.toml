@@ -1,0 +1,74 @@
+[package]
+name = "bhost"
+version = "0.1.0"
+description = "BHOST : héberge des serveurs Minecraft Java sur ton PC"
+authors = ["Thomas"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "bhost_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# tray-icon : BHOST dans la zone de notification (en bas à droite) ; image-png : son icône suit le logo choisi.
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+# Notifications de Windows (onglet Automatisations › Me prévenir).
+tauri-plugin-notification = "2"
+# Réglages › Lancer avec Windows (BHOST s'ajoute au démarrage de Windows, dans HKCU\…\Run).
+tauri-plugin-autostart = "2"
+# Réglages › Rechercher les mises à jour : télécharge la nouvelle version (signée) et lance son installeur.
+tauri-plugin-updater = "2"
+# Un seul BHOST à la fois : le relancer réaffiche la fenêtre (même rangé dans la zone de notification).
+tauri-plugin-single-instance = "2"
+# L'heure du PC (heure locale, avec l'heure d'été) pour les automatisations.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.40.4"
+# Aller sur Internet en HTTPS, avec la sécurité de Windows (têtes des joueurs, et plus tard les téléchargements).
+ureq = { version = "3", default-features = false, features = ["native-tls"] }
+# Lire et écrire des images PNG (découper le visage dans un skin).
+png = "0.18"
+base64 = "0.23"
+# Vérifier les téléchargements (empreinte SHA-256) et ouvrir les archives .zip (Java).
+sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Le relais BHOST (tunnel.rs) : la clé qui prouve que nos noms sont à nous, et le hasard pour la créer.
+ed25519-dalek = "2"
+getrandom = "0.3"
+# Lire les fichiers des mondes (level.dat…), compressés en gzip.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# Retrouver la fenêtre de BHOST pour changer son icône.
+raw-window-handle = "0.6"
+# Ouvrir le port du serveur sur la box (UPnP), pour « Ouvert à tes amis ».
+igd-next = "0.18"
+
+# Les fonctions de Windows : changer l'icône de la fenêtre, empêcher la mise en veille,
+# couper un serveur et tout ce qu'il a lancé (Job Object), attendre la fin des serveurs quand Windows s'éteint.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Power", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Shutdown", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock"] }
+
+# Pour les essais seulement : le vrai relais, lancé sur la machine (tunnel.rs › de_bout_en_bout).
+[dev-dependencies]
+bhost-relais = { path = "../relais" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

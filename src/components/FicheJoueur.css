@@ -1,0 +1,101 @@
+/* Fiche d'un joueur (onglet Joueurs), d'après la maquette. */
+.g.dialog.pf {
+  width: 560px;
+}
+
+.pf-h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pf-tete .av {
+  flex-basis: 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  font-size: 22px;
+}
+
+.pf-n {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-n b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: var(--f-titre-3);
+}
+
+.pf-n > span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.pf-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.pf-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: rgba(var(--g-rgb), 0.5);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+
+.pf-stats div > span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.pf-stats b {
+  font: var(--f-corps-fort);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-where,
+.pf-sauve,
+.pf-rien {
+  margin: 6px 2px 0;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.pf-rien {
+  margin: 16px 0 4px;
+  text-align: center;
+  font: var(--f-corps);
+}
+
+.pf-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sep);
+}
+
+.pf-btns {
+  display: flex;
+  align-self: stretch;
+  gap: 6px;
+}
+
+.pf-btns .danger {
+  margin-left: auto;
+}

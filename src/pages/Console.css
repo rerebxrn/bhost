@@ -1,0 +1,77 @@
+/* La console : sombre dans les deux thèmes. */
+.console {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-surf);
+  background: var(--term);
+  box-shadow: 0 0 0 1px var(--term-edge);
+  color: var(--log-text);
+  overflow: hidden;
+}
+
+.con-h {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 0 var(--space-14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font: var(--f-legende);
+  color: var(--log-head);
+}
+
+.con-h b {
+  font: var(--f-en-tete);
+  color: var(--log-text);
+}
+
+/* Le bas est dégagé : les dernières lignes passent sous la capsule, puis remontent. */
+.log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-10) var(--space-14) 84px;
+  font: var(--f-console);
+  white-space: pre-wrap;
+  /* La console est sombre dans les deux thèmes : sa barre de défilement aussi. */
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+.log .t {
+  color: var(--log-time);
+}
+
+.lv-INFO {
+  color: var(--log-info);
+}
+
+.lv-WARN {
+  color: var(--log-warn);
+}
+
+.lv-ERROR {
+  color: var(--log-error);
+}
+
+.lv-CMD {
+  color: var(--log-cmd);
+}
+
+.lv-DEBUG {
+  color: var(--log-time);
+}
+
+/* Les messages de BHOST lui-même (installation de Java…) */
+.lv-BHOST {
+  color: var(--log-cmd);
+}
+
+.con-empty {
+  padding: 30px 0;
+  text-align: center;
+  font: var(--f-corps);
+  color: var(--log-placeholder);
+}

@@ -1,0 +1,123 @@
+/* Onglet Joueurs, d'après la maquette. */
+.pl-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.joueurs .surf {
+  max-width: none;
+}
+
+.pname {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pname b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--f-corps-fort);
+}
+
+.pname > span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.pbtn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pbtn:hover b {
+  text-decoration: underline;
+}
+
+.op {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font: var(--f-badge);
+  font-weight: 700;
+  color: var(--op-ink);
+  background: var(--op-bg);
+}
+
+.icb.more.open {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.g.ctx.pl-menu {
+  transform-origin: top right;
+}
+
+/* Ajouter à la liste blanche */
+.pl-add {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.pl-add label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--r-ctl);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--surf-edge);
+  color: var(--text2);
+  transition: box-shadow var(--dur-fast);
+}
+
+.pl-add label:focus-within {
+  box-shadow: inset 0 0 0 2px var(--acc);
+}
+
+.pl-add input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: var(--f-corps);
+}
+
+/* Un banni : sa tête en gris. */
+.banni {
+  display: flex;
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.ban-ic {
+  color: var(--danger);
+  margin-bottom: 4px;
+}
+
+/* Une demande : tête ronde, comme dans la maquette. */
+.li.demande {
+  gap: var(--space-8);
+}
+
+.li.demande .av {
+  margin-right: var(--space-2);
+  border-radius: 50%;
+}

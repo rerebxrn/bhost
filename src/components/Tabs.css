@@ -1,0 +1,98 @@
+/* Barre d'onglets en verre : 36 px de haut, onglets de 28 px. */
+.tabs {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: calc(100% - 24px);
+  height: var(--h-glass-bar);
+}
+
+.tabs-row {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 var(--space-4);
+  touch-action: none; /* on peut tirer la goutte au doigt */
+}
+
+.tab {
+  position: relative;
+  z-index: 2;
+  flex: 0 1 auto;
+  min-width: 76px;
+  height: calc(var(--h-glass-bar) - 8px);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text);
+  font: var(--f-bouton);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-fade);
+}
+
+/* Réserve la place du texte en gras, pour que la barre ne bouge pas
+   quand on change d'onglet. */
+.tab::after {
+  content: attr(data-nom);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 600;
+}
+
+.tab:disabled {
+  color: var(--text2);
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tab.on {
+  color: var(--acc-text);
+  font-weight: 600;
+}
+
+/* La goutte : le fond de l'onglet actif, qui glisse. */
+.drop {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  left: 0;
+  height: calc(var(--h-glass-bar) - 8px);
+  border-radius: var(--r-pill);
+  background: var(--glass-sel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition:
+    transform var(--dur-move) var(--ease-soft),
+    width var(--dur-move) var(--ease-soft),
+    background var(--dur-fade),
+    box-shadow var(--dur-fade);
+}
+
+/* Pendant qu'on la tire, la goutte grossit et devient une vraie goutte de verre. */
+.drop.moving {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 0 0 1px var(--drop-edge),
+    inset 0 4px 8px var(--drop-hi),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.16),
+    0 8px 20px rgba(0, 0, 0, 0.18);
+  backdrop-filter: saturate(2.4) brightness(1.08);
+}
+
+/* Fenêtre étroite (960 px) : onglets un peu plus serrés, pour que « Mods & Plugins » tienne aussi. */
+@media (max-width: 1180px) {
+  .tabs-row {
+    padding: 0 var(--space-2);
+  }
+  .tab {
+    min-width: 0;
+    padding: 0 9px;
+  }
+}

@@ -1,0 +1,87 @@
+/* Bouton menu façon macOS : le choix actuel, puis ⌃⌄. */
+.choix {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  max-width: 260px;
+  padding: 0 6px 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--surf);
+  box-shadow:
+    0 0 0 0.5px var(--surf-edge),
+    0 1px 2px rgba(0, 0, 0, 0.1);
+  color: var(--text);
+  font: var(--f-corps);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    transform 0.2s var(--ease-spring),
+    box-shadow var(--dur-fast);
+}
+
+.choix span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choix svg {
+  flex: none;
+  color: var(--text2);
+}
+
+.choix:active {
+  transform: scale(0.96);
+}
+
+.choix.on {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+/* Le menu passe au-dessus des fenêtres (le voile est à 30). */
+.ctx-catch.choix-catch {
+  z-index: 40;
+}
+
+.g.ctx.choix-menu {
+  z-index: 41;
+  width: auto;
+  min-width: 220px;
+  transform-origin: top right;
+}
+
+.g.ctx.choix-menu.haut {
+  transform-origin: bottom right;
+}
+
+.choix-item {
+  height: 28px;
+  gap: 6px;
+  padding: 0 12px 0 6px;
+  white-space: nowrap;
+}
+
+.choix-item:hover,
+.choix-item:focus-visible {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.choix-item i {
+  flex: 0 0 16px;
+  display: flex;
+  justify-content: center;
+  opacity: 0;
+}
+
+.choix-item.sel i {
+  opacity: 1;
+}
+
+.choix-item svg,
+.choix-item:hover svg {
+  color: inherit;
+}

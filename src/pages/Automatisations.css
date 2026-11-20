@@ -1,0 +1,276 @@
+/* Onglet Automatisations, d'après la maquette (version 2) :
+   une liste calme comme les alarmes d'Horloge, une fenêtre à menus comme les Réglages de macOS. */
+
+.au-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.au-resume {
+  margin: 0;
+  min-width: 0;
+  font: var(--f-corps);
+  color: var(--text2);
+}
+
+/* Une automatisation : la ligne entière ouvre la modification ; l'interrupteur à droite. */
+.au-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding-right: 14px;
+  border-bottom: 1px solid var(--sep);
+  transition: background-color var(--dur-fast);
+}
+
+.au-row:last-child {
+  border-bottom: 0;
+}
+
+.au-row:hover {
+  background: color-mix(in srgb, var(--hover) 55%, transparent);
+}
+
+.au-hit {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0 9px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-surf);
+}
+
+.au-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.au-big {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 32px;
+}
+
+.au-big.sm {
+  font: var(--f-corps-fort);
+}
+
+.au-sub {
+  font: var(--f-legende);
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-nx {
+  flex: none;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.au-big,
+.au-sub {
+  transition: opacity var(--dur-fade);
+}
+
+.au-row.off .au-big,
+.au-row.off .au-sub {
+  opacity: 0.45;
+}
+
+/* Dernières actions : du texte simple */
+.au-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.au-h:last-child {
+  border-bottom: 0;
+}
+
+.au-hw {
+  min-width: 0;
+  font: var(--f-corps);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-hq {
+  flex: none;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.au-foot {
+  margin: 14px 4px 0;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+/* La fenêtre */
+.g.dialog.au-dlg {
+  width: 460px;
+  padding: 18px 18px 14px;
+}
+
+.au-dlg h4 {
+  margin: 0 0 2px;
+}
+
+.au-dlg .au-phrase {
+  margin: 0 0 6px;
+  font: var(--f-corps);
+  color: var(--text2);
+  line-height: 1.4;
+}
+
+.au-sec {
+  margin: 14px 2px 6px;
+  font: var(--f-legende);
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.au-box {
+  border-radius: 12px;
+  background: rgba(var(--g-rgb), 0.5);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+
+.au-r {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--sep);
+  font: var(--f-corps);
+}
+
+.au-r:last-child {
+  border-bottom: 0;
+}
+
+.au-r.col {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 10px 10px 12px;
+}
+
+.au-r.col > span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.au-r .field {
+  width: 100%;
+  font: var(--f-corps);
+}
+
+.au-r .field.mono {
+  font: var(--f-champ-mono);
+}
+
+.au-r .field.au-time {
+  width: 112px;
+  text-align: center;
+}
+
+.au-note {
+  margin: 0;
+  padding: 0 12px 10px;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.au-days {
+  display: flex;
+  gap: 4px;
+}
+
+.au-day {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--text);
+  font: var(--f-legende);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.2s var(--ease-spring),
+    background-color var(--dur-fast),
+    color var(--dur-fast);
+}
+
+.au-day.sel {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.au-day:active {
+  transform: scale(0.9);
+}
+
+.au-dlg .au-hint {
+  margin: 6px 4px 0;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.au-err {
+  margin: 10px 0 0;
+}
+
+.dlg-btns.au-btns {
+  margin-top: 18px;
+}
+
+.au-del {
+  flex: 0 0 auto !important;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--danger);
+}
+
+.au-del:hover:not([disabled]) {
+  background: var(--hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-day,
+  .au-row {
+    transition: none;
+  }
+}
+
+/* « Nouvelle » : capsule, comme le bouton principal des autres onglets. */
+.au-top .btn {
+  border-radius: var(--r-pill);
+  padding: 0 12px;
+}

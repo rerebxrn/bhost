@@ -1,0 +1,63 @@
+/* Le monde ne se charge plus : un datapack qui a créé son terrain a été retiré. */
+.monde-casse {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--r-surf);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.monde-casse > svg {
+  flex: none;
+  color: var(--danger);
+}
+
+.monde-casse > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.monde-casse b {
+  font: var(--f-corps-fort);
+}
+
+.monde-casse span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.monde-casse-bt {
+  flex: none;
+  height: var(--h-control);
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--stop);
+  color: #ffffff;
+  font: var(--f-bouton);
+  cursor: pointer;
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.monde-casse-bt:hover {
+  filter: brightness(1.06);
+}
+
+.monde-casse-bt:active {
+  transform: scale(0.97);
+}
+
+.monde-casse-bt:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.monde-casse-bt:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}

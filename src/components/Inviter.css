@@ -1,0 +1,339 @@
+/* « Inviter des joueurs » et le message « … veut rejoindre », d'après la maquette. */
+
+/* Le petit bouton plein « Inviter » (accueil, onglet Joueurs). */
+.pill-acc {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--acc);
+  color: var(--on-acc);
+  font: var(--f-legende);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.pill-acc:active {
+  transform: scale(0.95);
+}
+
+/* Le bouton principal d'un onglet (« Inviter des amis ») : capsule de 28 px, comme les autres. */
+.pill-acc.grand {
+  height: var(--h-control);
+  padding: 0 12px;
+  font: var(--f-bouton);
+}
+
+/* Sur l'Accueil, « Inviter » est teinté : « Copier » reste le seul bouton plein. */
+.pill-acc.teinte {
+  background: var(--acc-tint);
+  color: var(--acc-text);
+}
+
+/* ---- Le panneau ---- */
+.ctx-catch.inv-catch {
+  z-index: 27;
+}
+
+.g.inv {
+  position: fixed;
+  z-index: 28;
+  border-radius: var(--r-panel);
+  background: var(--mat-ultrathick);
+  box-shadow: var(--sh-menu), inset 0 0 0 0.5px var(--sep);
+  transform-origin: calc(100% - 40px) -10px;
+  animation: inv-ouvre 0.55s cubic-bezier(0.25, 1.45, 0.45, 1) both;
+}
+
+.g.inv.sortie {
+  animation: inv-ferme 0.16s ease-in both;
+}
+
+@keyframes inv-ouvre {
+  from {
+    opacity: 0;
+    transform: scale(0.6) translateY(-20px);
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@keyframes inv-ferme {
+  to {
+    opacity: 0;
+    transform: scale(0.9) translateY(-6px);
+  }
+}
+
+.inv > * {
+  position: relative;
+  z-index: 3;
+}
+
+.inv-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 10px 0 18px;
+  font: var(--f-titre-3);
+  color: var(--text);
+}
+
+.inv-h > svg {
+  color: var(--acc-text);
+}
+
+.inv-h .x,
+.req .x {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+
+.inv-h .x:hover,
+.req .x:hover {
+  background: var(--hover);
+}
+
+.inv-intro {
+  margin: -6px 18px 4px;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.inv-sec2 {
+  margin: 12px 18px 6px;
+  font: var(--f-legende);
+  font-weight: 600;
+  color: var(--text2);
+}
+
+/* Une boîte : le texte à copier, et son bouton. */
+.inv-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 14px;
+  min-height: 44px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 12px;
+  background: rgba(var(--g-rgb), 0.5);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+
+.inv-box code,
+.inv-box span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inv-box code {
+  font: var(--f-champ-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.inv-box.msg {
+  align-items: flex-start;
+}
+
+.inv-box.msg span {
+  white-space: normal;
+  font: var(--f-legende);
+  line-height: 1.45;
+  color: var(--text);
+  padding: 3px 0;
+}
+
+.inv-box.off span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.btn.tint {
+  flex: none;
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font-weight: 600;
+}
+
+.btn.tint:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--acc) 26%, transparent);
+}
+
+/* Ajouter à la liste blanche */
+.inv-wl {
+  display: flex;
+  gap: 8px;
+  margin: 0 14px;
+}
+
+.inv-wl label {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--r-ctl);
+  background: rgba(var(--g-rgb), 0.55);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--text2);
+  transition: box-shadow var(--dur-fade);
+}
+
+.inv-wl label:focus-within {
+  box-shadow: inset 0 0 0 2px var(--acc);
+}
+
+.inv-wl input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: var(--f-corps);
+}
+
+.inv-fin {
+  height: 16px;
+}
+
+/* Une tête ronde (message « veut rejoindre »). */
+.avw {
+  position: relative;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.avw .av {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+/* ---- « Hugo veut rejoindre… » ---- */
+.g.req {
+  position: absolute;
+  right: 22px;
+  bottom: calc(var(--h-dock) + 44px);
+  z-index: 9;
+  width: 336px;
+  border-radius: var(--r-panel);
+  padding: 14px 14px 14px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--mat-ultrathick);
+  box-shadow: var(--sh-menu), inset 0 0 0 0.5px var(--sep);
+  transform: translateY(24px) scale(0.88);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.6s cubic-bezier(0.25, 1.5, 0.45, 1),
+    opacity 0.2s;
+}
+
+.g.req.show {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.req > * {
+  position: relative;
+  z-index: 3;
+}
+
+.avw.grand {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+}
+
+.avw.grand .av {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.req-b {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.req p {
+  margin: 2px 22px 10px 0;
+  font: var(--f-corps);
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.req .btns {
+  display: flex;
+  gap: 8px;
+}
+
+.req .btns button {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-pill);
+  font: var(--f-corps-fort);
+  cursor: pointer;
+}
+
+.req .btns button[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.req .ok {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.req .no {
+  background: rgba(var(--g-rgb), 0.7);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  color: var(--text);
+}
+
+.req .x {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g.inv,
+  .g.inv.sortie {
+    animation: none;
+  }
+  .g.req {
+    transition: opacity 0.2s;
+    transform: none;
+  }
+}

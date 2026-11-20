@@ -1,0 +1,104 @@
+/* Onglet Sauvegardes, d'après la maquette. */
+.bk-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.bk-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.bk-prog {
+  margin-top: 10px;
+  padding: 12px 14px 0;
+}
+
+.bk-garder b {
+  display: inline-block;
+  min-width: 96px;
+  text-align: center;
+}
+
+.bk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.bk:last-child {
+  border-bottom: 0;
+}
+
+.bk-ic {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hover);
+  color: var(--text2);
+}
+
+.bk-ic.k-manuelle {
+  background: color-mix(in srgb, var(--acc) 15%, transparent);
+  color: var(--acc-text);
+}
+
+.bk-ic.k-maj,
+.bk-ic.k-reinit {
+  background: color-mix(in srgb, #3f71bb 13%, transparent);
+  color: #3f71bb;
+}
+
+.bk-ic.k-restauration {
+  background: color-mix(in srgb, #b5772e 15%, transparent);
+  color: #b5772e;
+}
+
+.bk-lab {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--hover);
+  font: var(--f-badge);
+  font-weight: 600;
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bk .btn {
+  margin-left: 4px;
+}
+
+.icb.pin {
+  opacity: 0.55;
+}
+
+.icb.pin.on {
+  opacity: 1;
+  color: var(--acc-text);
+}
+
+.icb.pin.on svg {
+  fill: color-mix(in srgb, var(--acc) 30%, transparent);
+}
+
+.v-warn.rs-warn {
+  margin: 0 0 14px;
+}
+
+/* Les boutons du haut : capsules, comme le bouton principal des autres onglets. */
+.bk-btns .btn {
+  border-radius: var(--r-pill);
+  padding: 0 12px;
+}

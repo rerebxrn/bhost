@@ -1,0 +1,82 @@
+/* Curseur façon iPhone (iOS 26) : rail fin, bouton en capsule qui devient une goutte de verre quand on le tient. */
+.curseur {
+  --p: 0%;
+  --k: 0;
+  position: relative;
+  width: 220px;
+  height: 26px;
+  cursor: pointer;
+  touch-action: none;
+  outline: 0;
+  /* Pas de sélection de texte pendant qu'on fait glisser. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.curseur-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 11px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.curseur-rail i {
+  display: block;
+  width: var(--p);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--acc);
+}
+
+/* Le bouton : sa place suit --p. Au relâché, il se cale sur la valeur avec un ressort. */
+.curseur-bouton {
+  position: absolute;
+  top: 4px;
+  left: calc(var(--p) - 28px * var(--k));
+  width: 28px;
+  height: 18px;
+  border-radius: var(--r-pill);
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+  transition:
+    left 0.45s var(--ease-soft),
+    scale 0.4s var(--ease-gel),
+    background var(--dur-fade),
+    box-shadow var(--dur-fade);
+}
+
+.curseur:not(.tenu) .curseur-rail i {
+  transition: width 0.45s var(--ease-soft);
+}
+
+/* Tenu : le bouton suit le pointeur sans retard, gonfle et devient du verre transparent. */
+.curseur.tenu .curseur-bouton {
+  transition:
+    scale 0.4s var(--ease-gel),
+    background var(--dur-fade),
+    box-shadow var(--dur-fade);
+  scale: 1.5 1.45;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 0 0 1px var(--drop-edge),
+    inset 0 3px 6px var(--drop-hi),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.14),
+    0 6px 14px rgba(0, 0, 0, 0.2);
+  backdrop-filter: saturate(2.2) brightness(1.1);
+}
+
+.curseur:focus-visible .curseur-bouton {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curseur-bouton,
+  .curseur-rail i {
+    transition: none !important;
+  }
+}

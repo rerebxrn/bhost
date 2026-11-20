@@ -1,0 +1,155 @@
+/* Réglages de BHOST, d'après la maquette (groupes façon macOS 27). */
+.reglages .surf {
+  max-width: none;
+}
+
+.params .field.rg-pseudo {
+  width: 200px;
+}
+
+/* Le dossier des serveurs : son chemin en police de code, coupé s'il est trop long. */
+.params .lbl .rg-chemin {
+  font: var(--f-champ-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rg-btns {
+  flex: none;
+  display: flex;
+  gap: var(--space-8);
+}
+
+/* Thème (Ambre, Azur) et Mode (Clair, Sombre, Auto) : une petite fenêtre posée sur un dégradé
+   aux couleurs du thème (pas d'image de fond). Les couleurs sont écrites en dur :
+   la vignette montre le thème, quel que soit le thème actuel. */
+.appear {
+  display: flex;
+  gap: 12px;
+}
+
+.ap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text2);
+  font: var(--f-legende);
+  cursor: pointer;
+  transition: color var(--dur-fast);
+}
+
+.ap.sel {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ap i {
+  position: relative;
+  display: block;
+  width: 68px;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--surf-edge);
+  transition:
+    box-shadow var(--dur-fade),
+    transform 0.35s var(--ease-spring);
+}
+
+.ap:active i {
+  transform: scale(0.94);
+  transition-duration: 0.1s;
+}
+
+.ap.sel i {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+/* La fenêtre dans la vignette */
+.ap i span {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  right: 8px;
+  bottom: 0;
+  border-radius: 4px 4px 0 0;
+}
+
+/* Ambre : crème et bronze le jour, encre la nuit */
+.v-ambre-clair {
+  background: linear-gradient(135deg, #e3dace, #987c5e);
+}
+
+.v-ambre-clair span {
+  background: #ffffff;
+}
+
+.v-ambre-sombre {
+  background: linear-gradient(135deg, #303253, #0e0e16);
+}
+
+.v-ambre-sombre span {
+  background: #1c1c2c;
+}
+
+.v-ambre-systeme {
+  background: linear-gradient(90deg, #e3dace 50%, #12121d 50%);
+}
+
+.v-ambre-systeme span {
+  background: linear-gradient(90deg, #ffffff 50%, #1c1c2c 50%);
+}
+
+/* Azur : ciel, sable et bleu roi le jour, graphite bleuté la nuit */
+.v-azur-clair {
+  background: linear-gradient(135deg, #a8c5e6, #dcd4b6 45%, #2f6bdc 70%, #0c3ca8);
+}
+
+.v-azur-clair span {
+  background: #ffffff;
+}
+
+.v-azur-sombre {
+  background: linear-gradient(135deg, #2b3a58, #0b0f17);
+}
+
+.v-azur-sombre span {
+  background: #151a25;
+}
+
+.v-azur-systeme {
+  background: linear-gradient(90deg, #a8c5e6 50%, #141c2c 50%);
+}
+
+.v-azur-systeme span {
+  background: linear-gradient(90deg, #ffffff 50%, #151a25 50%);
+}
+
+/* Liquid Glass : Transparent ——o—— Teinté */
+.rg-verre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.rg-verre .curseur {
+  width: 180px;
+}
+
+/* Mise à jour qui n'a pas marché. */
+.params .lbl .rg-maj-err {
+  color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ap i {
+    transition: none;
+  }
+}

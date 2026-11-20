@@ -1,0 +1,60 @@
+# Publie une nouvelle version de BHOST (marche à suivre : docs/PUBLIER.md).
+# GitHub fabrique l'installeur Windows, le signe avec la clé secrète, et le pose dans les Releases
+# de ce dépôt, avec latest.json : c'est ce fichier que lit « Rechercher les mises à jour ».
+name: Publier BHOST
+
+on:
+  workflow_dispatch:
+
+# Par défaut, le jeton automatique de GitHub ne fait que lire le code.
+permissions:
+  contents: read
+
+concurrency:
+  group: publier
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    # Les secrets de signature sont rangés dans cet environnement (Settings › Environments).
+    environment: publication
+    permissions:
+      contents: write # créer la Release
+    steps:
+      # Actions épinglées sur un commit précis : une action piratée ne peut pas voler la clé.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+
+      # Pas de scripts d'installation npm : aucun code de paquet ne tourne avant la compilation.
+      - run: npm ci --ignore-scripts
+
+      # Échoue si Cargo.lock n'est pas à jour : on compile exactement les versions vérifiées.
+      - run: cargo fetch --locked --manifest-path src-tauri/Cargo.toml
+
+      # Seulement ici : fabriquer aussi le fichier signé pour les mises à jour
+      # (sur ton PC, « npm run tauri build » marche sans la clé secrète).
+      - name: Fichiers de mise à jour
+        run: node -e "const f='src-tauri/tauri.conf.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.bundle.createUpdaterArtifacts=true;require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
+
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: BHOST __VERSION__
+          releaseBody: Nouvelle version de BHOST.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

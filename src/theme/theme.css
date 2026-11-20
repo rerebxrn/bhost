@@ -1,0 +1,415 @@
+/* Charte BHOST dans le code : polices, jetons, styles de base.
+   Source : la charte (tokens.json). Ne mets pas de couleur en dur ailleurs. */
+
+/* ---------- Polices (licence libre OFL, fichiers dans src/assets/fonts) ---------- */
+@font-face {
+  font-family: "Mona Sans";
+  src: url("../assets/fonts/MonaSans-Variable.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- Jetons communs aux deux thèmes ---------- */
+:root {
+  --font: "Mona Sans", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+
+  /* Échelle de texte de macOS 27. Usage : font: var(--f-titre-1); */
+  --f-grand-titre: 700 26px/32px var(--font);
+  --f-titre-1: 700 22px/26px var(--font);
+  --f-titre-2: 700 17px/22px var(--font);
+  --f-titre-3: 600 15px/20px var(--font);
+  --f-en-tete: 700 13px/16px var(--font);
+  --f-corps: 400 13px/16px var(--font);
+  --f-corps-fort: 600 13px/16px var(--font);
+  --f-bouton: 500 13px/16px var(--font);
+  --f-valeur-stat: 600 17px/22px var(--font);
+  --f-legende: 400 12px/15px var(--font);
+  --f-sous-titre: 400 11px/14px var(--font);
+  --f-titre-section: 600 11px/14px var(--font);
+  --f-badge: 600 10px/13px var(--font);
+  --f-console: 400 12px/1.75 var(--mono);
+  --f-commande: 400 13px/16px var(--mono);
+  --f-champ-mono: 400 12px/15px var(--mono);
+
+  /* Espacements */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-22: 22px;
+
+  /* Rayons, selon le rôle */
+  --r-win: 8px;
+  --r-ctl: 7px;
+  --r-sel: 8px;
+  --r-surf: 12px;
+  --r-menu: 12px;
+  --r-inner: 6px;
+  --r-dialog: 18px;
+  --r-panel: 22px;
+  --r-pill: 999px;
+
+  /* Tailles */
+  --h-titlebar: 40px;
+  --w-sidebar: 240px;
+  --w-wc: 46px;
+  --h-control: 28px;
+  --h-row: 44px;
+  --h-glass-bar: 36px;
+  --h-dock: 48px;
+
+  /* Mouvement */
+  --ease-spring: cubic-bezier(0.28, 1.5, 0.52, 1);
+  --ease-soft: cubic-bezier(0.3, 1.25, 0.5, 1);
+  --ease-gel: cubic-bezier(0.25, 1.6, 0.45, 1);
+  --dur-fast: 150ms;
+  --dur-fade: 200ms;
+  --dur-move: 550ms;
+  --dur-gel: 600ms;
+
+  /* Liquid Glass (réglages du kit Apple macOS 27) */
+  --lg-refraction: 70;
+  --lg-depth: 30;
+  --lg-dispersion: 20;
+  --lg-frost-small: 6px;
+  --lg-frost-large: 16px;
+  --lg-splay: 20;
+  --lg-light-angle: 0;
+  --lg-light: 25;
+  --blur-material: 60px;
+  --t: 0.3; /* intensité du verre, de 0 à 1 */
+
+  /* Couleurs communes (sauf la console d'Azur clair, voir plus bas) */
+  --glass-console: rgba(30, 28, 34, 0.62);
+  --stop: #c4283c;
+  --close-hover: #c42b1c;
+  --st-online: #2e9e57;
+  --st-stopped: #8f8a80;
+  --st-busy: #d9930b;
+  --warn-bg: rgba(217, 147, 11, 0.16);
+  --log-text: #e6e5ee;
+  --log-head: #a3a2b8;
+  --log-time: #8a8a99;
+  --log-placeholder: #86859c;
+  --log-info: #8cc4f0;
+  --log-warn: #f2c14e;
+  --log-error: #f59184;
+  --log-cmd: #9bd8a9;
+  --type-vanilla: #5e7a45;
+  --type-paper: #4f6c8c;
+  --type-purpur: #626471;
+  --type-spigot: #987c5e;
+  --type-fabric: #8a7458;
+  --type-forge: #433a40;
+  --type-neoforge: #6e533e;
+  --type-import: #7a7480;
+  --sh-menu: 0 18px 48px rgba(0, 0, 0, 0.25);
+
+  /* Jetons calculés à partir d'autres jetons */
+  --window-tint: var(--mat-medium);
+  --acc-text: var(--acc);
+  --focus: var(--acc);
+  --glass: rgba(var(--g-rgb), calc(var(--g-min) + var(--t) * var(--g-span)));
+}
+
+/* ---------- Thème clair : crème, sable, bronze ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+  --fond: url("../assets/fonds/wall-light.jpg");
+  --fond-couleur: #bcae9e;
+
+  --mat-ultrathick: rgba(236, 229, 219, 0.88);
+  --mat-thick: rgba(246, 242, 236, 0.72);
+  --mat-medium: rgba(246, 242, 236, 0.6);
+  --mat-thin: rgba(246, 242, 236, 0.48);
+  --mat-ultrathin: rgba(246, 242, 236, 0.36);
+
+  --content: #f6f2ec;
+  --surf: #ffffff;
+  --field: #efe9e0;
+  --hover: rgba(67, 58, 64, 0.06);
+  --fill: rgba(67, 58, 64, 0.08);
+  --fill-strong: rgba(67, 58, 64, 0.14);
+  --sep: rgba(67, 58, 64, 0.12);
+  --surf-edge: rgba(67, 58, 64, 0.09);
+  --win-edge: rgba(67, 58, 64, 0.24);
+  --scrim: rgba(67, 58, 64, 0.22);
+
+  --text: #2b2427;
+  --text2: #6a6067;
+  --text3: rgba(43, 36, 39, 0.25);
+
+  --st-online: #18904a;
+  --st-stopped: #817c73;
+  --st-busy: #a97210;
+
+  --acc: #7a5b3a;
+  --on-acc: #ffffff;
+  --acc-tint: rgba(128, 96, 63, 0.16);
+
+  --track: rgba(110, 83, 62, 0.22);
+  --sw-off: rgba(67, 58, 64, 0.12);
+  --sw-edge: rgba(67, 58, 64, 0.42);
+
+  --g-rgb: 253, 250, 245;
+  --g-min: 0.22;
+  --g-span: 0.62;
+  --glass-sel: rgba(70, 58, 50, 0.12);
+  /* Reflets du verre : francs sur le clair */
+  --g-rim: 1;
+  --g-sheen-hover: 0.7;
+  --lg-spec: 1;
+  --drop-edge: rgba(255, 255, 255, 0.9);
+  --drop-hi: rgba(255, 255, 255, 0.45);
+
+  --danger: #a8182b;
+  --op-ink: #6e4e2e;
+  --op-bg: rgba(152, 124, 94, 0.18);
+  --term: #1e1a1c;
+  --term-edge: rgba(0, 0, 0, 0.2);
+
+  --sh-surface: 0 0 0 1px rgba(67, 58, 64, 0.09);
+  --sh-selected: 0 0 0 0.5px rgba(67, 58, 64, 0.09), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --sh-glass:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.95), inset 0 -1px 0.5px rgba(255, 255, 255, 0.16),
+    inset 0 0 10px rgba(0, 0, 0, 0.07), 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Thème sombre : encre, bleu nuit ---------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --fond: url("../assets/fonds/wall-dark.jpg");
+  --fond-couleur: #12121d;
+
+  --mat-ultrathick: rgba(15, 15, 23, 0.5);
+  --mat-thick: rgba(15, 15, 23, 0.4);
+  --mat-medium: rgba(15, 15, 23, 0.29);
+  --mat-thin: rgba(15, 15, 23, 0.2);
+  --mat-ultrathin: rgba(15, 15, 23, 0.1);
+
+  --content: #14141f;
+  --surf: #1c1c2c;
+  --field: #232336;
+  --hover: rgba(200, 205, 255, 0.07);
+  --fill: rgba(200, 205, 255, 0.1);
+  --fill-strong: rgba(200, 205, 255, 0.18);
+  --sep: rgba(200, 205, 255, 0.1);
+  --surf-edge: rgba(200, 205, 255, 0.08);
+  --win-edge: rgba(0, 0, 0, 0.7);
+  --scrim: rgba(5, 5, 12, 0.5);
+
+  --text: #ecebf4;
+  --text2: #a7a6bc;
+  --text3: rgba(236, 235, 244, 0.25);
+
+  --acc: #93a8f4;
+  --on-acc: #0e0e16;
+  --acc-tint: rgba(147, 168, 244, 0.18);
+
+  --track: rgba(140, 150, 200, 0.3);
+  --sw-off: rgba(200, 205, 255, 0.14);
+  --sw-edge: rgba(200, 205, 255, 0.36);
+
+  --g-rgb: 36, 36, 58;
+  --g-min: 0.3;
+  --g-span: 0.55;
+  --glass-sel: rgba(255, 255, 255, 0.14);
+  /* Reflets du verre : discrets sur le sombre, sinon ils font un contour blanc */
+  --g-rim: 0.35;
+  --g-sheen-hover: 0.35;
+  --lg-spec: 0.45;
+  --drop-edge: rgba(255, 255, 255, 0.3);
+  --drop-hi: rgba(255, 255, 255, 0.12);
+
+  --danger: #ff8f86;
+  --op-ink: #e2c9a0;
+  --op-bg: rgba(226, 201, 160, 0.14);
+  --term: #0e0e16;
+  --term-edge: rgba(200, 205, 255, 0.08);
+
+  --sh-surface: 0 0 0 1px rgba(200, 205, 255, 0.08);
+  --sh-selected: 0 0 0 0.5px rgba(200, 205, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --sh-glass:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.34), inset 0 -1px 0.5px rgba(255, 255, 255, 0.16),
+    inset 0 0 10px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Thème Azur (Réglages › Apparence › Thème) ----------
+   Il se pose par-dessus le clair ou le sombre (data-fond="azur", mis par ThemeProvider).
+   Même charte : un seul accent, pas de violet ni d'indigo, pas de lueur, contenu opaque.
+   Exception voulue par Thomas : en clair, la console est un bleu nuit plus doux. */
+
+/* Azur clair : ciel, sable, vague bleu roi */
+[data-fond="azur"][data-theme="light"] {
+  --fond: url("../assets/fonds/wall-lagon.jpg");
+  --fond-couleur: #8bb6d8;
+
+  --mat-ultrathick: rgba(232, 240, 248, 0.88);
+  --mat-thick: rgba(242, 247, 252, 0.72);
+  --mat-medium: rgba(242, 247, 252, 0.6);
+  --mat-thin: rgba(242, 247, 252, 0.48);
+  --mat-ultrathin: rgba(242, 247, 252, 0.36);
+
+  --content: #f3f7fc;
+  --surf: #ffffff;
+  --field: #e8eff8;
+  --hover: rgba(16, 42, 92, 0.06);
+  --fill: rgba(16, 42, 92, 0.08);
+  --fill-strong: rgba(16, 42, 92, 0.14);
+  --sep: rgba(16, 42, 92, 0.11);
+  --surf-edge: rgba(16, 42, 92, 0.09);
+  --win-edge: rgba(16, 42, 92, 0.24);
+  --scrim: rgba(16, 42, 92, 0.22);
+
+  --text: #0f1f3d;
+  --text2: #4f6079;
+  --text3: rgba(15, 31, 61, 0.25);
+
+  --acc: #1b5bcc;
+  --on-acc: #ffffff;
+  --acc-tint: rgba(27, 91, 204, 0.13);
+
+  --track: rgba(27, 91, 204, 0.2);
+  --sw-off: rgba(16, 42, 92, 0.12);
+  --sw-edge: rgba(16, 42, 92, 0.4);
+
+  --g-rgb: 247, 251, 255;
+  --glass-sel: rgba(16, 42, 92, 0.1);
+
+  --op-ink: #1b4b9e;
+  --op-bg: rgba(27, 91, 204, 0.12);
+  --warn-bg: rgba(27, 91, 204, 0.12);
+  --term: #1f3354;
+  --term-edge: rgba(16, 42, 92, 0.2);
+  --log-head: #b4c3dc;
+  --log-time: #a2b2cc;
+  --log-placeholder: #a2b2cc;
+
+  --sh-surface: 0 0 0 1px rgba(16, 42, 92, 0.09);
+  --sh-selected: 0 0 0 0.5px rgba(16, 42, 92, 0.09), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Azur sombre : la même vague, graphite bleuté.
+   La console garde celle du thème sombre (charte). */
+[data-fond="azur"][data-theme="dark"] {
+  --fond: url("../assets/fonds/wall-nuit.jpg");
+  --fond-couleur: #0d1119;
+
+  --mat-ultrathick: rgba(8, 12, 22, 0.5);
+  --mat-thick: rgba(8, 12, 22, 0.4);
+  --mat-medium: rgba(8, 12, 22, 0.29);
+  --mat-thin: rgba(8, 12, 22, 0.2);
+  --mat-ultrathin: rgba(8, 12, 22, 0.1);
+
+  --content: #0d1119;
+  --surf: #151a25;
+  --field: #1e2431;
+  --hover: rgba(185, 200, 235, 0.07);
+  --fill: rgba(185, 200, 235, 0.1);
+  --fill-strong: rgba(185, 200, 235, 0.18);
+  --sep: rgba(185, 200, 235, 0.1);
+  --surf-edge: rgba(185, 200, 235, 0.08);
+  --scrim: rgba(4, 6, 12, 0.55);
+
+  --text: #ecf0f8;
+  --text2: #a0aac0;
+  --text3: rgba(236, 240, 248, 0.25);
+
+  --acc: #8fb2ee;
+  --on-acc: #0b1120;
+  --acc-tint: rgba(143, 178, 238, 0.18);
+
+  --track: rgba(143, 178, 238, 0.3);
+  --sw-off: rgba(185, 200, 235, 0.14);
+  --sw-edge: rgba(185, 200, 235, 0.36);
+
+  --g-rgb: 26, 32, 48;
+  --glass-sel: rgba(255, 255, 255, 0.14);
+
+  --op-ink: #cddcf7;
+  --op-bg: rgba(143, 178, 238, 0.15);
+  --warn-bg: rgba(143, 178, 238, 0.15);
+
+  --sh-surface: 0 0 0 1px rgba(185, 200, 235, 0.08);
+  --sh-selected: 0 0 0 0.5px rgba(185, 200, 235, 0.08), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- Barre latérale et barre de titre, en clair ----------
+   Elles laissent voir le fond d'écran : le texte gris et l'accent y sont un peu plus foncés,
+   pour rester lisibles (4,5:1) sur l'endroit le plus foncé du fond, à toutes les tailles de fenêtre. */
+[data-theme="light"] .side,
+[data-theme="light"] .titlebar {
+  --text2: #3f393d;
+  --acc-text: #4a3823;
+}
+
+[data-fond="azur"][data-theme="light"] .side,
+[data-fond="azur"][data-theme="light"] .titlebar {
+  --text2: #364253;
+  --acc-text: #123d89;
+}
+
+/* ---------- Styles de base ---------- */
+* {
+  box-sizing: border-box;
+  /* Barres de défilement fines et discrètes, au lieu des grosses barres de Windows. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--fill-strong) transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* Le fond d'écran Golden Gate est derrière tout. */
+body {
+  font: var(--f-corps);
+  color: var(--text);
+  background: var(--fond-couleur) var(--fond) center / cover no-repeat;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* Chiffres qui bougent : même largeur pour chaque chiffre. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus au clavier : anneau plein de 2 px. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Si Windows demande moins d'animations : fondus courts seulement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,816 @@
+/* Assistant « Créer un serveur » (maquette : .wz et suivants). */
+.page.wz {
+  max-width: 700px;
+  margin: 0 auto;
+  padding-top: var(--space-6);
+  gap: 0;
+}
+
+.wz-head {
+  margin: 4px 0 18px;
+}
+
+.wz-kick {
+  font: var(--f-titre-section);
+  color: var(--acc-text);
+}
+
+.wz-head h1 {
+  margin: 2px 0 4px;
+  font: var(--f-titre-1);
+  letter-spacing: -0.01em;
+}
+
+.wz-head p {
+  margin: 0;
+  font: var(--f-corps);
+  color: var(--text2);
+}
+
+.wz-sec {
+  margin: 20px 0 8px 2px;
+  font: var(--f-titre-section);
+  color: var(--text2);
+}
+
+.wz-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 2px 0;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.wz-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.wz .surf {
+  max-width: none;
+}
+
+.wz .surf + .surf {
+  margin-top: 12px;
+}
+
+.wz .row > .lbl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.t2 {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.t2.warn {
+  color: var(--op-ink);
+}
+
+.row.off > span {
+  opacity: 0.5;
+}
+
+/* Logiciels : des cartes par groupe */
+.opts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.opt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-height: 66px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--r-surf);
+  background: var(--surf);
+  box-shadow: 0 0 0 1px var(--surf-edge);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    box-shadow var(--dur-fast),
+    transform var(--dur-fade) var(--ease-spring);
+}
+
+.opt:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px var(--text2);
+}
+
+.opt:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.opt.sel {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+.opt:disabled {
+  cursor: default;
+}
+
+.opt:disabled .opt-ico,
+.opt:disabled .opt-txt > span {
+  opacity: 0.5;
+}
+
+.opt-ico,
+.hero-ico {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+/* Tuile blanche façon icône d'app, pour tous les logiciels (vrais logos et icônes neutres).
+   Même fond en clair et en sombre : sinon certains logos noirs disparaissent. */
+.opt-ico.logo {
+  flex-basis: 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px; /* 25 % comme les icônes d'Apple */
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow:
+    inset 0 0 0 0.5px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.14);
+  transition: transform 0.35s var(--ease-spring);
+}
+
+.opt-ico.logo img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.opt-ico.logo.plein img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* La tuile se soulève un peu au survol, et rebondit quand on choisit. */
+.opt:not(:disabled):hover .opt-ico.logo {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.opt.sel .opt-ico.logo {
+  animation: rebond 0.5s var(--ease-spring);
+}
+
+/* « Bientôt » : on garde le logo net (on ne touche pas aux logos), seul le texte pâlit. */
+.opt:disabled .opt-ico.logo {
+  opacity: 1;
+}
+
+.hero-ico {
+  flex-basis: 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.opt-txt {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.opt-txt b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--f-corps-fort);
+}
+
+.opt-txt > span {
+  font: var(--f-legende);
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.opt-ck {
+  flex: none;
+  color: var(--acc-text);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity var(--dur-fast),
+    transform 0.35s var(--ease-spring);
+}
+
+.opt.sel .opt-ck {
+  opacity: 1;
+  transform: none;
+}
+
+.rec,
+.bientot,
+.instable {
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font: var(--f-badge);
+  display: inline-flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--acc) 16%, transparent);
+  color: var(--acc-text);
+}
+
+.bientot {
+  background: var(--fill);
+  color: var(--text2);
+}
+
+.instable {
+  background: var(--warn-bg);
+  color: var(--op-ink);
+}
+
+.wz .imp {
+  margin-top: 18px;
+}
+
+/* Versions : une liste à boutons radio */
+.versions {
+  overflow: hidden;
+}
+
+.vrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-14);
+  border: 0;
+  border-bottom: 1px solid var(--sep);
+  background: transparent;
+  color: var(--text);
+  font: var(--f-corps);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vrow:last-child {
+  border-bottom: 0;
+}
+
+.vrow:hover {
+  background: var(--hover);
+}
+
+.vrow b {
+  font-weight: 600;
+}
+
+.vrow .j {
+  margin-left: auto;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.radio {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--text2);
+  transition: box-shadow var(--dur-fast);
+}
+
+.vrow.sel .radio {
+  box-shadow: inset 0 0 0 5px var(--acc);
+}
+
+.wz-load {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-10);
+  margin-top: 12px;
+  padding: 30px 0;
+  font: var(--f-corps);
+  color: var(--text2);
+}
+
+/* Monde */
+.bigname {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: var(--r-surf);
+  background: var(--surf);
+  box-shadow: 0 0 0 1px var(--surf-edge);
+}
+
+/* L'icône à gauche, centrée sur les deux lignes (« Nom du serveur » et le nom). */
+.bigname > .wz-grand {
+  grid-row: span 2;
+}
+
+.bigname > span {
+  display: block;
+  font: var(--f-titre-section);
+  color: var(--text2);
+}
+
+.bigname input {
+  grid-column: 2;
+  width: 100%;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: var(--f-grand-titre);
+}
+
+.bigname input::placeholder {
+  color: var(--text2);
+  opacity: 0.55;
+}
+
+.bigname:focus-within {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.mode-c {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--r-surf);
+  background: var(--surf);
+  box-shadow: 0 0 0 1px var(--surf-edge);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    box-shadow var(--dur-fast),
+    transform var(--dur-fade) var(--ease-spring);
+}
+
+.mode-c:active {
+  transform: scale(0.97);
+}
+
+.mode-c svg {
+  margin-bottom: 4px;
+  color: var(--text2);
+}
+
+.mode-c b {
+  font: var(--f-corps-fort);
+}
+
+.mode-c span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.mode-c:hover {
+  box-shadow: 0 0 0 1px var(--text2);
+}
+
+.mode-c.on {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+.mode-c.on svg {
+  color: var(--acc-text);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-ctl);
+  box-shadow: 0 0 0 1px var(--surf-edge);
+  overflow: hidden;
+}
+
+.stepper button {
+  width: 30px;
+  height: var(--h-control);
+  border: 0;
+  background: var(--surf);
+  color: var(--text);
+  font: var(--f-titre-3);
+  cursor: pointer;
+}
+
+.stepper button:hover {
+  background: var(--hover);
+}
+
+.stepper button:active {
+  background: var(--fill);
+  transform: scale(0.88);
+}
+
+.stepper button {
+  transition:
+    background var(--dur-fast),
+    transform 0.3s var(--ease-spring);
+}
+
+.stepper span {
+  min-width: 36px;
+  text-align: center;
+  font: var(--f-corps-fort);
+}
+
+/* Le nombre saute un peu à chaque changement. */
+.stepper span b {
+  display: inline-block;
+  font: inherit;
+  animation: saut 0.35s var(--ease-spring);
+}
+
+@keyframes saut {
+  from {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+}
+
+.ram {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ram b {
+  min-width: 44px;
+  text-align: right;
+}
+
+.eula {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: 12px var(--space-14);
+}
+
+.eula.todo {
+  box-shadow: 0 0 0 1px var(--acc);
+}
+
+.chk {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  font: var(--f-corps);
+  cursor: pointer;
+}
+
+.chk input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--acc);
+}
+
+.lien {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc-text);
+  font: var(--f-corps-fort);
+  cursor: pointer;
+}
+
+/* Dossier des serveurs */
+.dir {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding: 18px 20px;
+}
+
+.dir-ico {
+  flex: none;
+  color: var(--acc-text);
+}
+
+.dir-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dir-main b {
+  font: var(--f-corps-fort);
+}
+
+.dir-path {
+  font: var(--f-champ-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disk {
+  height: 6px;
+  margin: 4px 0 2px;
+  border-radius: var(--r-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.disk i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--acc);
+  transition: width 0.6s var(--ease-soft);
+}
+
+.disk.big {
+  height: 8px;
+  margin: 10px 0 14px;
+}
+
+/* Résumé */
+.sum {
+  padding: 18px 20px;
+}
+
+.sum-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.sum-top b {
+  display: block;
+  font: var(--f-titre-2);
+}
+
+.sum-top span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 16px;
+  padding-top: 16px;
+}
+
+.fact {
+  min-width: 0;
+}
+
+.fact span {
+  display: block;
+  font: var(--f-sous-titre);
+  color: var(--text2);
+}
+
+.fact b {
+  display: block;
+  font: var(--f-corps-fort);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fact b.chemin {
+  direction: rtl;
+  text-align: left;
+  font: var(--f-champ-mono);
+}
+
+.plan {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.plan li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  font: var(--f-corps);
+}
+
+.plan-n {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--field);
+  font: var(--f-titre-section);
+  color: var(--text2);
+}
+
+/* Installation */
+.inst {
+  padding: 18px 20px 6px;
+}
+
+.inst-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-10);
+}
+
+.inst-top b {
+  font: var(--f-titre-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.inst-top span {
+  color: var(--text2);
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--sep);
+  font: var(--f-corps);
+}
+
+.task:last-of-type {
+  border-bottom: 0;
+}
+
+.task .ic {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text2);
+}
+
+.task.done .ic {
+  color: var(--st-online);
+}
+
+.task.wait {
+  color: var(--text2);
+}
+
+.task .pt {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--track);
+}
+
+.task-p {
+  margin-left: auto;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.inst-err {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font: var(--f-corps);
+}
+
+.inst-err svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* La capsule du bas : Annuler · Retour · Continuer */
+.g.wz-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--h-dock);
+  padding: 0 4px;
+}
+
+.wz-nav > * {
+  position: relative;
+  z-index: 3;
+}
+
+.wz-nav .ab.go {
+  padding: 0 22px;
+}
+
+.wz-nav .ab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Fenêtre étroite : deux colonnes de cartes */
+@container (max-width: 640px) {
+  .opts,
+  .modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1080px) {
+  .modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Recherche dans la liste des versions. */
+/* Champ de recherche en capsule, comme dans macOS (pas une case de plus). */
+.vsearch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  height: 32px;
+  margin: 0 0 var(--space-10);
+  padding: 0 var(--space-14);
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--text2);
+  transition: box-shadow var(--dur-fast);
+}
+
+.wz .surf + .vsearch,
+.wz .surf + .wz-load {
+  margin-top: var(--space-16);
+}
+
+.vsearch:focus-within {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+.vsearch input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.vsearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: var(--f-corps);
+}
+
+.vsearch input::placeholder {
+  color: var(--text2);
+}
+
+.vvide {
+  padding: var(--space-14);
+  color: var(--text2);
+  font: var(--f-corps);
+}
+
+/* Pas de mot tout seul sur la 2e ligne d'une description. */
+.opt-txt > span {
+  text-wrap: pretty;
+}

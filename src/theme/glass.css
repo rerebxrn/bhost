@@ -1,0 +1,145 @@
+/* Le verre : seulement pour ce qui flotte (onglets, capsule d'actions, menus).
+   Par défaut : un flou simple. Avec « Réfraction réelle », le moteur Liquid Glass
+   (src/glass/lens.ts) remplace ce flou par un vrai filtre de verre. */
+.g {
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  border-radius: var(--r-pill);
+  /* Écrit en entier (et pas var(--glass)) pour que le verre sombre de la console
+     puisse changer --g-rgb, --g-min et --g-span sur place. */
+  background: rgba(var(--g-rgb), calc(var(--g-min) + var(--t) * var(--g-span)));
+  backdrop-filter: blur(calc(2px + var(--t) * 16px)) saturate(1.9) brightness(1.04);
+  box-shadow: var(--sh-glass);
+}
+
+/* Réfraction réelle : le filtre calculé par le moteur pour cet élément. */
+html.lg-on [data-lk] {
+  backdrop-filter: var(--lens);
+}
+
+/* Au-dessus de la console (toujours sombre), le verre devient sombre. */
+.on-console .g,
+.g.on-console {
+  --g-rgb: 30, 28, 34;
+  --g-min: 0.48;
+  --g-span: 0.48;
+  --text: #eeedf5;
+  --text2: #a9a8bc;
+  --hover: rgba(255, 255, 255, 0.08);
+  --danger: #ff9a90;
+  --track: rgba(140, 150, 200, 0.3);
+  --acc-text: var(--log-cmd);
+  --g-rim: 0.35;
+  --g-sheen-hover: 0.35;
+  --lg-spec: 0.45;
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0.5px rgba(255, 255, 255, 0.16),
+    inset 0 0 10px rgba(0, 0, 0, 0.35),
+    0 0 0 0.5px rgba(0, 0, 0, 0.55),
+    0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Liseré brillant sur le bord */
+.g::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.12) 28%,
+    rgba(255, 255, 255, 0) 50%,
+    rgba(255, 255, 255, 0.08) 72%,
+    rgba(255, 255, 255, 0.55) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: var(--g-rim);
+}
+
+/* Reflet qui suit la souris : une petite tache ronde et douce, seulement au survol.
+   Seulement sur les petits éléments (barres, boutons) : sur un menu ou une fenêtre, elle faisait un halo trop grand.
+   (--mx et --my sont posés par src/glass/gel.ts) */
+.g::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(
+    circle 44px at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0;
+  mix-blend-mode: soft-light;
+  transition: opacity 0.3s;
+}
+
+.g:hover::after {
+  opacity: var(--g-sheen-hover);
+}
+
+.g[data-lens="panel"]::after {
+  display: none;
+}
+
+/* Effet gel : le bouton s'étire sous le pointeur, puis revient en ressort. */
+[data-gel] {
+  transition:
+    transform var(--dur-gel) var(--ease-gel),
+    background var(--dur-fast);
+}
+
+[data-gel].gel-on {
+  transition:
+    transform 0.07s linear,
+    background var(--dur-fast);
+}
+
+/* Apparition douce d'un bloc à l'ouverture d'une page */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Azur : le verre posé sur la console prend le bleu nuit d'Azur (pas l'encre d'Ambre). */
+[data-fond="azur"] .on-console .g,
+[data-fond="azur"] .g.on-console {
+  --g-rgb: 20, 28, 46;
+  --text2: #a6b2c8;
+}
+
+[data-fond="azur"][data-theme="light"] .on-console .g,
+[data-fond="azur"][data-theme="light"] .g.on-console {
+  --g-rgb: 24, 38, 64;
+}

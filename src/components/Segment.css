@@ -1,0 +1,99 @@
+/* Choix parmi quelques options : un rail en capsule, la pastille de l'option choisie glisse dessus. */
+.segc {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--h-control);
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  touch-action: none; /* on peut tirer la pastille au doigt */
+  user-select: none;
+}
+
+.segc button {
+  position: relative;
+  z-index: 2;
+  height: calc(var(--h-control) - 4px);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text);
+  font: var(--f-bouton);
+  cursor: pointer;
+  transition: color var(--dur-fade);
+}
+
+/* Réserve la place du texte en gras : le rail ne bouge pas quand on change d'option. */
+.segc button::after {
+  content: attr(data-nom);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 600;
+}
+
+.segc button.on {
+  color: var(--on-acc);
+  font-weight: 600;
+}
+
+.segc button:disabled {
+  cursor: default;
+}
+
+/* La pastille : pleine en accent, elle glisse avec un ressort. */
+.segc-pouce {
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  left: 0;
+  height: calc(var(--h-control) - 4px);
+  border-radius: var(--r-pill);
+  background: var(--acc);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 3px rgba(0, 0, 0, 0.18);
+  transition:
+    transform var(--dur-move) var(--ease-soft),
+    width var(--dur-move) var(--ease-soft),
+    scale 0.4s var(--ease-gel),
+    background var(--dur-fade),
+    box-shadow var(--dur-fade);
+}
+
+/* Quand on appuie : la pastille gonfle et devient une goutte de verre transparente. */
+.segc.appui .segc-pouce {
+  scale: 1.1 1.3;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 0 0 1px var(--drop-edge),
+    inset 0 4px 8px var(--drop-hi),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.14),
+    0 6px 16px rgba(0, 0, 0, 0.18);
+  backdrop-filter: saturate(2.2) brightness(1.08);
+}
+
+.segc.appui button.on {
+  color: var(--acc-text);
+}
+
+.segc.off {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segc-pouce {
+    transition: none;
+  }
+}
+
+/* Petit compteur après le nom (« Bannis 2 ») */
+.segc .cnt {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.65;
+}

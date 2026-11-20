@@ -1,0 +1,120 @@
+.titlebar {
+  flex: 0 0 var(--h-titlebar);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 14px;
+  user-select: none;
+}
+
+/* Le logo et le nom laissent passer les clics vers la barre,
+   pour qu'on puisse aussi déplacer la fenêtre en tirant dessus. */
+.tb-app {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font: var(--f-legende);
+  pointer-events: none;
+}
+
+.tb-app .logo-bhost {
+  display: block;
+  color: var(--text);
+}
+
+.tb-app span {
+  color: var(--text2);
+}
+
+.tb-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+}
+
+.seg {
+  display: flex;
+  height: var(--h-control);
+  padding: var(--space-2);
+  gap: var(--space-2);
+  border-radius: var(--r-pill);
+  background: var(--hover);
+}
+
+.seg button {
+  width: 32px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text2);
+  cursor: pointer;
+}
+
+.seg button.on {
+  color: var(--text);
+}
+
+/* Bascule clair / sombre en verre dépoli : la pastille glisse d'un côté à l'autre avec un ressort. */
+.seg.g {
+  position: relative;
+  border-radius: var(--r-pill);
+}
+
+.seg button {
+  position: relative;
+  z-index: 3;
+  transition: color var(--dur-fade);
+}
+
+.seg-pouce {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: var(--space-2);
+  width: 32px;
+  border-radius: var(--r-pill);
+  background: var(--surf);
+  box-shadow: var(--sh-selected);
+  transition: transform 0.45s var(--ease-spring);
+}
+
+.seg.sombre .seg-pouce {
+  transform: translateX(calc(100% + var(--space-2)));
+}
+
+.seg button:active {
+  transform: scale(0.9);
+  transition: transform 0.15s;
+}
+
+.wc-group {
+  display: flex;
+  height: 100%;
+}
+
+/* Boutons de fenêtre Windows 11 : 46 px de large, toute la hauteur */
+.wc {
+  width: var(--w-wc);
+  height: 100%;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  cursor: default;
+}
+
+.wc:hover {
+  background: var(--hover);
+}
+
+.wc.close:hover {
+  background: var(--close-hover);
+  color: #ffffff;
+}

@@ -1,0 +1,147 @@
+/* Les cartes d'erreur de l'Accueil : entre l'en-tête et le bandeau des chiffres. */
+.errs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.surf.err {
+  max-width: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  --err: var(--st-busy);
+}
+
+.surf.err.bad {
+  --err: var(--danger);
+}
+
+/* L'icône dans une pastille teintée : seule touche de couleur de la carte. */
+.err-ic {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-ctl);
+  display: grid;
+  place-items: center;
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 14%, transparent);
+}
+
+.err-c {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.err-t {
+  font: var(--f-corps-fort);
+  margin-top: 1px;
+}
+
+.err-x,
+.err-cause {
+  margin: 0;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.err-cause {
+  color: var(--text);
+}
+
+.err-a {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.err-lien {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  margin-left: 4px;
+  font: var(--f-bouton);
+  color: var(--acc-text, var(--acc));
+  cursor: pointer;
+}
+
+.err-lien:hover {
+  text-decoration: underline;
+}
+
+.err-lien:focus-visible,
+.err-fermer:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Téléchargement de Java : texte et barre. */
+.err-av {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 9px;
+  font: var(--f-legende);
+  color: var(--text2);
+  font-variant-numeric: tabular-nums;
+}
+
+.err-barre {
+  height: 4px;
+  max-width: 320px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.err-barre i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--acc);
+  transition: width 0.3s;
+}
+
+.err-barre i.plein {
+  animation: err-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes err-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.err-fermer {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: -4px -4px 0 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.err-fermer:hover {
+  background: var(--hover, var(--fill));
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .err-barre i.plein {
+    animation: none;
+  }
+}

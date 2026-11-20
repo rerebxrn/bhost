@@ -1,0 +1,128 @@
+/* Barre latérale : posée sur le verre de la fenêtre, d'un bord à l'autre. */
+.side {
+  flex: 0 0 var(--w-sidebar);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-10) 12px;
+  overflow-y: auto;
+}
+
+.sec-title {
+  padding: 12px var(--space-10) var(--space-4);
+  font: var(--f-titre-section);
+  color: var(--text2);
+}
+
+.srv,
+.new,
+.side-set {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-radius: var(--r-sel);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+
+.srv:hover,
+.new:hover,
+.side-set:hover {
+  background: var(--hover);
+}
+
+/* Sélection façon macOS : un fond gris arrondi, pas de carte en relief. */
+.srv.sel,
+.new.sel,
+.side-set.sel {
+  background: var(--fill);
+}
+
+.srv {
+  gap: var(--space-10);
+  min-height: 40px;
+  padding: var(--space-4) var(--space-8);
+}
+
+/* Le cube d'un serveur. */
+.srv-ico {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.srv-ico img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+}
+
+.srv-txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.srv-txt b {
+  font: var(--f-corps-fort);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.srv-txt span {
+  font: var(--f-sous-titre);
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* « Créer un serveur » : un lien d'action, jamais un bouton plein. */
+.new {
+  gap: var(--space-8);
+  height: var(--h-control);
+  padding: 0 var(--space-10);
+  color: var(--acc-text);
+  font: var(--f-bouton);
+}
+
+.side-foot {
+  margin-top: auto;
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--sep);
+}
+
+.side-set {
+  gap: var(--space-8);
+  height: var(--h-control);
+  padding: 0 var(--space-10);
+  font: var(--f-bouton);
+  color: var(--text);
+}
+
+/* Un serveur qui arrive dans la liste (créé, importé, dupliqué) glisse en place. */
+.srv {
+  animation: rise 0.42s var(--ease-soft) both;
+}
+
+.srv,
+.new,
+.side-set {
+  transition:
+    background var(--dur-fast),
+    transform 0.3s var(--ease-spring);
+}
+
+.srv:active,
+.new:active,
+.side-set:active {
+  transform: scale(0.98);
+}

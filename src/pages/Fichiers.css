@@ -1,0 +1,558 @@
+/* Onglet Fichiers, d'après la maquette : le dossier à gauche, le fichier à droite. */
+.fx {
+  display: flex;
+  gap: 12px;
+  height: max(340px, calc(100vh - 250px));
+  padding-bottom: calc(var(--h-dock) + 24px);
+  box-sizing: content-box;
+}
+
+.fx .surf {
+  max-width: none;
+  margin: 0;
+}
+
+.fx-tree {
+  flex: 0 0 clamp(272px, 24%, 360px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: box-shadow var(--dur-fast);
+}
+
+/* Des fichiers glissés au-dessus : un contour en accent. */
+.fx-tree.survol {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+.fx-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 46px;
+  padding: 0 6px 0 8px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.crumbs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.crumbs .cr {
+  display: contents;
+}
+
+.crumbs button {
+  flex: 0 1 auto;
+  min-width: 28px;
+  max-width: 150px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text2);
+  font: var(--f-legende);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.crumbs button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.crumbs button.cur {
+  flex: none;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.cr-sep {
+  flex: none;
+  color: var(--text2);
+  opacity: 0.6;
+}
+
+.fx-warn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font: var(--f-legende);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.fx-warn svg {
+  flex: none;
+}
+
+.fx-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+
+.fl {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: var(--f-corps);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fl:hover {
+  background: var(--hover);
+}
+
+.fl-ic {
+  flex: none;
+  color: var(--text2);
+}
+
+.fl.isdir .fl-ic {
+  color: var(--acc-text);
+}
+
+.fl.isdir .fl-n {
+  font-weight: 600;
+}
+
+.fl-n {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fl-m {
+  flex: none;
+  font: var(--f-legende);
+  color: var(--text2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fl.sel,
+.fl.sel:hover {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.fl.sel .fl-ic,
+.fl.sel .fl-m {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.fx-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border-top: 1px solid var(--sep);
+  font: var(--f-legende);
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.fx-ed {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fx-eh {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.fx-fi {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--acc) 14%, transparent);
+  color: var(--acc-text);
+}
+
+.fx-nm {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fx-fn {
+  font: var(--f-corps-fort);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fx-fp {
+  font: var(--f-champ-mono);
+  font-size: 11px;
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fx-ro {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--hover);
+  font: var(--f-legende);
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.fx-ban {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 12px 0;
+  padding: 8px 8px 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--acc) 10%, transparent);
+  font: var(--f-legende);
+  line-height: 1.35;
+}
+
+.fx-ban svg {
+  flex: none;
+  color: var(--acc-text);
+}
+
+.fx-ban span {
+  flex: 1;
+}
+
+/* Éditeur de texte */
+.fx-code {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font: var(--f-champ-mono);
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+  user-select: text;
+}
+
+.fx-code.ro {
+  color: var(--text2);
+}
+
+.fx-none {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px;
+  text-align: center;
+}
+
+.fx-none b {
+  font: var(--f-corps-fort);
+}
+
+.fx-none > span:not(.fx-big):not(.spin) {
+  max-width: 340px;
+  font: var(--f-legende);
+  color: var(--text2);
+  line-height: 1.45;
+}
+
+.fx-none .btn {
+  margin-top: 6px;
+}
+
+.fx-big {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hover);
+  color: var(--text2);
+}
+
+.fx-img {
+  max-width: 260px;
+  max-height: 260px;
+  border-radius: 10px;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 1px var(--sep);
+}
+
+.fx-ef {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 10px 0 14px;
+  border-top: 1px solid var(--sep);
+}
+
+.fx-ef > span {
+  flex: 1;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.fx-ef > span.warn {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Réglages faciles */
+.fx-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 14px 16px;
+}
+
+.fx-body .grp-t {
+  margin-top: 14px;
+}
+
+.fx-card {
+  border-radius: 10px;
+  background: var(--surf);
+  box-shadow: inset 0 0 0 1px var(--sep);
+  overflow: hidden;
+}
+
+.fx-card .row {
+  min-height: 46px;
+}
+
+.fx-card .row:last-child {
+  border-bottom: 0;
+}
+
+.pk {
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--hover);
+  font: var(--f-champ-mono);
+  font-size: 10px;
+  color: var(--text2);
+}
+
+.fx-card .lbl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.field.fx-texte {
+  width: 250px;
+  font: var(--f-corps);
+}
+
+.field.fx-port {
+  width: 84px;
+  text-align: center;
+}
+
+/* Le nombre du compteur : un clic pour le taper. */
+.stepper .fx-n {
+  width: auto;
+  min-width: 76px;
+  padding: 0 4px;
+  font: var(--f-corps-fort);
+  cursor: text;
+}
+
+.stepper button.fx-n:active {
+  transform: none;
+}
+
+.stepper input.fx-n {
+  width: 76px;
+  height: var(--h-control);
+  border: 0;
+  outline: none;
+  background: var(--fill);
+  color: var(--text);
+  text-align: center;
+}
+
+.stepper .fx-n b {
+  display: inline-block;
+  font: inherit;
+  animation: saut 0.35s var(--ease-spring);
+}
+
+.stepper button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+}
+
+.fx-icone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.t2.mono {
+  font: var(--f-champ-mono);
+  font-size: 11px;
+}
+
+/* L'aperçu du serveur, comme dans la liste du jeu (toujours sombre, comme Minecraft). */
+.motd-row {
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--sep);
+}
+
+.motd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 440px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 6px;
+  background: #16151a;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font: var(--f-champ-mono);
+}
+
+.motd-ic {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 5px;
+  image-rendering: pixelated;
+}
+
+.motd-ic.vide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--acc);
+  color: var(--on-acc);
+  font: var(--f-titre-3);
+}
+
+.motd-ic.sm {
+  width: 28px;
+  height: 28px;
+}
+
+.motd-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.motd-t b {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.motd-t span {
+  color: #a9a8b6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motd-r {
+  flex: none;
+  align-self: flex-start;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  padding-top: 2px;
+  color: #a9a8b6;
+  font-size: 11px;
+}
+
+.motd-r span {
+  margin-right: 6px;
+}
+
+.motd-r i {
+  width: 2.5px;
+  border-radius: 1px;
+  background: #5ed68a;
+}
+
+.motd-r i:nth-of-type(1) {
+  height: 3px;
+}
+.motd-r i:nth-of-type(2) {
+  height: 5px;
+}
+.motd-r i:nth-of-type(3) {
+  height: 7px;
+}
+.motd-r i:nth-of-type(4) {
+  height: 9px;
+}
+.motd-r i:nth-of-type(5) {
+  height: 11px;
+}
