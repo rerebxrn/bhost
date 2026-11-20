@@ -21,6 +21,7 @@ mod icone;
 mod icone_jeu;
 mod installeur;
 mod java;
+mod machine;
 mod joueurs;
 mod listes;
 mod mise_a_jour;
@@ -2730,6 +2731,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             lister_serveurs,
+            machine::lister_cles_usb,
             importer_serveur,
             demarrer_serveur,
             installer_java_serveur,

@@ -11,6 +11,11 @@
     inset 0 -1px 0 rgba(255, 255, 255, 0.12);
 }
 
+/* Agrandie : la fenêtre touche les bords de l'écran, le liseré n'a plus de sens. */
+.agrandie .fenetre {
+  box-shadow: none;
+}
+
 .corps {
   flex: 1;
   min-height: 0;
@@ -432,6 +437,13 @@
 .btn.acc {
   background: var(--acc);
   color: var(--on-acc);
+}
+
+/* Survol d'un bouton principal : il garde sa couleur, un peu plus claire. */
+.btn.acc:hover:not([disabled]),
+.btn.acc:active:not([disabled]) {
+  background: var(--acc);
+  filter: brightness(1.08);
 }
 
 .btn[disabled] {

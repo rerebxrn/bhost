@@ -587,6 +587,14 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
       {/* La capsule du bas : Annuler, Retour, Continuer. */}
       {(!enCreation || creation.erreur) && (
         <div className="dock">
+          {/* « Annuler » est à part : il ne fait pas avancer l'assistant. */}
+          {onAnnuler && !creation?.erreur && (
+            <div className="g wz-nav" data-lens="bar">
+              <button type="button" data-gel className="ab" onClick={onAnnuler}>
+                Annuler
+              </button>
+            </div>
+          )}
           <div className="g wz-nav" data-lens="bar" role="group" aria-label="Navigation de l'assistant">
             {creation?.erreur ? (
               <>
@@ -600,11 +608,6 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
               </>
             ) : (
               <>
-                {onAnnuler && (
-                  <button type="button" data-gel className="ab" onClick={onAnnuler}>
-                    Annuler
-                  </button>
-                )}
                 {rang > 0 && (
                   <button type="button" data-gel className="ab" onClick={() => aller(etapes[rang - 1])}>
                     <IconArrowLeft size={15} stroke={2} aria-hidden />

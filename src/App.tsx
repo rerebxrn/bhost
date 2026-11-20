@@ -14,6 +14,7 @@ import DemandePop from "./components/DemandePop";
 import Reglages from "./pages/Reglages";
 import NouveauServeur from "./pages/NouveauServeur";
 import PremierLancement from "./pages/PremierLancement";
+import MachineDediee from "./pages/MachineDediee";
 import Console from "./pages/Console";
 import Accueil from "./pages/Accueil";
 import Parametres from "./pages/Parametres";
@@ -100,6 +101,7 @@ export default function App() {
   const [erreur, setErreur] = useState("");
   const [defile, setDefile] = useState(false); // la page a défilé : effet de bord sous les onglets
   const [accueilVu, setAccueilVu] = useState(accueilDejaVu);
+  const [tutoMachine, setTutoMachine] = useState(false); // premier lancement : tutoriel « machine dédiée » ouvert
   const theme = useTheme();
   useLiquidGlass(theme.reel, theme.teinte, theme.sombre);
 
@@ -358,16 +360,20 @@ export default function App() {
 
   if (accueil) {
     return (
-      <div className="fenetre">
-        <TitleBar />
-        {serveurs !== null && (
-          <PremierLancement
-            onLocal={() => {
-              retenirAccueil();
-              setAccueilVu(true);
-            }}
-          />
-        )}
+      <div className={"fenetre" + (tutoMachine ? " sans-cote" : "")}>
+        <TitleBar sousTitre={tutoMachine ? "Machine dédiée" : undefined} />
+        {serveurs !== null &&
+          (tutoMachine ? (
+            <MachineDediee onQuitter={() => setTutoMachine(false)} />
+          ) : (
+            <PremierLancement
+              onLocal={() => {
+                retenirAccueil();
+                setAccueilVu(true);
+              }}
+              onMachine={() => setTutoMachine(true)}
+            />
+          ))}
       </div>
     );
   }

@@ -548,3 +548,7 @@ export function ecouterInternet(recu: (ok: boolean) => void) {
     abonnement.then((arreter) => arreter());
   };
 }
+
+// Machine dédiée (BHOST OS) : les clés USB branchées sur ce PC.
+export type CleUsb = { lecteur: string; nom: string; totalGo: number };
+export const listerClesUsb = () => invoke<CleUsb[]>("lister_cles_usb");
