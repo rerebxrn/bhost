@@ -137,6 +137,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
       javaChoix: changement.javaChoix ?? serveur.javaChoix ?? null,
       optimise: serveur.optimise ?? true,
       arguments: serveur.arguments ?? "",
+      priorite: serveur.priorite ?? "normale",
     }).then(([s]) => onChange(s));
 
   const cartes: ReactNode[] = [];

@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Acces, Machine, Serveur, Statut } from "./types";
+import type { Acces, Machine, Priorite, Serveur, Statut } from "./types";
 
 export function listerServeurs() {
   return invoke<Serveur[]>("lister_serveurs");
@@ -186,6 +186,7 @@ export type ReglagesServeur = {
   javaChoix: string | null;
   optimise: boolean;
   arguments: string;
+  priorite: Priorite;
 };
 
 export const parametresServeur = (id: string) => invoke<Parametres>("parametres_serveur", { id });

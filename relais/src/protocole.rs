@@ -9,6 +9,9 @@
 //      Minecraft envoie d'abord une « poignée de main » qui contient l'adresse tapée : le relais y lit le nom.
 //   3. Le relais dit à l'agent : « JOUEUR 17 <jeton> ». BHOST ouvre une 2ᵉ connexion « DONNEES 17 <jeton> »,
 //      se branche sur le serveur Minecraft du PC, et le relais recolle les deux bouts.
+//   4. Machines dédiées (BHOST OS) : la machine se présente avec « MACHINE <clé> <code> » et signe un défi.
+//      Un PC qui tape ce code envoie « LIER <code> » : le relais répond « LIEE <id> » (l'id de la machine)
+//      ou « NON code ». Après 5 codes faux, l'adresse IP attend 15 minutes (« NON bloque »).
 
 /// La version du dialogue entre BHOST et le relais.
 pub const VERSION: u32 = 1;
@@ -73,6 +76,23 @@ pub fn sous_domaine(hote: &str, domaine: &str) -> Option<String> {
     let fin = format!(".{}", domaine.trim_matches('.').to_ascii_lowercase());
     let nom = hote.strip_suffix(&fin)?;
     nom_valide(nom).then(|| nom.to_string())
+}
+
+/// Le code d'une machine dédiée : 8 caractères, sans 0, O, 1 ni I (comme src/code.ts).
+pub const ALPHABET_CODE: &str = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+pub fn code_valide(code: &str) -> bool {
+    code.len() == 8 && code.chars().all(|c| ALPHABET_CODE.contains(c))
+}
+
+/// L'id d'une machine : le début de sa clé publique (16 caractères hexadécimaux).
+pub fn id_machine(cle: &str) -> String {
+    cle.chars().take(16).collect()
+}
+
+/// Le texte qu'une machine signe pour prouver que la clé est à elle.
+pub fn a_signer_machine(code: &str, defi: &str) -> String {
+    format!("bhost-machine-v{VERSION}|{code}|{defi}")
 }
 
 /// Le texte que BHOST signe pour prouver que le nom est à lui.
@@ -256,6 +276,10 @@ pub enum DeBhost {
     Ping,
     /// Connexion données : le joueur `id` attendu par le relais.
     Donnees { id: u64, jeton: String },
+    /// Une machine dédiée se présente : sa clé publique et son code (puis elle signe un défi).
+    Machine { cle: String, code: String },
+    /// Un PC veut relier la machine qui a ce code.
+    Lier { code: String },
 }
 
 /// Ce que le relais répond.
@@ -269,6 +293,8 @@ pub enum DuRelais {
     Pong,
     /// Un joueur arrive : ouvre une connexion « DONNEES ».
     Joueur { id: u64, jeton: String },
+    /// Le code est bon : l'id de la machine.
+    Liee { id: String },
 }
 
 fn hexa_valide(texte: &str, longueur: usize) -> bool {
@@ -281,6 +307,8 @@ pub fn ecrire_de_bhost(m: &DeBhost) -> String {
         DeBhost::Signe { signature } => format!("SIGNE {signature}\n"),
         DeBhost::Ping => "PING\n".into(),
         DeBhost::Donnees { id, jeton } => format!("DONNEES {id} {jeton}\n"),
+        DeBhost::Machine { cle, code } => format!("MACHINE {cle} {code}\n"),
+        DeBhost::Lier { code } => format!("LIER {code}\n"),
     }
 }
 
@@ -291,6 +319,8 @@ pub fn lire_de_bhost(ligne: &str) -> Option<DeBhost> {
         ["SIGNE", s] if hexa_valide(s, 128) => Some(DeBhost::Signe { signature: s.to_ascii_lowercase() }),
         ["PING"] => Some(DeBhost::Ping),
         ["DONNEES", id, jeton] if hexa_valide(jeton, 32) => Some(DeBhost::Donnees { id: id.parse().ok()?, jeton: jeton.to_ascii_lowercase() }),
+        ["MACHINE", cle, code] if hexa_valide(cle, 64) && code_valide(code) => Some(DeBhost::Machine { cle: cle.to_ascii_lowercase(), code: code.to_string() }),
+        ["LIER", code] if code_valide(code) => Some(DeBhost::Lier { code: code.to_string() }),
         _ => None,
     }
 }
@@ -302,6 +332,7 @@ pub fn ecrire_du_relais(m: &DuRelais) -> String {
         DuRelais::Non { raison } => format!("NON {raison}\n"),
         DuRelais::Pong => "PONG\n".into(),
         DuRelais::Joueur { id, jeton } => format!("JOUEUR {id} {jeton}\n"),
+        DuRelais::Liee { id } => format!("LIEE {id}\n"),
     }
 }
 
@@ -313,6 +344,7 @@ pub fn lire_du_relais(ligne: &str) -> Option<DuRelais> {
         ["NON", r] if r.len() < 20 => Some(DuRelais::Non { raison: r.to_string() }),
         ["PONG"] => Some(DuRelais::Pong),
         ["JOUEUR", id, jeton] if hexa_valide(jeton, 32) => Some(DuRelais::Joueur { id: id.parse().ok()?, jeton: jeton.to_ascii_lowercase() }),
+        ["LIEE", id] if hexa_valide(id, 16) => Some(DuRelais::Liee { id: id.to_ascii_lowercase() }),
         _ => None,
     }
 }
@@ -430,6 +462,8 @@ mod tests {
             DeBhost::Signe { signature: "cd".repeat(64) },
             DeBhost::Ping,
             DeBhost::Donnees { id: 17, jeton: "0f".repeat(16) },
+            DeBhost::Machine { cle: cle.clone(), code: "K7M2Q9XR".into() },
+            DeBhost::Lier { code: "K7M2Q9XR".into() },
         ] {
             assert_eq!(lire_de_bhost(&ecrire_de_bhost(&m)), Some(m));
         }
@@ -439,6 +473,7 @@ mod tests {
             DuRelais::Non { raison: "pris".into() },
             DuRelais::Pong,
             DuRelais::Joueur { id: 3, jeton: "aa".repeat(16) },
+            DuRelais::Liee { id: "ab".repeat(8) },
         ] {
             assert_eq!(lire_du_relais(&ecrire_du_relais(&m)), Some(m));
         }
@@ -448,5 +483,10 @@ mod tests {
         assert_eq!(depuis_hexa(&hexa(&[0, 1, 255])), Some(vec![0, 1, 255]));
         assert_eq!(depuis_hexa("zz"), None);
         assert_eq!(a_signer("survie", "ab"), "bhost-relais-v1|survie|ab");
+        // Codes de machine : 8 caractères, ni 0, O, 1, I, ni minuscules.
+        assert_eq!(lire_de_bhost("LIER K0M2Q9XR"), None);
+        assert_eq!(lire_de_bhost("LIER k7m2q9xr"), None);
+        assert_eq!(lire_de_bhost("LIER K7M2Q9X"), None);
+        assert_eq!(id_machine(&cle), "abababababababab");
     }
 }

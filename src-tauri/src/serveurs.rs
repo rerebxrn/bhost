@@ -40,6 +40,9 @@ pub struct Serveur {
     /// Paramètres › Avancé › Réglages de démarrage optimisés (options de Java d'Aikar, sans réserver la mémoire d'avance).
     #[serde(default, skip_serializing_if = "faux")]
     pub optimise: bool,
+    /// Paramètres › Performances › Priorité (absente : Normale).
+    #[serde(default, skip_serializing_if = "crate::processus::Priorite::est_normale")]
+    pub priorite: crate::processus::Priorite,
     /// Paramètres › Joueurs Bedrock : le port de Geyser pour ce serveur (19132, ou un suivant s'il est pris).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bedrock_port: Option<u16>,

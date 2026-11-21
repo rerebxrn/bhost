@@ -712,6 +712,9 @@ fn demarrer_avec(app: &AppHandle, id: &str, serveur: &Serveur, programme: &str) 
     dire_statut(app, id, "demarrage");
     match processus::lancer(dossier, programme, &arguments, &variables, ecoute) {
         Ok(p) => {
+            if let Err(erreur) = p.regler_priorite(serveur.priorite) {
+                dire_ligne(app, id, &format!("[BHOST] {erreur}"));
+            }
             vivants.insert(id.to_string(), p);
             drop(vivants);
             problemes::effacer(app, id, false);
@@ -1382,6 +1385,8 @@ struct ReglagesServeur {
     java_choix: Option<String>,
     optimise: bool,
     arguments: String,
+    #[serde(default)]
+    priorite: processus::Priorite,
 }
 
 /// Enregistre les réglages d'un serveur. Ils comptent au prochain démarrage.
@@ -1403,9 +1408,14 @@ fn regler_serveur(id: String, reglages: ReglagesServeur, etat: State<Etat>) -> R
     serveur.java_choix = reglages.java_choix;
     serveur.optimise = reglages.optimise;
     serveur.arguments = reglages.arguments.trim().to_string();
+    serveur.priorite = reglages.priorite;
     let copie = serveur.clone();
     serveurs::enregistrer(&etat.fichier, &liste)?;
     drop(liste);
+    // La priorité change tout de suite si le serveur tourne.
+    if let Some(p) = etat.vivants.lock().unwrap().get(&id).cloned() {
+        p.regler_priorite(copie.priorite)?;
+    }
     Ok((vu(&etat, &copie), parametres(&copie)))
 }
 

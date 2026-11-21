@@ -365,7 +365,7 @@ export default function App() {
         liste &&
         liste.map((x) =>
           x.id === s.id
-            ? { ...x, nom: s.nom, ramMo: s.ramMo, joueursMax: s.joueursMax, port: s.port, couleur: s.couleur, javaChoix: s.javaChoix, demarrerAuto: s.demarrerAuto, ouvertAmis: s.ouvertAmis, optimise: s.optimise, arguments: s.arguments }
+            ? { ...x, nom: s.nom, ramMo: s.ramMo, joueursMax: s.joueursMax, port: s.port, couleur: s.couleur, javaChoix: s.javaChoix, demarrerAuto: s.demarrerAuto, ouvertAmis: s.ouvertAmis, optimise: s.optimise, arguments: s.arguments, priorite: s.priorite }
             : x,
         ),
     );

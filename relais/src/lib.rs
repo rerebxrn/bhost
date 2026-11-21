@@ -42,6 +42,10 @@ const LIGNE_MAX: usize = 300;
 const CONNEXIONS_MAX: usize = 20_000;
 /// Noms enregistrés au plus.
 const NOMS_MAX: usize = 200_000;
+/// Machines dédiées : codes faux permis par adresse IP avant d'attendre.
+const ESSAIS_MAX: u32 = 5;
+/// … et l'attente après le 5ᵉ code faux.
+const ATTENTE_ESSAIS: Duration = Duration::from_secs(15 * 60);
 
 pub struct Reglages {
     /// « bhost.app » : les serveurs sont « nom.bhost.app ».
@@ -72,6 +76,14 @@ struct Agent {
     _fin: oneshot::Sender<()>,
 }
 
+/// Une machine dédiée (BHOST OS) en ligne, rangée par son code.
+struct MachineEnLigne {
+    id: String,
+    session: u64,
+    /// Remplacée par une connexion plus récente : ce bout tombe, et la session le voit.
+    _fin: oneshot::Sender<()>,
+}
+
 /// Un joueur qui attend que BHOST ouvre sa connexion.
 struct Attente {
     jeton: String,
@@ -95,6 +107,9 @@ pub struct Relais {
     agents_ip: Mutex<HashMap<IpAddr, u32>>,
     serveurs_ip: Mutex<HashMap<IpAddr, u32>>,
     nouveaux_ip: Mutex<HashMap<IpAddr, (Instant, u32)>>,
+    machines: Mutex<HashMap<String, MachineEnLigne>>,
+    /// Codes de machine faux, par adresse IP : (depuis quand, combien).
+    essais: Mutex<HashMap<IpAddr, (Instant, u32)>>,
     compteur: AtomicU64,
 }
 
@@ -175,6 +190,8 @@ impl Relais {
             agents_ip: Mutex::default(),
             serveurs_ip: Mutex::default(),
             nouveaux_ip: Mutex::default(),
+            machines: Mutex::default(),
+            essais: Mutex::default(),
             compteur: AtomicU64::new(1),
         })
     }
@@ -447,6 +464,11 @@ async fn agent(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()> 
             Ok(())
         }
         Some(DeBhost::Bonjour { nom, cle }) => controle(rel, flux, ip, nom, cle).await,
+        Some(DeBhost::Machine { cle, code }) => machine(rel, flux, ip, cle, code).await,
+        Some(DeBhost::Lier { code }) => {
+            let reponse = rel.lier(&code, ip);
+            ecrire(&mut flux, &reponse).await
+        }
         _ => Ok(()),
     }
 }
@@ -508,6 +530,77 @@ async fn controle(rel: &Relais, mut flux: TcpStream, ip: IpAddr, nom: String, cl
         drop(agents);
         // Les joueurs qui attendaient ce serveur n'attendent pas 10 s pour rien.
         rel.attentes.lock().unwrap().retain(|_, a| a.nom != nom);
+    }
+    resultat
+}
+
+impl Relais {
+    /// Un PC tape le code d'une machine. Après 5 codes faux, l'adresse IP attend 15 minutes
+    /// (même avec le bon code) : deviner un code de 8 caractères devient impossible.
+    fn lier(&self, code: &str, ip: IpAddr) -> DuRelais {
+        let ip = bloc(ip);
+        let mut essais = self.essais.lock().unwrap();
+        essais.retain(|_, (depuis, _)| depuis.elapsed() < ATTENTE_ESSAIS);
+        if essais.get(&ip).is_some_and(|(_, n)| *n >= ESSAIS_MAX) {
+            return DuRelais::Non { raison: "bloque".into() };
+        }
+        if let Some(m) = self.machines.lock().unwrap().get(code) {
+            return DuRelais::Liee { id: m.id.clone() };
+        }
+        let (depuis, n) = essais.entry(ip).or_insert((Instant::now(), 0));
+        *n += 1;
+        if *n >= ESSAIS_MAX {
+            *depuis = Instant::now(); // l'attente part du dernier essai
+        }
+        DuRelais::Non { raison: "code".into() }
+    }
+}
+
+/// La connexion d'une machine dédiée : preuve de la clé, puis elle reste joignable par son code.
+async fn machine(rel: &Relais, mut flux: TcpStream, ip: IpAddr, cle: String, code: String) -> io::Result<()> {
+    let defi = protocole::hexa(&hasard::<16>());
+    ecrire(&mut flux, &DuRelais::Defi { defi: defi.clone() }).await?;
+    let Some(ligne) = lire_ligne(&mut flux, DELAI_DEBUT).await? else { return Ok(()) };
+    let Some(DeBhost::Signe { signature }) = protocole::lire_de_bhost(&ligne) else { return Ok(()) };
+    if !signature_valide(&cle, &signature, &protocole::a_signer_machine(&code, &defi)) {
+        return ecrire(&mut flux, &DuRelais::Non { raison: "signature".into() }).await;
+    }
+    let Some(_place) = Place::prendre(&rel.serveurs_ip, ip, MAX_SERVEURS_PAR_IP) else {
+        return ecrire(&mut flux, &DuRelais::Non { raison: "trop".into() }).await;
+    };
+    let id = protocole::id_machine(&cle);
+    let session = rel.compteur.fetch_add(1, Ordering::Relaxed);
+    let (fin, mut remplace) = oneshot::channel::<()>();
+    // Deux machines avec le même code (très rare) : la 2ᵉ doit en tirer un autre.
+    let pris = {
+        let mut machines = rel.machines.lock().unwrap();
+        let pris = machines.get(&code).is_some_and(|m| m.id != id);
+        if !pris {
+            machines.insert(code.clone(), MachineEnLigne { id: id.clone(), session, _fin: fin });
+        }
+        pris
+    };
+    if pris {
+        return ecrire(&mut flux, &DuRelais::Non { raison: "pris".into() }).await;
+    }
+    ecrire(&mut flux, &DuRelais::Ok { adresse: id }).await?;
+
+    let (mut lecture, mut ecriture) = flux.into_split();
+    let resultat: io::Result<()> = async {
+        loop {
+            tokio::select! {
+                ligne = lire_ligne(&mut lecture, DELAI_SILENCE) => match ligne? {
+                    Some(l) if protocole::lire_de_bhost(&l) == Some(DeBhost::Ping) => ecrire(&mut ecriture, &DuRelais::Pong).await?,
+                    _ => return Ok(()),
+                },
+                _ = &mut remplace => return Ok(()),
+            }
+        }
+    }
+    .await;
+    let mut machines = rel.machines.lock().unwrap();
+    if machines.get(&code).is_some_and(|m| m.session == session) {
+        machines.remove(&code);
     }
     resultat
 }

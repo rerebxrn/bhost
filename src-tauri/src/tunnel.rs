@@ -5,7 +5,7 @@
 
 #[allow(dead_code)]
 #[path = "../../relais/src/protocole.rs"]
-mod protocole;
+pub(crate) mod protocole;
 
 use ed25519_dalek::{Signer, SigningKey};
 use protocole::{DeBhost, DuRelais};
@@ -259,7 +259,7 @@ impl Lignes {
     }
 }
 
-fn adresse_relais() -> io::Result<SocketAddr> {
+pub(crate) fn adresse_relais() -> io::Result<SocketAddr> {
     // BHOST_RELAIS : un autre relais, seulement pour les essais (jamais dans la version publiée).
     #[cfg(debug_assertions)]
     let texte = std::env::var("BHOST_RELAIS").unwrap_or_else(|_| RELAIS.to_string());
@@ -268,7 +268,7 @@ fn adresse_relais() -> io::Result<SocketAddr> {
     texte.to_socket_addrs()?.next().ok_or_else(|| io::ErrorKind::NotFound.into())
 }
 
-fn connecter(adresse: SocketAddr) -> io::Result<TcpStream> {
+pub(crate) fn connecter(adresse: SocketAddr) -> io::Result<TcpStream> {
     let flux = TcpStream::connect_timeout(&adresse, Duration::from_secs(5))?;
     let _ = flux.set_nodelay(true);
     Ok(flux)

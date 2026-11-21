@@ -34,7 +34,10 @@ export type Serveur = {
   ouvertAmis?: boolean; // Paramètres › Ouvert à tes amis (port ouvert sur la box)
   optimise?: boolean; // Paramètres › Réglages de démarrage optimisés
   arguments?: string; // Paramètres › Arguments en plus
+  priorite?: Priorite; // Paramètres › Performances › Priorité (absente : normale)
 };
+
+export type Priorite = "basse" | "normale" | "haute";
 
 // Une machine dédiée (BHOST OS) reliée à ce PC avec son code.
 export type Machine = {

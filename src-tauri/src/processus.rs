@@ -24,6 +24,44 @@ pub enum Signal {
 
 pub type Ecoute = Arc<dyn Fn(Signal) + Send + Sync>;
 
+/// Paramètres › Performances › Priorité : qui passe d'abord quand le PC est occupé (un jeu, un navigateur…).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Priorite {
+    /// Le serveur laisse la place aux autres programmes.
+    Basse,
+    #[default]
+    Normale,
+    /// Le serveur passe avant les autres programmes.
+    Haute,
+}
+
+impl Priorite {
+    pub fn est_normale(&self) -> bool {
+        *self == Priorite::Normale
+    }
+}
+
+/// Le « bridage » de Windows 11 pour les programmes sans fenêtre (EcoQoS), sous la forme (ControlMask, StateMask).
+/// Deux freins, tous deux coupés pour un serveur.
+///
+/// Frein « vitesse » (1) : Windows met le programme sur les petits cœurs, à basse fréquence, quand un jeu est au premier plan.
+///
+/// Frein « minuterie » (4) : Windows ignore la demande de précision de Java. Ses pauses durent alors 15,6 ms au lieu de 1 ms :
+/// un tick de 50 ms passe à 62,5 ms, soit exactement 16 TPS au lieu de 20.
+///
+/// En priorité Basse, on laisse Windows décider de la vitesse, mais la minuterie reste précise.
+/// StateMask à 0 : « jamais bridé » pour chaque frein choisi dans ControlMask.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn freins_coupes(priorite: Priorite) -> (u32, u32) {
+    const VITESSE: u32 = 1; // PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+    const MINUTERIE: u32 = 4; // PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+    match priorite {
+        Priorite::Basse => (MINUTERIE, 0),
+        _ => (VITESSE | MINUTERIE, 0),
+    }
+}
+
 /// Un serveur en train de tourner.
 pub struct Processus {
     /// Numéro du programme chez Windows (pour mesurer sa mémoire et son processeur).
@@ -56,10 +94,65 @@ impl Processus {
             .map_err(|_| "Le serveur ne répond plus.".to_string())
     }
 
+    /// Donne au serveur sa priorité, et coupe le bridage de Windows (voir `freins_coupes`).
+    /// Marche aussi pendant qu'il tourne. Ailleurs que sur Windows : rien pour l'instant.
+    pub fn regler_priorite(&self, priorite: Priorite) -> Result<(), String> {
+        let enfant = self.enfant.lock().unwrap();
+        vitesse::regler(&enfant, priorite)
+    }
+
     /// Coupe le serveur tout de suite, sans sauvegarder : Java et tout ce qu'il a lancé.
     pub fn tuer(&self) {
         self.groupe.couper();
         let _ = self.enfant.lock().unwrap().kill();
+    }
+}
+
+/// Priorité et bridage (Windows). Ailleurs : rien.
+mod vitesse {
+    use super::Priorite;
+
+    #[cfg(windows)]
+    pub fn regler(enfant: &std::process::Child, priorite: Priorite) -> Result<(), String> {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::System::Threading::{
+            ProcessPowerThrottling, SetPriorityClass, SetProcessInformation, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS,
+            NORMAL_PRIORITY_CLASS, PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_STATE,
+        };
+        let classe = match priorite {
+            Priorite::Basse => BELOW_NORMAL_PRIORITY_CLASS,
+            Priorite::Normale => NORMAL_PRIORITY_CLASS,
+            Priorite::Haute => HIGH_PRIORITY_CLASS,
+        };
+        let poignee = enfant.as_raw_handle() as _;
+        let (controle, etat) = super::freins_coupes(priorite);
+        let freins = |controle: u32| {
+            let infos = PROCESS_POWER_THROTTLING_STATE { Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION, ControlMask: controle, StateMask: etat };
+            // SAFETY : `poignee` est celle du programme que nous avons lancé (vivant tant que `enfant` est verrouillé),
+            // `infos` vit pendant l'appel et sa taille est la bonne.
+            unsafe {
+                SetProcessInformation(
+                    poignee,
+                    ProcessPowerThrottling,
+                    &infos as *const _ as *const core::ffi::c_void,
+                    std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+                ) != 0
+            }
+        };
+        // Windows 10 ne connaît pas le frein « minuterie » : on réessaie sans lui.
+        if !freins(controle) {
+            let _ = freins(controle & !4);
+        }
+        // SAFETY : même poignée, appel simple.
+        if unsafe { SetPriorityClass(poignee, classe) } == 0 {
+            return Err("Windows a refusé de changer la priorité.".into());
+        }
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    pub fn regler(_enfant: &std::process::Child, _priorite: Priorite) -> Result<(), String> {
+        Ok(())
     }
 }
 
@@ -255,6 +348,26 @@ pub fn lancer(dossier: &Path, programme: &str, arguments: &[String], variables: 
     });
 
     Ok(processus)
+}
+
+#[cfg(test)]
+mod tests_priorite {
+    use super::*;
+
+    #[test]
+    fn freins() {
+        // Normale et Haute : vitesse et minuterie jamais bridées ; Basse : seulement la minuterie.
+        assert_eq!(freins_coupes(Priorite::Normale), (5, 0));
+        assert_eq!(freins_coupes(Priorite::Haute), (5, 0));
+        assert_eq!(freins_coupes(Priorite::Basse), (4, 0));
+    }
+
+    #[test]
+    fn priorite_dans_le_fichier() {
+        assert_eq!(serde_json::to_string(&Priorite::Haute).unwrap(), "\"haute\"");
+        assert_eq!(serde_json::from_str::<Priorite>("\"basse\"").unwrap(), Priorite::Basse);
+        assert_eq!(Priorite::default(), Priorite::Normale);
+    }
 }
 
 #[cfg(all(test, unix))]

@@ -29,7 +29,7 @@ import {
   reglerBedrock,
   type VueBedrock,
 } from "../api";
-import { nomLogiciel, type Acces, type Serveur } from "../types";
+import { nomLogiciel, type Acces, type Priorite, type Serveur } from "../types";
 import "./Parametres.css";
 
 const MODES = [
@@ -38,6 +38,16 @@ const MODES = [
   { id: "aventure", nom: "Aventure" },
   { id: "hardcore", nom: "Hardcore" },
 ];
+const PRIORITES: { id: Priorite; nom: string }[] = [
+  { id: "basse", nom: "Basse" },
+  { id: "normale", nom: "Normale" },
+  { id: "haute", nom: "Haute" },
+];
+const AIDE_PRIORITE: Record<Priorite, string> = {
+  basse: "Tes jeux passent d'abord.",
+  normale: "Partagé avec tes autres programmes.",
+  haute: "Le serveur passe avant tes jeux.",
+};
 const DIFFICULTES = [
   { id: "paisible", nom: "Paisible" },
   { id: "facile", nom: "Facile" },
@@ -124,6 +134,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
       javaChoix: serveur.javaChoix ?? null,
       optimise: !!serveur.optimise,
       arguments: serveur.arguments ?? "",
+      priorite: serveur.priorite ?? "normale",
       ...change,
     };
     return reglerServeur(serveur.id, reglages).then(
@@ -319,6 +330,13 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
             <Curseur min={1} max={memoireMax} valeur={ram} onChange={changerRam} etiquette="Mémoire allouée" unite="Go" />
             <b className="tnum">{ram} Go</b>
           </div>
+        </div>
+        <div className="row">
+          <div className="lbl">
+            <span>Priorité</span>
+            <span className="t2">{AIDE_PRIORITE[serveur.priorite ?? "normale"]}</span>
+          </div>
+          <Segment etiquette="Priorité" options={PRIORITES} valeur={serveur.priorite ?? "normale"} onChoisir={(priorite) => regler({ priorite })} />
         </div>
       </section>
 

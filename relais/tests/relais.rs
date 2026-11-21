@@ -200,3 +200,54 @@ async fn un_mauvais_jeton_ne_vole_pas_un_joueur() {
     timeout(Duration::from_secs(5), voleur.read_to_end(&mut recu)).await.unwrap().unwrap();
     assert!(recu.is_empty(), "le voleur n'a rien reçu");
 }
+
+/// Une fausse machine dédiée (BHOST OS) : elle se présente avec son code et reste en ligne.
+async fn machine(agents: SocketAddr, code: &str, graine: u8) -> (DuRelais, BufReader<TcpStream>) {
+    let cle = SigningKey::from_bytes(&[graine; 32]);
+    let mut f = BufReader::new(TcpStream::connect(agents).await.unwrap());
+    let m = protocole::ecrire_de_bhost(&DeBhost::Machine { cle: protocole::hexa(cle.verifying_key().as_bytes()), code: code.into() });
+    f.get_mut().write_all(format!("BHOST 1\n{m}").as_bytes()).await.unwrap();
+    let mut ligne = String::new();
+    f.read_line(&mut ligne).await.unwrap();
+    let Some(DuRelais::Defi { defi }) = protocole::lire_du_relais(&ligne) else { panic!("pas de défi : {ligne}") };
+    let signature = protocole::hexa(&cle.sign(protocole::a_signer_machine(code, &defi).as_bytes()).to_bytes());
+    f.get_mut().write_all(protocole::ecrire_de_bhost(&DeBhost::Signe { signature }).as_bytes()).await.unwrap();
+    ligne.clear();
+    f.read_line(&mut ligne).await.unwrap();
+    (protocole::lire_du_relais(&ligne).expect("réponse illisible"), f)
+}
+
+/// Un PC tape un code : la réponse du relais.
+async fn lier(agents: SocketAddr, code: &str) -> DuRelais {
+    let mut f = BufReader::new(TcpStream::connect(agents).await.unwrap());
+    f.get_mut().write_all(format!("BHOST 1\nLIER {code}\n").as_bytes()).await.unwrap();
+    let mut ligne = String::new();
+    timeout(Duration::from_secs(5), f.read_line(&mut ligne)).await.unwrap().unwrap();
+    protocole::lire_du_relais(&ligne).expect("réponse illisible")
+}
+
+#[tokio::test]
+async fn machine_reliee_par_son_code_et_essais_limites() {
+    let (_, agents) = relais().await;
+    let (ok, _m) = machine(agents, "K7M2Q9XR", 9).await;
+    let id = protocole::id_machine(&protocole::hexa(SigningKey::from_bytes(&[9; 32]).verifying_key().as_bytes()));
+    assert_eq!(ok, DuRelais::Ok { adresse: id.clone() });
+    // Le bon code : l'id de la machine.
+    assert_eq!(lier(agents, "K7M2Q9XR").await, DuRelais::Liee { id: id.clone() });
+    // Une autre machine ne peut pas prendre le même code.
+    assert_eq!(machine(agents, "K7M2Q9XR", 10).await.0, DuRelais::Non { raison: "pris".into() });
+    // 5 codes faux, puis même le bon code attend.
+    for _ in 0..5 {
+        assert_eq!(lier(agents, "ZZZZ2222").await, DuRelais::Non { raison: "code".into() });
+    }
+    assert_eq!(lier(agents, "K7M2Q9XR").await, DuRelais::Non { raison: "bloque".into() });
+}
+
+#[tokio::test]
+async fn machine_partie_plus_joignable() {
+    let (_, agents) = relais().await;
+    let (_, m) = machine(agents, "ABCD2345", 11).await;
+    drop(m);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(lier(agents, "ABCD2345").await, DuRelais::Non { raison: "code".into() });
+}
