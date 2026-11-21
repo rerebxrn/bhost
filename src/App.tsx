@@ -97,7 +97,8 @@ const retenirAccueil = () => {
 
 // Ce qu'on affiche à droite de la barre latérale.
 // « machine » : le tutoriel « Préparer une machine dédiée », ouvert depuis Réglages.
-type Vue = "serveur" | "nouveau" | "reglages" | "machine";
+// « infos » : la page « Machine » d'une machine dédiée (stockage, température…).
+type Vue = "serveur" | "nouveau" | "reglages" | "machine" | "infos";
 
 export default function App() {
   // null : la liste n'est pas encore arrivée de la partie Rust.
@@ -113,6 +114,7 @@ export default function App() {
   const [ajoutMachine, setAjoutMachine] = useState(false); // fenêtre « Ajouter une machine dédiée »
   const [aDelier, setADelier] = useState<Machine | null>(null);
   const [machineARenommer, setMachineARenommer] = useState<Machine | null>(null);
+  const [machineActive, setMachineActive] = useState("ici"); // la machine affichée à gauche : « ici » = ce PC
   const theme = useTheme();
   useLiquidGlass(theme.reel, theme.teinte, theme.sombre);
 
@@ -140,9 +142,17 @@ export default function App() {
     machinesLiees().then(setMachines, () => {});
     return ecouterMachines(setMachines);
   }, []);
+  // Les mesures des machines (stockage, température…) : relues toutes les 5 s, tant qu'il y a une machine.
+  const avecMachines = machines.length > 0;
+  useEffect(() => {
+    if (!avecMachines) return;
+    const minuterie = window.setInterval(() => machinesLiees().then(setMachines, () => {}), 5000);
+    return () => window.clearInterval(minuterie);
+  }, [avecMachines]);
   // Une machine vient d'être reliée : ses serveurs arrivent dans la liste.
   const machineAjoutee = (m: Machine) => {
     setMachines((l) => [...l.filter((x) => x.id !== m.id), m]);
+    setMachineActive(m.id);
     listerServeurs().then(setServeurs, () => {});
     retenirAccueil();
     setAccueilVu(true);
@@ -153,6 +163,8 @@ export default function App() {
     delierMachine(m.id).then(
       () => {
         setMachines((l) => l.filter((x) => x.id !== m.id));
+        setServeurs((l) => l && l.filter((s) => s.machine !== m.id));
+        setMachineActive((a) => (a === m.id ? "ici" : a));
         prevenir(`« ${m.nom} » retirée`);
       },
       (e) => setErreur(typeof e === "string" ? e : "Ça n'a pas marché."),
@@ -370,7 +382,9 @@ export default function App() {
         ),
     );
 
-  const liste = serveurs ?? [];
+  // Seuls les serveurs de la machine choisie à gauche.
+  const tous = serveurs ?? [];
+  const liste = tous.filter((s) => (s.machine ?? "ici") === machineActive);
   // Nouvel onglet ou autre serveur : on remonte en haut de la page.
   const zoneScroll = useRef<HTMLDivElement>(null);
   const cleOnglet = (idActif ?? "") + onglet + vue;
@@ -436,17 +450,35 @@ export default function App() {
       <div className="corps">
         <Sidebar
           serveurs={liste}
+          machines={machines}
+          machineActive={machineActive}
+          machineOuverte={vue === "infos"}
+          onMachine={(id) => {
+            setMachineActive(id);
+            // Machine hors ligne : ses serveurs sont grisés, on montre la machine.
+            const eteinte = machines.some((m) => m.id === id && m.etat !== "en-ligne");
+            const premier = eteinte ? undefined : tous.find((s) => (s.machine ?? "ici") === id);
+            setIdActif(premier?.id ?? null);
+            setVue(premier ? "serveur" : id === "ici" ? "nouveau" : "infos");
+          }}
+          onAjouterMachine={() => setAjoutMachine(true)}
+          onVueMachine={() => setVue("infos")}
           idActif={surServeur ? serveur.id : null}
-          nouveauOuvert={serveurs !== null && vue !== "reglages" && !surServeur}
+          nouveauOuvert={serveurs !== null && vue !== "reglages" && vue !== "infos" && !surServeur}
           reglagesOuverts={vue === "reglages"}
           onChoisir={ouvrir}
           onMenu={(id, x, y) => setMenu({ id, x, y })}
-          onCreer={() => setVue("nouveau")}
+          onCreer={() => (machineActive === "ici" ? setVue("nouveau") : prevenir("Bientôt : créer un serveur sur une machine dédiée.", 3000))}
           onReglages={() => setVue("reglages")}
         />
 
         <main className="main">
-          {serveurs === null ? null : vue === "reglages" ? (
+          {serveurs === null ? null : vue === "infos" ? (
+            <div className="soon">
+              <b>{machines.find((m) => m.id === machineActive)?.nom ?? "Machine"}</b>
+              Bientôt : stockage par serveur, température, redémarrer, éteindre.
+            </div>
+          ) : vue === "reglages" ? (
             <div className="scroll sans-barres">
               <Reglages machines={machines} onAjouterMachine={() => setAjoutMachine(true)} onRenommerMachine={setMachineARenommer} onDelierMachine={setADelier} />
             </div>

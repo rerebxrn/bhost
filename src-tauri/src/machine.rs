@@ -91,10 +91,63 @@ pub struct MachineVue {
     /// « hors-ligne » tant que le pilotage par le relais n'existe pas (BHOST OS).
     etat: &'static str,
     serveurs: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disque: Option<Jauge>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    memoire: Option<Jauge>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    processeur: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f64>,
+}
+
+/// Une jauge de la machine (Go). Les noms suivent `Machine` de src/types.ts.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct Jauge {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    utilise_go: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reservee_go: Option<f64>,
+    total_go: f64,
+}
+
+// ---- Machines de test (version de dev seulement) ----
+// Sans machine dédiée, Thomas tape « TEST-TEST » (en ligne) ou « TEST-2222 » (hors ligne) pour voir la barre de gauche.
+// La version publiée ne connaît pas ces codes (cfg!(debug_assertions) est faux).
+const TEST_EN_LIGNE: (&str, &str) = ("TESTTEST", "7e57000000000001");
+const TEST_HORS_LIGNE: (&str, &str) = ("TEST2222", "7e57000000000002");
+
+fn machine_de_test(code: &str) -> Option<&'static str> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    [TEST_EN_LIGNE, TEST_HORS_LIGNE].iter().find(|(c, _)| *c == code).map(|(_, id)| *id)
 }
 
 fn vue(m: &MachineLiee) -> MachineVue {
-    MachineVue { id: m.id.clone(), nom: m.nom.clone(), code: m.code.clone(), etat: "hors-ligne", serveurs: 0 }
+    let mut v = MachineVue {
+        id: m.id.clone(),
+        nom: m.nom.clone(),
+        code: m.code.clone(),
+        etat: "hors-ligne",
+        serveurs: 0,
+        disque: None,
+        memoire: None,
+        processeur: None,
+        temperature: None,
+    };
+    if cfg!(debug_assertions) && m.id == TEST_EN_LIGNE.1 {
+        // La température monte et descend toute seule (54 → 86 °C) pour voir le gris, l'orange et le rouge.
+        let s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let t = 54.0 + 32.0 * (((s / 10) % 9) as f64 / 8.0);
+        v.etat = "en-ligne";
+        v.disque = Some(Jauge { utilise_go: Some(168.0), reservee_go: None, total_go: 476.0 });
+        v.memoire = Some(Jauge { utilise_go: None, reservee_go: Some(11.8), total_go: 16.0 });
+        v.processeur = Some(18.0);
+        v.temperature = Some(t.round());
+    }
+    v
 }
 
 /// Une seule écriture du fichier à la fois.
@@ -184,8 +237,13 @@ pub fn machines_liees(etat: State<crate::Etat>) -> Vec<MachineVue> {
 pub async fn lier_machine(app: AppHandle, code: String, etat: State<'_, crate::Etat>) -> Result<MachineVue, String> {
     let code = nettoyer_code(&code).ok_or("Ce code n'est pas valide. Vérifie-le.")?;
     let dossier = etat.dossier.clone();
-    let c = code.clone();
-    let id = tauri::async_runtime::spawn_blocking(move || demander_au_relais(&c)).await.map_err(|_| "Ça n'a pas marché.".to_string())??;
+    let id = match machine_de_test(&code) {
+        Some(id) => id.to_string(),
+        None => {
+            let c = code.clone();
+            tauri::async_runtime::spawn_blocking(move || demander_au_relais(&c)).await.map_err(|_| "Ça n'a pas marché.".to_string())??
+        }
+    };
     let _une_seule = VERROU.lock().unwrap();
     let mut liste = lire(&dossier);
     let m = ajouter(&mut liste, &id, &code);
@@ -260,6 +318,19 @@ mod tests {
         assert!(reponse_liaison("NON code\n").unwrap_err().contains("Aucune machine"));
         assert!(reponse_liaison("NON bloque\n").unwrap_err().contains("15 minutes"));
         assert!(reponse_liaison("n'importe quoi").is_err());
+    }
+
+    #[test]
+    fn machines_de_test() {
+        // Les tests tournent en version de dev : les deux codes de test existent.
+        assert_eq!(machine_de_test("TESTTEST"), Some("7e57000000000001"));
+        assert_eq!(machine_de_test("K7M2Q9XR"), None);
+        let en_ligne = vue(&MachineLiee { id: TEST_EN_LIGNE.1.into(), nom: "Test".into(), code: "TESTTEST".into() });
+        assert_eq!(en_ligne.etat, "en-ligne");
+        assert!(en_ligne.temperature.is_some_and(|t| (54.0..=86.0).contains(&t)));
+        let json = serde_json::to_string(&en_ligne).unwrap();
+        assert!(json.contains("\"utiliseGo\":168.0") && json.contains("\"reserveeGo\":11.8"));
+        assert_eq!(vue(&MachineLiee { id: TEST_HORS_LIGNE.1.into(), nom: "Test".into(), code: "TEST2222".into() }).etat, "hors-ligne");
     }
 
     #[test]

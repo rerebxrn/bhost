@@ -35,6 +35,7 @@ export type Serveur = {
   optimise?: boolean; // Paramètres › Réglages de démarrage optimisés
   arguments?: string; // Paramètres › Arguments en plus
   priorite?: Priorite; // Paramètres › Performances › Priorité (absente : normale)
+  machine?: string; // id de la machine dédiée qui l'héberge ; absent = ce PC
 };
 
 export type Priorite = "basse" | "normale" | "haute";

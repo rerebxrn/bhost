@@ -126,3 +126,255 @@
 .side-set:active {
   transform: scale(0.98);
 }
+
+/* ---------- Avec une machine dédiée ---------- */
+
+/* Le sélecteur de machine : en haut de la barre. Piste A (21/11, choix de Thomas « pour le moment ») :
+   une ligne transparente comme dans la barre du Finder, gris léger au survol, sans carte blanche. */
+.sm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--space-6);
+  padding: 6px 8px 6px 8px;
+  border: 0;
+  border-radius: var(--r-sel);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.3s var(--ease-spring),
+    background var(--dur-fast);
+}
+
+.sm:hover {
+  background: var(--hover);
+}
+
+.sm:active {
+  transform: scale(0.98);
+}
+
+.sm.on {
+  background: var(--fill);
+}
+
+.sm:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+
+.sm-ico {
+  flex: 0 0 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.sm-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sm-txt b {
+  font: var(--f-corps-fort);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sm-txt > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: var(--f-sous-titre);
+  color: var(--text2);
+}
+
+.sm-fleche {
+  flex: none;
+  color: var(--text2);
+}
+
+.sm-point {
+  flex: none;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--st-stopped);
+}
+
+.sm-point.en-ligne {
+  background: var(--st-online);
+}
+
+.sm-point.connexion {
+  background: var(--st-busy);
+}
+
+/* Le menu s'ouvre sous le sélecteur, de la même largeur.
+   Vrai verre (comme les onglets), pas le matériau épais des autres menus : on voit la barre à travers. */
+.g.ctx.choix-menu.sm-menu {
+  min-width: 0;
+  transform-origin: top left;
+  background: rgba(var(--g-rgb), calc(var(--g-min) + var(--t) * var(--g-span)));
+  box-shadow: var(--sh-glass);
+}
+
+.sm-item {
+  gap: 8px;
+}
+
+.sm-item .sm-nom {
+  flex: 1;
+  text-align: left;
+}
+
+.sm-item:hover .sm-point,
+.sm-item:focus-visible .sm-point {
+  box-shadow: 0 0 0 1.5px var(--on-acc);
+}
+
+/* L'état de la machine, sous le sélecteur. Un clic ouvre la page « Machine ». */
+.sm-etat {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 10px 9px;
+  border: 0;
+  border-radius: var(--r-sel);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sm-jauge {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sm-jauge-t {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: var(--f-sous-titre);
+  color: var(--text2);
+}
+
+.sm-jauge-t b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sm-barre {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--fill);
+}
+
+.sm-barre i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--acc);
+  transition: width 0.6s var(--ease-soft);
+}
+
+.sm-barre.haut i {
+  background: var(--st-busy);
+}
+
+.sm-barre.plein i {
+  background: var(--stop);
+}
+
+/* « Processeur      54 °C · 18 % », comme les jauges : le nom à gauche, les valeurs à droite. */
+.sm-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: var(--f-sous-titre);
+  color: var(--text2);
+}
+
+.sm-ligne-v {
+  display: flex;
+  gap: 5px;
+}
+
+.sm-ligne-v b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sm-ligne-v b.tiede {
+  color: var(--st-busy);
+  font-weight: 650;
+}
+
+.sm-ligne-v b.chaud {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+/* Hors ligne : une phrase à la place des jauges. */
+.sm-etat.hors b {
+  font: var(--f-corps-fort);
+}
+
+.sm-etat.hors span {
+  margin-top: -6px;
+  font: var(--f-sous-titre);
+  color: var(--text2);
+}
+
+/* Machine hors ligne : ses serveurs restent là, grisés.
+   (Sur les enfants : l'animation d'arrivée du bouton fixe déjà son opacité.) */
+.srv.off {
+  cursor: default;
+}
+
+.srv.off > * {
+  opacity: 0.45;
+}
+
+.srv.off:hover {
+  background: transparent;
+}
+
+.srv.off:active {
+  transform: none;
+}
+
+/* « Machine dédiée + » juste au-dessus du trait de Réglages, tant qu'aucune machine n'est reliée. */
+.side-set.side-machine {
+  margin-top: auto;
+  color: var(--text2);
+}
+
+.side-machine + .side-foot {
+  margin-top: 0;
+}
+
+.side-machine .side-plus {
+  margin-left: auto;
+  color: var(--text3);
+}
+
+.side-machine:hover,
+.side-machine:hover .side-plus {
+  color: var(--text);
+}
