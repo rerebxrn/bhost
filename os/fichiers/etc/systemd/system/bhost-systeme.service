@@ -1,0 +1,7 @@
+[Unit]
+Description=BHOST OS : demande de l'agent
+ConditionKernelCommandLine=!boot=bhost
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bhost-systeme

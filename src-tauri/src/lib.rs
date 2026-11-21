@@ -7,6 +7,7 @@
 mod acces;
 #[cfg(not(feature = "bureau"))]
 pub mod agent;
+mod chiffre;
 #[cfg(not(feature = "bureau"))]
 pub mod pilotage;
 mod hote;
@@ -14,6 +15,7 @@ mod automatique;
 mod bedrock;
 mod automatisations;
 mod catalogue;
+mod conduite;
 mod copie;
 mod creation;
 mod corbeille;
@@ -30,6 +32,7 @@ mod icone;
 mod icone_jeu;
 mod installeur;
 mod java;
+mod lag;
 mod machine;
 mod joueurs;
 mod listes;
@@ -38,7 +41,8 @@ mod mise_a_jour;
 mod mondes;
 mod nbt;
 mod problemes;
-mod processus;
+pub mod processus;
+pub mod cle;
 mod regles;
 mod reseau;
 mod ressources;
@@ -46,6 +50,7 @@ mod reveil;
 mod sauvegarde;
 mod serveurs;
 mod spigot;
+mod stockage;
 mod tetes;
 mod tps;
 mod tunnel;
@@ -175,7 +180,7 @@ fn vu(etat: &Etat, serveur: &Serveur) -> ServeurVu {
         depuis: etat.depuis.lock().unwrap().get(&serveur.id).copied(),
         joueurs: etat.joueurs.lock().unwrap().get(&serveur.id).cloned().unwrap_or_default(),
         joueurs_max: serveurs::joueurs_max(Path::new(&serveur.dossier)),
-        disque_mo: None,
+        disque_mo: serveur.disque_max_mo.and_then(|_| stockage::connue(&serveur.id)),
         serveur: serveur.clone(),
     }
 }
@@ -230,7 +235,10 @@ struct NouvelleTps<'a> {
 /// Regarde si une ligne de console donne les ticks par seconde, et prévient l'interface.
 /// Renvoie vrai si la ligne répond à une demande de BHOST : elle ne va pas dans la console.
 fn suivre_tps(app: &AppHandle, id: &str, ligne: &str) -> bool {
-    let Some(valeur) = tps::lire(ligne) else { return false };
+    let Some(valeur) = tps::lire(ligne) else {
+        // Les autres lignes de la réponse (« The game is running normally »…) : cachées si BHOST a demandé.
+        return tps::accompagne(ligne) && app.state::<Etat>().tps.lock().unwrap().get(id).is_some_and(|s| s.cacher_voisine(Instant::now()));
+    };
     let pour_bhost = app.state::<Etat>().tps.lock().unwrap().entry(id.to_string()).or_default().recevoir();
     let _ = app.emit("tps", NouvelleTps { id, tps: valeur });
     automatique::tps_recu(app, id, valeur);
@@ -251,8 +259,8 @@ fn demander_tps_de(app: &AppHandle, id: &str) {
     if etat.statuts.lock().unwrap().get(id).map(String::as_str) != Some("en-ligne") {
         return;
     }
-    let logiciel = etat.liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| s.logiciel.clone());
-    let Some(commande) = logiciel.as_deref().and_then(tps::commande) else { return };
+    let logiciel = etat.liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| (s.logiciel.clone(), s.version.clone()));
+    let Some(commande) = logiciel.and_then(|(l, v)| tps::commande(&l, &v)) else { return };
     let Some(p) = etat.vivants.lock().unwrap().get(id).cloned() else { return };
     if etat.tps.lock().unwrap().entry(id.to_string()).or_default().demander(Instant::now()) {
         let _ = p.ecrire(commande);
@@ -579,6 +587,8 @@ pub(crate) fn lancer_serveur(app: &AppHandle, id: &str) -> Result<(), String> {
     if etat.travaux.lock().unwrap().contains(id) {
         return Err("Attends la fin de l'opération en cours.".into());
     }
+    // Machine dédiée : pas de démarrage si le stockage max est atteint (la carte d'avant reste).
+    stockage::verifier_demarrage(&etat, &serveur)?;
     // La carte d'erreur d'avant disparaît (sauf « Java introuvable », qui montre le téléchargement).
     problemes::effacer(app, id, true);
     // Réveil à la connexion : BHOST libère le port avant que le serveur le prenne.
@@ -685,6 +695,7 @@ fn demarrer_avec(app: &AppHandle, id: &str, serveur: &Serveur, programme: &str) 
                 suivre_joueurs(&app2, &id2, &ligne);
                 suivre_refus(&app2, &id2, &ligne);
                 catalogue::suivre_pannes(&app2, &id2, &ligne);
+                lag::suivre(&app2, &id2, &ligne);
             }
         }
         Signal::Pret => {
@@ -694,6 +705,7 @@ fn demarrer_avec(app: &AppHandle, id: &str, serveur: &Serveur, programme: &str) 
         }
         Signal::Fini { propre } => {
             let ancien = app2.state::<Etat>().vivants.lock().unwrap().remove(&id2);
+            lag::oublier(&app2, &id2);
             app2.state::<Etat>().tps.lock().unwrap().remove(&id2);
             // Le monde est enregistré : les règles envoyées y sont écrites.
             app2.state::<Etat>().regles_envoyees.lock().unwrap().remove(&id2);
@@ -731,6 +743,8 @@ fn demarrer_avec(app: &AppHandle, id: &str, serveur: &Serveur, programme: &str) 
             if let Err(erreur) = p.regler_priorite(serveur.priorite) {
                 dire_ligne(app, id, &format!("[BHOST] {erreur}"));
             }
+            // BHOST OS : sa mémoire, plus la marge de Java ; au-delà, c'est lui qui s'arrête, pas la machine.
+            p.limiter_memoire(u64::from(serveur.ram_mo) + ressources::MARGE_JAVA_MO);
             vivants.insert(id.to_string(), p);
             drop(vivants);
             problemes::effacer(app, id, false);
@@ -1197,6 +1211,9 @@ struct DemandeCreation {
     /// Machine dédiée choisie à gauche (absente : ce PC).
     #[serde(default)]
     machine: Option<String>,
+    /// Sur une machine dédiée : son stockage max, en Go.
+    #[serde(default)]
+    stockage_go: Option<u32>,
     #[serde(flatten)]
     monde: creation::Monde,
 }
@@ -1259,6 +1276,7 @@ fn creer(app: &AppHandle, demande: DemandeCreation) -> Result<ServeurVu, String>
             couleur: demande.couleur.clone(),
             java: java_snapshot,
             ouvert_amis: demande.ouvert_amis,
+            disque_max_mo: demande.stockage_go.map(|g| u64::from(g.clamp(1, 100_000)) * 1024),
             ..Default::default()
         };
         let mut liste = etat.liste.lock().unwrap();
@@ -1421,6 +1439,8 @@ struct Parametres {
     commande: String,
     /// Mémoire du PC, en Go.
     memoire_go: f64,
+    /// Place libre sur le disque du serveur, en Go.
+    disque_libre_go: f64,
 }
 
 fn parametres(serveur: &Serveur) -> Parametres {
@@ -1438,6 +1458,7 @@ fn parametres(serveur: &Serveur) -> Parametres {
         java_auto: java_auto(serveur),
         commande: format!("{programme} {}", arguments.join(" ")),
         memoire_go: (memoire.unwrap_or(0) as f64 / 1_073_741_824.0 * 10.0).round() / 10.0,
+        disque_libre_go: (garde::place_libre(Path::new(&serveur.dossier)).unwrap_or(0) as f64 / 1_073_741_824.0 * 10.0).round() / 10.0,
     }
 }
 
@@ -1459,6 +1480,9 @@ struct ReglagesServeur {
     arguments: String,
     #[serde(default)]
     priorite: processus::Priorite,
+    /// Machine dédiée : le stockage max, en Mo (absent : inchangé).
+    #[serde(default)]
+    disque_max_mo: Option<u64>,
 }
 
 /// Enregistre les réglages d'un serveur. Ils comptent au prochain démarrage.
@@ -1481,6 +1505,9 @@ fn regler_serveur(id: String, reglages: ReglagesServeur, etat: State<Etat>) -> R
     serveur.optimise = reglages.optimise;
     serveur.arguments = reglages.arguments.trim().to_string();
     serveur.priorite = reglages.priorite;
+    if let (Some(_), Some(max)) = (serveur.disque_max_mo, reglages.disque_max_mo) {
+        serveur.disque_max_mo = Some(max.clamp(1024, 100_000 * 1024));
+    }
     let copie = serveur.clone();
     serveurs::enregistrer(&etat.fichier, &liste)?;
     drop(liste);
@@ -1611,6 +1638,7 @@ fn retirer_serveur(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), 
 
 /// Un serveur supprimé ou retiré : ses demandes partent avec lui.
 fn oublier_demandes(app: &AppHandle, id: &str) {
+    stockage::oublier(id);
     let etat = app.state::<Etat>();
     let mut registre = etat.demandes.lock().unwrap();
     registre.oublier(id);
@@ -2015,6 +2043,23 @@ fn regler_proprietes(id: String, valeurs: BTreeMap<String, String>, etat: State<
     let dossier = Path::new(&serveur.dossier);
     serveurs::modifier_proprietes(dossier, &propres)?;
     Ok(serveurs::lire_proprietes(dossier).into_iter().collect())
+}
+
+/// Le code de conduite (1.21.9 et plus) : vide s'il n'y en a pas.
+#[cfg_attr(feature = "bureau", tauri::command)]
+fn code_conduite(id: String, etat: State<Etat>) -> Result<String, String> {
+    let serveur = serveur_de(&etat, &id)?;
+    Ok(conduite::lire(Path::new(&serveur.dossier)))
+}
+
+/// Change le code de conduite (vide : coupé). Compte au prochain démarrage.
+#[cfg_attr(feature = "bureau", tauri::command)]
+fn regler_code_conduite(id: String, texte: String, etat: State<Etat>) -> Result<String, String> {
+    let serveur = serveur_de(&etat, &id)?;
+    if !conduite::possible(&serveur.version) {
+        return Err("Il faut Minecraft 1.21.9 ou plus récent.".into());
+    }
+    conduite::ecrire(Path::new(&serveur.dossier), &texte)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2531,15 +2576,19 @@ struct MondeSolo {
 /// Les mondes du jeu solo (%APPDATA%\.minecraft\saves).
 #[cfg(feature = "bureau")] // ouvre une fenêtre ou lit ce PC : pas sur BHOST OS
 #[cfg_attr(feature = "bureau", tauri::command)]
-async fn mondes_solo(app: AppHandle, id: String) -> Result<Vec<MondeSolo>, String> {
+/// `version` : celle du serveur, quand il est sur une machine dédiée (ce PC ne le connaît pas).
+async fn mondes_solo(app: AppHandle, id: String, version: Option<String>) -> Result<Vec<MondeSolo>, String> {
     a_part(move || {
-        let serveur = serveur_de(&app.state::<Etat>(), &id)?;
+        let version = match version {
+            Some(v) => v,
+            None => serveur_de(&app.state::<Etat>(), &id)?.version,
+        };
         let saves = app.path().data_dir().map_err(|e| e.to_string())?.join(".minecraft").join("saves");
         Ok(mondes::solo(&saves)
             .into_iter()
             .map(|m| MondeSolo {
                 chemin: saves.join(&m.dossier).to_string_lossy().into_owned(),
-                trop_recent: m.version.as_deref().is_some_and(|v| mondes::trop_recent(v, &serveur.version)),
+                trop_recent: m.version.as_deref().is_some_and(|v| mondes::trop_recent(v, &version)),
                 monde: m,
             })
             .collect())
@@ -2678,6 +2727,43 @@ fn etats_acces(etat: State<Etat>) -> Vec<acces::Acces> {
     etat.acces.vues()
 }
 
+/// Accueil › Adresse : ce mot est-il libre pour « mot.bhost.app » ?
+#[derive(Serialize)]
+struct VueAdresse {
+    /// « actuelle », « libre », « pris », « invalide », « trop » ou « injoignable ».
+    etat: &'static str,
+    /// Pris : le premier numéro libre (« survie2 »).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proposition: Option<String>,
+}
+
+#[cfg_attr(feature = "bureau", tauri::command)]
+async fn adresse_libre(app: AppHandle, id: String, mot: String) -> Result<VueAdresse, String> {
+    a_part(move || {
+        let mot = tunnel::protocole::mot_adresse(&mot);
+        Ok(match app.state::<Etat>().acces.tunnels.adresse_libre(&id, &mot) {
+            tunnel::Libre::Actuelle => VueAdresse { etat: "actuelle", proposition: None },
+            tunnel::Libre::Libre => VueAdresse { etat: "libre", proposition: None },
+            tunnel::Libre::Pris(p) => VueAdresse { etat: "pris", proposition: p },
+            tunnel::Libre::Invalide => VueAdresse { etat: "invalide", proposition: None },
+            tunnel::Libre::Trop => VueAdresse { etat: "trop", proposition: None },
+            tunnel::Libre::Injoignable => VueAdresse { etat: "injoignable", proposition: None },
+        })
+    })
+    .await
+}
+
+/// Accueil › Adresse : « mot.bhost.app » devient l'adresse du serveur (par le relais).
+#[cfg_attr(feature = "bureau", tauri::command)]
+async fn changer_adresse(app: AppHandle, id: String, mot: String) -> Result<(), String> {
+    a_part(move || {
+        serveur_de(&app.state::<Etat>(), &id)?;
+        let mot = tunnel::protocole::mot_adresse(&mot);
+        app.state::<Etat>().acces.tunnels.changer_adresse(&id, &mot).map_err(str::to_string)
+    })
+    .await
+}
+
 /// Paramètres › Général › Ouvert à tes amis.
 #[cfg_attr(feature = "bureau", tauri::command)]
 fn ouvrir_aux_amis(app: AppHandle, id: String, ouvert: bool, etat: State<Etat>) -> Result<ServeurVu, String> {
@@ -2766,6 +2852,7 @@ fn lancer_le_coeur(handle: AppHandle) {
     automatique::demarrer(handle.clone());
     ouvrir_en_continu(handle.clone());
     problemes::surveiller_internet(handle.clone());
+    stockage::surveiller(handle.clone());
     let a_demarrer: Vec<String> = handle.state::<Etat>().liste.lock().unwrap().iter().filter(|s| s.demarrer_auto).map(|s| s.id.clone()).collect();
     for id in a_demarrer {
         if let Err(erreur) = lancer_serveur(&handle, &id) {
@@ -2832,11 +2919,17 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             lister_serveurs,
             machine::lister_cles_usb,
+            cle::ecrire_cle,
+            cle::wifi_du_pc,
             machine::machines_liees,
             machine::lier_machine,
             machine::delier_machine,
             machine::renommer_machine,
             machine::machine_appel,
+            machine::envoyer_a_machine,
+            adresse_libre,
+            changer_adresse,
+            lag::pourquoi_lag,
             importer_serveur,
             demarrer_serveur,
             installer_java_serveur,
@@ -2898,6 +2991,8 @@ pub fn run() {
             montrer_fichier,
             proprietes_serveur,
             regler_proprietes,
+            code_conduite,
+            regler_code_conduite,
             automatique::automatisations_serveur,
             automatique::enregistrer_automatisation,
             automatique::supprimer_automatisation,

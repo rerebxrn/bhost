@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { IconCopy, IconUserPlus } from "@tabler/icons-react";
+import { IconUserPlus } from "@tabler/icons-react";
 import Console from "./Console";
 import Courbe from "../components/Courbe";
 import Tete from "../components/Tete";
 import Inviter from "../components/Inviter";
 import MondeCasse from "../components/MondeCasse";
 import Problemes from "../components/Problemes";
-import { regarderTps, type Probleme } from "../api";
+import Adresse from "../components/Adresse";
+import { analysesLag, pourquoiLag, regarderTps, type Probleme } from "../api";
 import { adresseLocale, decimale, duree, nombre, nomLogiciel, texteStatut, type Acces, type Machine, type Mesures, type Onglet, type Serveur } from "../types";
 
 type Props = {
@@ -41,6 +42,35 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
     };
   }, [serveur.id]);
 
+  // « Pourquoi ça lag ? » : spark analyse 30 s, puis BHOST ouvre son rapport (App.tsx, nouvelle « lag »).
+  const [finLag, setFinLag] = useState(() => analysesLag.get(serveur.id) ?? 0);
+  const [, setSeconde] = useState(0);
+  useEffect(() => setFinLag(analysesLag.get(serveur.id) ?? 0), [serveur.id]);
+  const resteLag = Math.max(0, Math.ceil((finLag - Date.now()) / 1000));
+  const analyseLag = finLag > 0 && analysesLag.has(serveur.id);
+  useEffect(() => {
+    if (!analyseLag) return;
+    const battement = window.setInterval(() => {
+      setSeconde((n) => n + 1);
+      if (!analysesLag.has(serveur.id)) setFinLag(0);
+    }, 1000);
+    return () => window.clearInterval(battement);
+  }, [analyseLag, serveur.id]);
+  const lancerLag = () => {
+    pourquoiLag(serveur.id).then(
+      ({ secondes }) => {
+        if (secondes === 0) {
+          onCopie("spark est installé. Redémarre le serveur, puis réessaie.");
+          return;
+        }
+        const fin = Date.now() + secondes * 1000;
+        analysesLag.set(serveur.id, fin);
+        setFinLag(fin);
+      },
+      (e) => onErreur(typeof e === "string" ? e : "Ça n'a pas marché."),
+    );
+  };
+
   const depuis = serveur.depuis ? duree(serveur.depuis, maintenant) : "";
   // Sur ce PC : « localhost ». Sur une machine dédiée : son adresse dans la maison.
   const local = machine?.ip ? (serveur.port === 25565 ? machine.ip : `${machine.ip}:${serveur.port}`) : adresseLocale(serveur);
@@ -62,17 +92,6 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
   // L'adresse pour les amis (Paramètres › Ouvert à tes amis).
   const pourAmis = serveur.ouvertAmis ? acces : undefined;
   const publique = pourAmis?.etat === "ouvert" ? pourAmis.adresse : undefined;
-  const texteAdresse = publique
-    ? publique
-    : !serveur.ouvertAmis
-      ? "Fermé · local uniquement"
-      : pourAmis?.etat === "erreur"
-        ? "Fermé · voir Paramètres"
-        : "Ouverture de ta box…";
-  const copierPublique = () => {
-    if (publique) navigator.clipboard.writeText(publique).then(() => onCopie(`« ${publique} » copié`));
-  };
-
   return (
     <>
       <header className="head ligne">
@@ -97,18 +116,7 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
             {machine ? "À la maison" : "Toi, sur ce PC"} : <code>{local}</code>
           </button>
           <label htmlFor="addr">Adresse</label>
-          <input
-            id="addr"
-            className={"field" + (publique ? "" : " is-off")}
-            type="text"
-            readOnly
-            value={texteAdresse}
-            title={pourAmis?.etat === "erreur" ? pourAmis.message : undefined}
-          />
-          <button type="button" className="btn acc" disabled={!publique} onClick={copierPublique}>
-            <IconCopy size={14} stroke={2} aria-hidden />
-            Copier
-          </button>
+          <Adresse serveur={serveur} acces={acces} onInfo={onCopie} onErreur={onErreur} />
         </div>
       </header>
 
@@ -151,7 +159,13 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
             <div className="k">Ticks par seconde</div>
             <div className="v">
               {tps === null ? "–" : decimale(tps)}
-              {tps !== null && <small>sur 20</small>}
+              {serveur.statut === "en-ligne" ? (
+                <button type="button" className="cell-lag" disabled={analyseLag} onClick={lancerLag}>
+                  {analyseLag ? (resteLag > 0 ? `Analyse… ${resteLag} s` : "Rapport…") : "Pourquoi ça lag ?"}
+                </button>
+              ) : (
+                tps !== null && <small>sur 20</small>
+              )}
             </div>
           </div>
           <Courbe valeurs={tps === null ? [] : (mesures?.tps ?? [])} max={20} />

@@ -374,6 +374,84 @@
   color: var(--text);
 }
 
+/* Accueil › Adresse par le relais : un clic dans la case pour changer le mot (components/Adresse.tsx). */
+.field.adr-case {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  cursor: text;
+  text-align: left;
+}
+
+.adr-crayon {
+  flex: none;
+  color: var(--text3);
+  transition: color var(--dur-fast);
+}
+
+.field.adr-case:hover .adr-crayon {
+  color: var(--text2);
+}
+
+.adr-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.field.adr-case.edit {
+  width: 300px;
+  justify-content: flex-start;
+  gap: 0;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+.adr-mot {
+  min-width: 1ch;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: var(--f-champ-mono);
+  outline: 0;
+}
+
+.adr-suf {
+  font: var(--f-champ-mono);
+  color: var(--text3);
+}
+
+.adr-st {
+  margin-left: auto;
+  padding-left: var(--space-8);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: var(--f-legende);
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.adr-st.libre {
+  color: var(--st-online);
+}
+
+.adr-prop {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.adr-prop:hover {
+  text-decoration: underline;
+}
+
 /* Champ en lecture seule */
 .field {
   width: 236px;
@@ -523,6 +601,28 @@
   font: var(--f-valeur-stat);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Accueil › Ticks par seconde : « Pourquoi ça lag ? » (spark), à la place de « sur 20 ». */
+.cell .v .cell-lag {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc-text);
+  font: var(--f-legende);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.cell .v .cell-lag:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.cell .v .cell-lag:disabled {
+  color: var(--text2);
+  cursor: default;
 }
 
 .cell .v small {

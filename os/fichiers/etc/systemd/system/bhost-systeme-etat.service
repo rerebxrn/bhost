@@ -1,0 +1,11 @@
+[Unit]
+Description=BHOST OS : état des mises à jour
+ConditionKernelCommandLine=!boot=bhost
+After=apt-daily-upgrade.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bhost-systeme etat
+
+[Install]
+WantedBy=multi-user.target apt-daily-upgrade.service

@@ -39,7 +39,7 @@ import {
   type InfosCreation,
   type VersionMc,
 } from "../api";
-import { nombre, type Logiciel as NomLogiciel, type Machine, type Serveur } from "../types";
+import { nombre, ramMaxMachine, type Logiciel as NomLogiciel, type Machine, type Serveur } from "../types";
 import "./NouveauServeur.css";
 
 type Icone = ComponentType<{ size?: number; stroke?: number; "aria-hidden"?: boolean }>;
@@ -161,10 +161,10 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
   const visibles = Array.isArray(liste) ? liste.filter((v) => v.id.toLowerCase().startsWith(cherche)) : [];
   const cube = couleur ?? couleurDe({ couleur: undefined, logiciel: logiciel as NomLogiciel });
 
-  // Sur une machine dédiée : jusqu'à sa RAM, moins ≈ 1,5 Go pour le système et ≈ 1 Go pour Java
-  // (ressources.rs : un serveur seul réglé au maximum peut toujours démarrer). Rien n'est réservé tant qu'il est éteint.
+  // Sur une machine dédiée : jusqu'à sa RAM, moins 768 Mo pour le système et 15 % (512 Mo au moins) pour Java
+  // (ressources.rs › ram_max_go : un serveur seul réglé au maximum peut toujours démarrer). Rien n'est réservé tant qu'il est éteint.
   const ramMax = machine?.memoire
-    ? Math.max(1, Math.floor(machine.memoire.totalGo - 2.5))
+    ? ramMaxMachine(machine.memoire.totalGo)
     : Math.max(2, Math.min(16, Math.floor((infos?.memoireGo ?? 8) - 2)));
   const libreGo = machine?.disque ? Math.floor(machine.disque.totalGo - machine.disque.utiliseGo) : 0;
   const stockageMax = Math.max(5, Math.min(500, libreGo));

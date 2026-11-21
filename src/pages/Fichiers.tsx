@@ -28,6 +28,7 @@ import {
   iconeServeur,
   iconeDuJeu,
   importerFichiers,
+  ecouterTravail,
   lireFichier,
   montrerFichier,
   parametresServeur,
@@ -119,12 +120,18 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
 
   const importer = (sources: string[], d: string) => {
     if (!sources.length) return;
+    // Machine dédiée : les fichiers partent de ce PC, on montre l'envoi.
+    const fin = serveur.machine ? ecouterTravail((qui, etape, pourcent) => qui === serveur.id && onInfo(`${etape}… ${pourcent} %`)) : () => {};
     importerFichiers(serveur.id, d, sources).then(
       (n) => {
+        fin();
         onInfo(n > 1 ? `${n} éléments importés` : "Importé");
         relire(d);
       },
-      (e) => onErreur(phrase(e)),
+      (e) => {
+        fin();
+        onErreur(phrase(e));
+      },
     );
   };
 

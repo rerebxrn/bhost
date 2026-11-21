@@ -173,6 +173,21 @@ pub fn genre(ip: Ipv4Addr) -> Genre {
     }
 }
 
+/// Un serveur sur une machine qui a une adresse publique (VPS) : rien à ouvrir, l'adresse est la sienne.
+pub fn en_direct(v: &Voulu, publique: Ipv4Addr) -> Acces {
+    if server_ip_bloque(&v.server_ip, publique) {
+        return Acces { id: v.id.clone(), etat: "erreur", adresse: None, message: Some(SERVER_IP.to_string()), bedrock: None, bedrock_message: None };
+    }
+    Acces {
+        id: v.id.clone(),
+        etat: "ouvert",
+        adresse: Some(adresse(publique, v.port)),
+        message: None,
+        bedrock: v.bedrock.map(|b| adresse_bedrock(publique, b)),
+        bedrock_message: None,
+    }
+}
+
 /// L'adresse à donner aux amis : sans le port quand c'est celui de Minecraft.
 pub fn adresse(ip: Ipv4Addr, port: u16) -> String {
     if port == PORT_MINECRAFT { ip.to_string() } else { format!("{ip}:{port}") }
@@ -291,6 +306,10 @@ impl EtatAcces {
         let erreur = |v: &Voulu, m: &str| Acces { id: v.id.clone(), etat: "erreur", adresse: None, message: Some(m.to_string()), bedrock: None, bedrock_message: None };
         if voulus.is_empty() && self.ouverts.lock().unwrap().is_empty() {
             return Vec::new();
+        }
+        // La machine a elle-même une adresse publique (VPS) : les amis viennent en direct, sans box ni relais.
+        if let Some(publique) = ip_vers(SocketAddr::from(([1, 1, 1, 1], 80))).filter(|ip| genre(*ip) == Genre::Publique) {
+            return voulus.iter().map(|v| en_direct(v, publique)).collect();
         }
         let Some(passerelle) = self.trouver_box() else {
             return voulus.iter().map(|v| erreur(v, PAS_DE_BOX)).collect();
@@ -521,6 +540,15 @@ mod tests {
         assert_eq!(genre(Ipv4Addr::new(10, 0, 0, 1)), Genre::Privee);
         assert_eq!(genre(Ipv4Addr::new(172, 16, 0, 1)), Genre::Privee);
         assert_eq!(genre(Ipv4Addr::new(0, 0, 0, 0)), Genre::Privee);
+    }
+
+    #[test]
+    fn vps_en_direct() {
+        let v = Voulu { id: "a".into(), nom: "Survie".into(), port: 25566, server_ip: String::new(), bedrock: Some(19132) };
+        let a = en_direct(&v, Ipv4Addr::new(62, 83, 119, 217));
+        assert_eq!((a.etat, a.adresse.as_deref(), a.bedrock.as_deref()), ("ouvert", Some("62.83.119.217:25566"), Some("62.83.119.217 · 19132")));
+        let bloque = Voulu { server_ip: "127.0.0.1".into(), ..v };
+        assert_eq!(en_direct(&bloque, Ipv4Addr::new(62, 83, 119, 217)).message.as_deref(), Some(SERVER_IP));
     }
 
     #[test]

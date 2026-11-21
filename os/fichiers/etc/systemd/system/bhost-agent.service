@@ -19,6 +19,8 @@ ProtectHome=yes
 ReadWritePaths=/var/lib/bhost
 PrivateTmp=yes
 LimitNOFILE=65536
+# Chaque serveur a son groupe (mémoire max, part du processeur) : systemd confie le groupe de l'agent à l'agent.
+Delegate=yes
 
 [Install]
 WantedBy=multi-user.target

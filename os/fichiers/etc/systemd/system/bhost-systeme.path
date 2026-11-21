@@ -1,0 +1,9 @@
+[Unit]
+Description=BHOST OS : demandes de l'agent (redémarrer, mises à jour…)
+ConditionKernelCommandLine=!boot=bhost
+
+[Path]
+PathExists=/var/lib/bhost/systeme/demande
+
+[Install]
+WantedBy=multi-user.target

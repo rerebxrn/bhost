@@ -20,3 +20,10 @@ export function afficherCode(code: string): string {
 }
 
 export const codeComplet = (code: string) => code.length === LONGUEUR;
+
+// Un code tiré au hasard (pour un VPS : BHOST le donne à la commande d'installation, puis relie la machine).
+export function codeAuHasard(): string {
+  const octets = crypto.getRandomValues(new Uint8Array(LONGUEUR));
+  // 32 caractères : un octet % 32 n'en favorise aucun.
+  return Array.from(octets, (o) => ALPHABET[o % ALPHABET.length]).join("");
+}

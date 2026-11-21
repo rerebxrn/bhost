@@ -43,6 +43,7 @@ pub enum Etat {
 
 struct Tunnel {
     port: u16,
+    nom_serveur: String,
     arret: Arc<AtomicBool>,
     etat: Arc<Mutex<Etat>>,
     /// La connexion de contrôle : on la coupe pour arrêter le fil sans attendre.
@@ -139,7 +140,7 @@ impl Tunnels {
             ancien.arreter();
         }
         let Some(dossier) = self.dossier.get().cloned() else { return };
-        let tunnel = Tunnel { port, arret: Arc::default(), etat: Arc::new(Mutex::new(Etat::Connexion)), prise: Arc::default() };
+        let tunnel = Tunnel { port, nom_serveur: nom_serveur.to_string(), arret: Arc::default(), etat: Arc::new(Mutex::new(Etat::Connexion)), prise: Arc::default() };
         let fil = Fil {
             id: id.to_string(),
             nom_serveur: nom_serveur.to_string(),
@@ -176,6 +177,85 @@ impl Tunnels {
                 t.arreter();
             }
         }
+    }
+
+    /// « Ce mot est-il libre pour l'adresse de ce serveur ? » (Accueil, case Adresse).
+    pub fn adresse_libre(&self, id: &str, mot: &str) -> Libre {
+        let Some(dossier) = self.dossier.get() else { return Libre::Injoignable };
+        if noms(dossier).get(id).is_some_and(|n| n == mot) {
+            return Libre::Actuelle;
+        }
+        if !protocole::forme_valide(mot) {
+            return Libre::Invalide;
+        }
+        let cle = match cle(dossier) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[BHOST] Clé du relais illisible : {e}");
+                return Libre::Injoignable;
+            }
+        };
+        // Le premier numéro libre : survie2, survie3…
+        let proposer = || {
+            let base = mot.trim_end_matches(|c: char| c.is_ascii_digit());
+            let depart = mot[base.len()..].parse::<u32>().unwrap_or(1).max(1);
+            (depart + 1..depart + 7)
+                .map(|n| protocole::nom_numero(base, n))
+                .filter(|n| protocole::nom_valide(n))
+                .find(|n| matches!(demander_libre(&cle, n), Ok(DuRelais::Ok { .. })))
+        };
+        // Un mot gardé pour BHOST (« test », « panel »…) : comme s'il était pris.
+        if !protocole::nom_valide(mot) {
+            return Libre::Pris(proposer());
+        }
+        match demander_libre(&cle, mot) {
+            Ok(DuRelais::Ok { .. }) => Libre::Libre,
+            Ok(DuRelais::Non { raison }) if raison == "pris" => Libre::Pris(proposer()),
+            Ok(DuRelais::Non { raison }) if raison == "nom" => Libre::Invalide,
+            Ok(DuRelais::Non { raison }) if raison == "trop" => Libre::Trop,
+            autre => {
+                // Dans le terminal de BHOST : pourquoi le relais n'a pas répondu (adresse, refus, délai…).
+                eprintln!("[BHOST] Relais {:?} muet pour « {mot} » : {autre:?}", adresse_relais().ok());
+                Libre::Injoignable
+            }
+        }
+    }
+
+    /// Change l'adresse d'un serveur (« survie » → survie.bhost.app). Le relais reprend tout de suite ;
+    /// l'ancien nom est rendu (les autres pourront le prendre).
+    pub fn changer_adresse(&self, id: &str, mot: &str) -> Result<(), &'static str> {
+        let dossier = self.dossier.get().ok_or("Le relais n'est pas prêt.")?.clone();
+        match self.adresse_libre(id, mot) {
+            Libre::Actuelle => return Ok(()),
+            Libre::Libre => {}
+            Libre::Pris(_) => return Err("Déjà pris."),
+            Libre::Invalide => return Err("Lettres, chiffres et tirets (3 à 32)."),
+            Libre::Trop => return Err("Trop d'essais. Réessaie dans 10 minutes."),
+            Libre::Injoignable => return Err("Le relais ne répond pas. Réessaie."),
+        }
+        let ancien = noms(&dossier).get(id).cloned();
+        noter_nom(&dossier, id, mot);
+        // Le fil du serveur repart avec le nouveau nom.
+        let reprise = self.liste.lock().unwrap().remove(id).map(|t| {
+            t.arreter();
+            (t.nom_serveur.clone(), t.port)
+        });
+        if let Some((nom_serveur, port)) = reprise {
+            self.vouloir(id, &nom_serveur, port);
+        }
+        // L'ancien nom est rendu quand le relais a vu partir l'ancienne connexion.
+        if let Some(ancien) = ancien.filter(|a| a != mot) {
+            std::thread::spawn(move || {
+                let Ok(cle) = cle(&dossier) else { return };
+                for _ in 0..5 {
+                    std::thread::sleep(Duration::from_secs(3));
+                    if lacher(&cle, &ancien).unwrap_or(false) {
+                        return;
+                    }
+                }
+            });
+        }
+        Ok(())
     }
 
     pub fn tout_arreter(&self) {
@@ -274,6 +354,45 @@ pub(crate) fn connecter(adresse: SocketAddr) -> io::Result<TcpStream> {
     Ok(flux)
 }
 
+/// La réponse à « ce nom est-il libre ? ».
+#[derive(Debug, PartialEq)]
+pub enum Libre {
+    /// C'est déjà l'adresse de ce serveur.
+    Actuelle,
+    Libre,
+    /// Pris par quelqu'un d'autre ; le premier numéro libre (« survie2 »), si on l'a trouvé.
+    Pris(Option<String>),
+    /// Réservé, trop court, ou des caractères refusés.
+    Invalide,
+    /// Le relais limite les questions.
+    Trop,
+    Injoignable,
+}
+
+/// Une question au relais (une connexion, une ligne, une réponse).
+fn question(m: &DeBhost) -> io::Result<(TcpStream, Lignes, DuRelais)> {
+    let mut flux = connecter(adresse_relais()?)?;
+    flux.set_read_timeout(Some(Duration::from_secs(2)))?;
+    flux.write_all(format!("BHOST {}\n{}", protocole::VERSION, protocole::ecrire_de_bhost(m)).as_bytes())?;
+    let mut lignes = Lignes::default();
+    let reponse = protocole::lire_du_relais(&lignes.attendre(&mut flux, DELAI)?).ok_or_else(|| io::Error::other("réponse illisible"))?;
+    Ok((flux, lignes, reponse))
+}
+
+/// « LIBRE <nom> <clé> » : libre (ou déjà à nous), ou NON pris / nom / trop.
+fn demander_libre(cle: &SigningKey, nom: &str) -> io::Result<DuRelais> {
+    question(&DeBhost::Libre { nom: nom.to_string(), cle: protocole::hexa(cle.verifying_key().as_bytes()) }).map(|(_, _, r)| r)
+}
+
+/// « LACHER » : rend un nom au relais (signé). Vrai si c'est fait.
+fn lacher(cle: &SigningKey, nom: &str) -> io::Result<bool> {
+    let (mut flux, mut lignes, reponse) = question(&DeBhost::Lacher { nom: nom.to_string(), cle: protocole::hexa(cle.verifying_key().as_bytes()) })?;
+    let DuRelais::Defi { defi } = reponse else { return Ok(false) };
+    let signature = protocole::hexa(&cle.sign(protocole::a_signer_lacher(nom, &defi).as_bytes()).to_bytes());
+    flux.write_all(protocole::ecrire_de_bhost(&DeBhost::Signe { signature }).as_bytes())?;
+    Ok(matches!(protocole::lire_du_relais(&lignes.attendre(&mut flux, DELAI)?), Some(DuRelais::Ok { .. })))
+}
+
 impl Fil {
     fn changer(&self, e: Etat) {
         let mut etat = self.etat.lock().unwrap();
@@ -302,15 +421,19 @@ impl Fil {
                 }
             }
         };
-        let mut nom = noms(&self.dossier).get(&self.id).cloned().unwrap_or_else(|| nouveau_nom(&self.nom_serveur));
+        // Le nom gardé, sinon celui du serveur : « survie », puis « survie2 », « survie3 »… s'il est pris.
+        let mut nom = noms(&self.dossier).get(&self.id).cloned().unwrap_or_else(|| protocole::nom_numero(&protocole::slug(&self.nom_serveur), 1));
+        let base = nom.trim_end_matches(|c: char| c.is_ascii_digit()).to_string();
+        let mut numero = 1;
         let mut attente = Duration::from_secs(2);
         let mut pris_de_suite = 0;
         while !self.arret.load(Ordering::Relaxed) {
             match self.session(&cle, &nom) {
-                // Nom pris : on en essaie un autre, mais pas en boucle sans fin.
-                Ok(Fin::Pris) if pris_de_suite < 3 => {
+                // Nom pris : le numéro suivant, mais pas en boucle sans fin (au-delà : un nom au hasard).
+                Ok(Fin::Pris) if pris_de_suite < 25 => {
                     pris_de_suite += 1;
-                    nom = nouveau_nom(&self.nom_serveur);
+                    numero += 1;
+                    nom = protocole::nom_numero(&base, numero);
                     continue;
                 }
                 Ok(Fin::Pris) => nom = nouveau_nom(&self.nom_serveur),
@@ -490,7 +613,8 @@ mod tests {
                 break a;
             }
         };
-        assert!(adresse.starts_with("survie-") && adresse.ends_with(".bhost.test"), "{adresse}");
+        // Le nom du serveur, tout simplement.
+        assert_eq!(adresse, "survie.bhost.test");
         // Un joueur tape l'adresse.
         let mut poignee = vec![0x00];
         protocole::ecrire_varint(&mut poignee, 769);
@@ -511,6 +635,55 @@ mod tests {
         // Même nom au prochain lancement.
         let nom = adresse.trim_end_matches(".bhost.test").to_string();
         assert_eq!(noms(&dossier).get("s1"), Some(&nom));
+        // Un autre PC (une autre clé) avec un serveur « Survie » : survie2.
+        let dossier2 = std::env::temp_dir().join(format!("bhost-bout2-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dossier2);
+        let autres = Tunnels::default();
+        let (envoi2, changements2) = std::sync::mpsc::channel();
+        autres.regler(dossier2.clone(), envoi2);
+        autres.vouloir("t1", "Survie", port);
+        let attendre = |t: &Tunnels, c: &std::sync::mpsc::Receiver<bool>, id: &str, voulu: &str| loop {
+            c.recv_timeout(Duration::from_secs(10)).expect("le relais n'a pas répondu");
+            if t.etat(id) == Some(Etat::EnLigne(voulu.to_string())) {
+                break;
+            }
+        };
+        attendre(&autres, &changements2, "t1", "survie2.bhost.test");
+        // La case Adresse : le sien, pris (avec une proposition), libre, refusé.
+        assert_eq!(tunnels.adresse_libre("s1", "survie"), Libre::Actuelle);
+        assert_eq!(tunnels.adresse_libre("s1", "survie2"), Libre::Pris(Some("survie3".into())));
+        assert_eq!(tunnels.adresse_libre("s1", "creatif"), Libre::Libre);
+        assert_eq!(tunnels.adresse_libre("s1", "panel"), Libre::Pris(Some("panel2".into())));
+        assert_eq!(tunnels.adresse_libre("s1", "a--b"), Libre::Invalide);
+        assert_eq!(tunnels.changer_adresse("s1", "survie2"), Err("Déjà pris."));
+        // Nouvelle adresse : en ligne tout de suite, et « survie » est rendu aux autres.
+        tunnels.changer_adresse("s1", "creatif").unwrap();
+        attendre(&tunnels, &changements, "s1", "creatif.bhost.test");
+        let mut rendu = false;
+        for _ in 0..40 {
+            if autres.adresse_libre("t1", "survie") == Libre::Libre {
+                rendu = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        assert!(rendu, "l'ancien nom n'a pas été rendu");
+        autres.tout_arreter();
+        let _ = std::fs::remove_dir_all(&dossier2);
+        let adresse = "creatif.bhost.test".to_string();
+        let envoi = {
+            let mut poignee = vec![0x00];
+            protocole::ecrire_varint(&mut poignee, 769);
+            protocole::ecrire_varint(&mut poignee, adresse.len() as i32);
+            poignee.extend_from_slice(adresse.as_bytes());
+            poignee.extend(25565u16.to_be_bytes());
+            poignee.push(2);
+            let mut e = Vec::new();
+            protocole::ecrire_varint(&mut e, poignee.len() as i32);
+            e.extend(poignee);
+            e.extend_from_slice(b"KOTORO_YT arrive");
+            e
+        };
         // On coupe : le relais dit « éteint ».
         tunnels.lacher("s1");
         std::thread::sleep(Duration::from_millis(300));

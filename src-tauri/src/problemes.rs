@@ -31,6 +31,8 @@ pub enum Probleme {
         libre_go: f64,
         demarrage: bool,
     },
+    /// Machine dédiée : son stockage max est atteint, BHOST l'a arrêté.
+    Stockage { go: f64 },
 }
 
 /// Ce que la console a montré pendant ce lancement.
@@ -116,6 +118,7 @@ pub fn phrase(probleme: &Probleme) -> String {
         Probleme::Crash => "Le serveur a planté.".into(),
         Probleme::Memoire { demarrage: true, .. } => "Pas assez de mémoire libre pour le lancer.".into(),
         Probleme::Memoire { .. } => "Le serveur a manqué de mémoire.".into(),
+        Probleme::Stockage { .. } => "Stockage max atteint : le serveur s'est arrêté.".into(),
     }
 }
 
@@ -125,6 +128,11 @@ fn poser(app: &AppHandle, id: &str, probleme: Probleme) {
     // BHOST est en arrière-plan : une notification Windows, pour ne pas le rater.
     let nom = app.state::<Etat>().liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| s.nom.clone()).unwrap_or_default();
     crate::hote::notifier(app, &nom, &phrase(&probleme), false);
+}
+
+/// Le stockage max (en Mo) est atteint : BHOST arrête le serveur.
+pub fn stockage(app: &AppHandle, id: &str, max_mo: u64) {
+    poser(app, id, Probleme::Stockage { go: (max_mo as f64 / 1024.0 * 10.0).round() / 10.0 });
 }
 
 /// Java est introuvable : on propose la version qu'il lui faut.

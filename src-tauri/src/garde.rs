@@ -13,7 +13,7 @@ pub const PROFONDEUR_MAX: usize = 64;
 const MARGE_DISQUE: u64 = 2 * 1024 * 1024 * 1024;
 
 /// La place libre sur le disque qui contient `chemin` (None si on ne sait pas).
-fn place_libre(chemin: &Path) -> Option<u64> {
+pub fn place_libre(chemin: &Path) -> Option<u64> {
     let vrai = chemin.ancestors().find_map(|p| p.canonicalize().ok())?;
     let disques = sysinfo::Disks::new_with_refreshed_list().ok()?;
     disques

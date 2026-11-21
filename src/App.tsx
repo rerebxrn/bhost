@@ -63,7 +63,9 @@ import {
   renommerMachine,
   estManqueMemoire,
   type ManqueMemoire as Manque,
+  ecouterLag,
 } from "./api";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { listeOnglets, nomLogiciel, texteStatut, type Acces, type Machine, type Mesures, type Onglet, type Serveur } from "./types";
 
 import "./App.css";
@@ -332,6 +334,18 @@ export default function App() {
     setMessage({ texte, visible: true });
     if (duree > 0) minuterie.current = window.setTimeout(() => setMessage((m) => ({ ...m, visible: false })), duree);
   };
+  // « Pourquoi ça lag ? » : le rapport de spark s'ouvre dans le navigateur, même si on a changé de page.
+  useEffect(
+    () =>
+      ecouterLag((_, lien, raison) => {
+        if (lien) {
+          openUrl(lien).catch(() => {});
+          prevenir("Rapport ouvert dans ton navigateur", 3000);
+        } else if (raison) setErreur(raison);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const cacherMessage = () => {
     window.clearTimeout(minuterie.current);
     setMessage((m) => ({ ...m, visible: false }));
@@ -530,7 +544,7 @@ export default function App() {
                   onRenommer={() => setMachineARenommer(machineChoisie)}
                   onRetirer={() => setADelier(machineChoisie)}
                   onCopie={(texte) => navigator.clipboard?.writeText(texte).then(() => prevenir("Copié."), () => {})}
-                  onBientot={() => prevenir("Bientôt : avec BHOST OS.", 3000)}
+                  onMessage={(texte) => prevenir(texte, 3000)}
                 />
               </div>
             ) : null

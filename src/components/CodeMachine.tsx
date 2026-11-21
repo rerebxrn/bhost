@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { afficherCode, codeComplet, LONGUEUR, nettoyerCode } from "../code";
-import { lierMachine } from "../api";
+import { afficherCode, codeAuHasard, codeComplet, LONGUEUR, nettoyerCode } from "../code";
+import { commandeVps, lierMachine } from "../api";
 import type { Machine } from "../types";
 import "./Menus.css";
 import "./CodeMachine.css";
@@ -47,7 +47,21 @@ export default function AjouterMachine({ onAjoutee, onPreparer, onFermer }: Prop
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
   const [ouvert, setOuvert] = useState(false);
+  const [vps, setVps] = useState(false); // la commande d'installation pour un VPS a été copiée
   const forme = useRef<HTMLFormElement>(null);
+
+  // Un VPS : BHOST tire le code, le met dans la commande (copiée) et dans le champ.
+  const copierVps = () => {
+    const nouveau = codeAuHasard();
+    navigator.clipboard.writeText(commandeVps(nouveau)).then(
+      () => {
+        setCode(nouveau);
+        setErreur("");
+        setVps(true);
+      },
+      () => setErreur("Impossible de copier la commande."),
+    );
+  };
 
   useEffect(() => {
     const image = requestAnimationFrame(() => setOuvert(true));
@@ -94,6 +108,8 @@ export default function AjouterMachine({ onAjoutee, onPreparer, onFermer }: Prop
           <p className="dlg-err" role="alert">
             {erreur}
           </p>
+        ) : vps ? (
+          <p className="code-aide">Commande copiée. Colle-la sur ton VPS, puis Ajouter quand elle a fini.</p>
         ) : (
           <p className="code-aide">Il est aussi dans les réglages de la machine.</p>
         )}
@@ -105,14 +121,21 @@ export default function AjouterMachine({ onAjoutee, onPreparer, onFermer }: Prop
             {envoi ? "Connexion…" : "Ajouter"}
           </button>
         </div>
-        {onPreparer && (
-          <p className="code-pied">
-            Pas encore de machine ?{" "}
-            <button type="button" className="code-lien" onClick={onPreparer}>
-              Préparer une machine
-            </button>
-          </p>
-        )}
+        <p className="code-pied">
+          {onPreparer && (
+            <>
+              Pas encore de machine ?{" "}
+              <button type="button" className="code-lien" onClick={onPreparer}>
+                Préparer une machine
+              </button>
+              <br />
+            </>
+          )}
+          Un VPS ?{" "}
+          <button type="button" className="code-lien" onClick={copierVps}>
+            Copier la commande d’installation
+          </button>
+        </p>
       </form>
     </div>
   );

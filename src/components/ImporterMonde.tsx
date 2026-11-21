@@ -20,7 +20,7 @@ export default function ImporterMonde({ serveur, onFini, onFermer }: Props) {
   const travail = useTravail(serveur.id, envoi);
 
   useEffect(() => {
-    mondesSolo(serveur.id).then(
+    mondesSolo(serveur.id, serveur.version).then(
       (l) => {
         setSolo(l);
         const premier = l.find((m) => !m.tropRecent);

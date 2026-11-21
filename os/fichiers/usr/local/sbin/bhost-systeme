@@ -1,0 +1,58 @@
+#!/bin/sh
+# BHOST OS : fait ce que l'agent demande depuis BHOST (page « Machine »), car l'agent n'a pas les droits.
+# L'agent écrit un seul mot dans /var/lib/bhost/systeme/demande ; seuls ces mots sont compris :
+#   redemarrer, eteindre, verifier (les mises à jour), mettre-a-jour.
+# Sans argument : lancé par bhost-systeme.path quand une demande arrive. « etat » : relit seulement l'état.
+# L'état (pour BHOST) est écrit dans /run/bhost-systeme/etat.json, que l'agent peut lire mais pas modifier.
+
+DEMANDE=/var/lib/bhost/systeme/demande
+DOSSIER=/run/bhost-systeme
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+
+mkdir -p "$DOSSIER"
+chmod 755 "$DOSSIER"
+
+etat() {
+	en_cours=$1
+	attente=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ')
+	# Redémarrage nécessaire : un noyau plus récent que celui qui tourne est installé.
+	dernier=$(ls /usr/lib/modules 2>/dev/null | sort -V | tail -1)
+	redemarrage=false
+	[ -n "$dernier" ] && [ "$dernier" != "$(uname -r)" ] && redemarrage=true
+	verifie=$(stat -c %Y /var/lib/apt/periodic/update-success-stamp 2>/dev/null || echo 0)
+	if [ -n "$en_cours" ]; then en_cours="\"$en_cours\""; else en_cours=null; fi
+	printf '{"enCours":%s,"attente":%s,"redemarrage":%s,"verifie":%s}\n' "$en_cours" "${attente:-0}" "$redemarrage" "$verifie" >"$DOSSIER/etat.tmp"
+	mv "$DOSSIER/etat.tmp" "$DOSSIER/etat.json"
+	chmod 644 "$DOSSIER/etat.json"
+}
+
+if [ "${1:-}" = etat ]; then
+	etat ""
+	exit 0
+fi
+
+# Un vrai fichier seulement (pas un lien), lu sur quelques octets, puis effacé.
+if [ ! -f "$DEMANDE" ] || [ -L "$DEMANDE" ]; then
+	rm -f "$DEMANDE"
+	exit 0
+fi
+action=$(head -c 20 "$DEMANDE" | tr -cd 'a-z-')
+rm -f "$DEMANDE"
+
+case "$action" in
+	redemarrer) systemctl reboot ;;
+	eteindre) systemctl poweroff ;;
+	verifier)
+		etat verification
+		apt-get update -qq && mkdir -p /var/lib/apt/periodic && touch /var/lib/apt/periodic/update-success-stamp
+		etat ""
+		;;
+	mettre-a-jour)
+		etat installation
+		apt-get update -qq && mkdir -p /var/lib/apt/periodic && touch /var/lib/apt/periodic/update-success-stamp
+		apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
+		apt-get -y -q autoremove --purge
+		etat ""
+		;;
+esac
+exit 0

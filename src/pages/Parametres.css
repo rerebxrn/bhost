@@ -200,3 +200,19 @@
   flex: 1;
   margin: 2px 0;
 }
+
+/* Code de conduite : une zone de texte sur toute la largeur. */
+.ps-conduite {
+  padding: 0 var(--space-14) var(--space-14);
+}
+
+.ps-conduite textarea {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 96px;
+  padding: var(--space-8);
+  resize: vertical;
+  font: var(--f-corps);
+  line-height: 18px;
+}

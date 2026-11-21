@@ -465,7 +465,7 @@ fn surveiller_tps(app: &AppHandle) {
         .lock()
         .unwrap()
         .iter()
-        .filter(|s| tps::commande(&s.logiciel).is_some() && s.automatisations.iter().any(|a| a.on && a.trig == "lag"))
+        .filter(|s| tps::commande(&s.logiciel, &s.version).is_some() && s.automatisations.iter().any(|a| a.on && a.trig == "lag"))
         .map(|s| s.id.clone())
         .collect();
     for id in ids {
@@ -628,7 +628,7 @@ fn vue(etat: &Etat, id: &str) -> Result<VueAuto, String> {
     let serveur = crate::serveur_de(etat, id)?;
     Ok(VueAuto {
         historique: etat.auto.memoire.lock().unwrap().historique.get(id).cloned().unwrap_or_default(),
-        tps_possible: tps::commande(&serveur.logiciel).is_some(),
+        tps_possible: tps::commande(&serveur.logiciel, &serveur.version).is_some(),
         maj_possible: maj_possible(&serveur),
         liste: serveur.automatisations,
     })
@@ -659,7 +659,7 @@ pub fn automatisations_serveur(id: String, etat: State<Etat>) -> Result<VueAuto,
 pub fn enregistrer_automatisation(app: AppHandle, id: String, automatisation: Automatisation) -> Result<VueAuto, String> {
     let mut a = automatisation;
     let vue = changer(&app, &id, |liste, serveur| {
-        au::verifier(&mut a, tps::commande(&serveur.logiciel).is_some(), maj_possible(serveur))?;
+        au::verifier(&mut a, tps::commande(&serveur.logiciel, &serveur.version).is_some(), maj_possible(serveur))?;
         if a.trig == "time" && a.when == "once" && au::prochaine_apres(&a, Local::now().naive_local()).is_none() {
             return Err("Cette heure est passée.".into());
         }

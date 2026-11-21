@@ -61,6 +61,18 @@ pub async fn repondre(app: &AppHandle, demande: Demande) -> String {
             let app = app.clone();
             tokio::task::spawn_blocking(move || etat_machine(&app)).await.map_err(|e| json(e.to_string()))
         }
+        "etat_systeme" => Ok(etat_systeme()),
+        "systeme_machine" => systeme_machine(app, &demande.args),
+        "changer_code" => {
+            let dossier = app.state::<Etat>().dossier.clone();
+            crate::pilotage::changer_code(&dossier).map(Value::String).map_err(|e| json(format!("Impossible de changer le code : {e}")))
+        }
+        // Des fichiers envoyés par un PC (mondes, plugins, mods, icône) : par morceaux, puis rangés.
+        "recevoir_envoi" => {
+            let (dossier, args) = (app.state::<Etat>().dossier.clone(), demande.args.clone());
+            tokio::task::spawn_blocking(move || recevoir_envoi(&dossier, &args)).await.map_err(|e| json(e.to_string())).and_then(|r| r)
+        }
+        "importer_envoi" => importer_envoi(app, &demande.args).await,
         cmd => appeler(app, cmd, &demande.args).await,
     };
     let reponse = match resultat {
@@ -73,6 +85,140 @@ pub async fn repondre(app: &AppHandle, demande: Demande) -> String {
         Err(e) => vers_json!({ "n": demande.n, "err": e }),
     };
     reponse.to_string()
+}
+
+// ---- Le système de BHOST OS (page « Machine » de BHOST) ----
+// L'agent n'a pas les droits de redémarrer la machine ni d'installer des mises à jour (utilisateur « bhost »).
+// Il écrit sa demande dans <dossier>/systeme/demande ; le service bhost-systeme (root) la lit et ne connaît
+// que quelques mots. Ce service écrit son état dans /run/bhost-systeme/etat.json (que l'agent ne peut pas modifier).
+
+const ETAT_SYSTEME: &str = "/run/bhost-systeme/etat.json";
+const VERSION_OS: &str = "/etc/bhost-os-version";
+
+/// Version de BHOST OS ; mises à jour en attente, recherche ou installation en cours, redémarrage nécessaire
+/// (nouveau noyau) : `{version, attente, enCours, redemarrage, verifie}` (verifie : secondes depuis 1970).
+fn etat_systeme() -> Value {
+    let version = std::fs::read_to_string(VERSION_OS).map(|v| v.trim().to_string()).unwrap_or_default();
+    let mut etat = std::fs::read_to_string(ETAT_SYSTEME).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).unwrap_or_else(|| vers_json!({}));
+    if let Value::Object(o) = &mut etat {
+        o.insert("version".into(), Value::String(version));
+    }
+    etat
+}
+
+/// Redémarrer, éteindre, rechercher ou installer les mises à jour.
+fn systeme_machine(app: &AppHandle, args: &Value) -> Result<Value, Value> {
+    let action = args.get("action").and_then(Value::as_str).unwrap_or_default();
+    if !["redemarrer", "eteindre", "verifier", "mettre-a-jour"].contains(&action) {
+        return Err(json("Action inconnue."));
+    }
+    if !std::path::Path::new(VERSION_OS).exists() {
+        return Err(json("Seulement sur BHOST OS."));
+    }
+    let dossier = app.state::<Etat>().dossier.join("systeme");
+    std::fs::create_dir_all(&dossier).map_err(|e| json(e.to_string()))?;
+    crate::garde::ecrire_atomique(&dossier.join("demande"), action.as_bytes()).map_err(|e| json(format!("Ça n'a pas marché : {e}")))?;
+    Ok(Value::Null)
+}
+
+// ---- Fichiers envoyés par un PC ----
+// Le PC envoie un fichier (ou une archive .zip de plusieurs) par morceaux de 1 Mo, en base64 :
+// ils arrivent dans <dossier>/envois/<envoi>/. Puis « importer_envoi » les range (fichiers, monde, icône)
+// avec les mêmes fonctions que sur le PC, et efface l'envoi.
+
+/// Le dossier d'un envoi (l'id est tiré au hasard par le PC : des chiffres hexa seulement).
+fn dossier_envoi(dossier: &std::path::Path, envoi: &str) -> Result<PathBuf, Value> {
+    if !(8..=32).contains(&envoi.len()) || !envoi.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err(json("Envoi refusé."));
+    }
+    Ok(dossier.join("envois").join(envoi))
+}
+
+/// Au démarrage de l'agent : les envois interrompus sont effacés.
+pub fn nettoyer_envois(dossier: &std::path::Path) {
+    let _ = std::fs::remove_dir_all(dossier.join("envois"));
+}
+
+/// Un morceau d'un fichier envoyé : {envoi, nom, position, donnees (base64), fin, zip}.
+fn recevoir_envoi(dossier: &std::path::Path, args: &Value) -> Result<Value, Value> {
+    use base64::Engine;
+    use std::io::Write;
+    let envoi: String = arg(args, "envoi")?;
+    let nom: String = arg(args, "nom")?;
+    let position: u64 = arg(args, "position")?;
+    let donnees: String = arg(args, "donnees")?;
+    let fin: bool = arg(args, "fin")?;
+    let zip: bool = arg::<Option<bool>>(args, "zip")?.unwrap_or(false);
+    // Un nom de fichier seul (pas de dossier, rien qui remonte).
+    if nom.is_empty() || nom.len() > 200 || nom.contains(['/', '\\', '\0']) || nom == "." || nom == ".." {
+        return Err(json("Nom de fichier refusé."));
+    }
+    let ici = dossier_envoi(dossier, &envoi)?;
+    let fichier = ici.join(&nom);
+    let octets = base64::engine::general_purpose::STANDARD.decode(donnees.as_bytes()).map_err(|_| json("Morceau abîmé."))?;
+    let erreur = |e: std::io::Error| json(format!("Enregistrement impossible sur la machine ({e})."));
+    if position == 0 {
+        std::fs::create_dir_all(&ici).map_err(erreur)?;
+        std::fs::write(&fichier, &octets).map_err(erreur)?;
+    } else {
+        // Le morceau suit exactement le précédent (sinon : un morceau perdu, on recommence).
+        let taille = std::fs::metadata(&fichier).map(|m| m.len()).map_err(|_| json("Envoi interrompu. Réessaie."))?;
+        if taille != position {
+            return Err(json("Envoi interrompu. Réessaie."));
+        }
+        let mut f = std::fs::OpenOptions::new().append(true).open(&fichier).map_err(erreur)?;
+        f.write_all(&octets).map_err(erreur)?;
+    }
+    if fin && zip {
+        let resultat = crate::java::extraire(&fichier, &ici).map_err(json);
+        let _ = std::fs::remove_file(&fichier);
+        resultat?;
+    }
+    Ok(Value::Null)
+}
+
+/// Range un envoi : {id, envoi, quoi: "fichiers" | "monde" | "icone", dossier, actuel}.
+async fn importer_envoi(app: &AppHandle, args: &Value) -> Result<Value, Value> {
+    let id: String = arg(args, "id")?;
+    let envoi: String = arg(args, "envoi")?;
+    let quoi: String = arg(args, "quoi")?;
+    let ici = dossier_envoi(&app.state::<Etat>().dossier, &envoi)?;
+    let mut sources: Vec<PathBuf> = std::fs::read_dir(&ici).map_err(|_| json("Envoi introuvable."))?.flatten().map(|e| e.path()).collect();
+    sources.sort();
+    let texte = |p: &PathBuf| p.to_string_lossy().into_owned();
+    // Le stockage max du serveur : la place manque-t-elle ?
+    let (app2, id2, ici2) = (app.clone(), id.clone(), ici.clone());
+    let place = tokio::task::spawn_blocking(move || {
+        let etat = app2.state::<Etat>();
+        let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id2).cloned();
+        serveur.map_or(Ok(()), |s| crate::stockage::verifier_ajout(&etat, &s, crate::stockage::taille(&ici2)))
+    })
+    .await
+    .unwrap_or(Ok(()));
+    if let Err(e) = place {
+        let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(ici)).await;
+        return Err(json(e));
+    }
+    let resultat = match quoi.as_str() {
+        "fichiers" => {
+            let dossier: String = arg::<Option<String>>(args, "dossier")?.unwrap_or_default();
+            crate::importer_fichiers(app.clone(), id, dossier, sources.iter().map(texte).collect()).await.map(json).map_err(json)
+        }
+        "monde" => {
+            let actuel = arg::<Option<bool>>(args, "actuel")?.unwrap_or(false);
+            match sources.first() {
+                Some(source) => crate::importer_monde(app.clone(), id, texte(source), actuel).await.map(json).map_err(json),
+                None => Err(json("Pas de monde dans cet envoi.")),
+            }
+        }
+        "icone" => match sources.first() {
+            Some(source) => crate::icone_serveur(app.clone(), id, texte(source)).await.map(json).map_err(json),
+            None => Err(json("Image introuvable.")),
+        },
+        _ => Err(json("Envoi refusé.")),
+    };
+    let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(ici)).await;
+    resultat
 }
 
 /// Un serveur (ou une liste de serveurs) dans la réponse : on y ajoute `machine`.
@@ -150,6 +296,8 @@ fn etat_machine(app: &AppHandle) -> Value {
         "processeur": processeur,
         "temperature": temperature,
         "ip": ip,
+        // BHOST OS : les serveurs ont leurs limites (mémoire max, part du processeur).
+        "limites": crate::processus::cgroupes::actives(),
         "serveurs": etat.liste.lock().unwrap().len(),
         "version": env!("CARGO_PKG_VERSION"),
     })

@@ -11,11 +11,16 @@ use serde::Serialize;
 
 const GO: u64 = 1024;
 
-/// Ce que le système de la machine garde pour lui (Linux, BHOST, le relais) : ≈ 1,5 Go.
-pub const SYSTEME_MO: u64 = 1536;
+/// Ce que le système de la machine garde pour lui (BHOST OS est minimal : Linux et l'agent tiennent en ≈ 400 Mo).
+pub const SYSTEME_MO: u64 = 768;
 
-/// Ce que Java prend en plus de la mémoire donnée au serveur (-Xmx) : ≈ 1 Go par serveur.
+/// La limite dure de chaque serveur (cgroup) : sa mémoire + 1 Go pour Java. Au-delà, il est arrêté.
 pub const MARGE_JAVA_MO: u64 = 1024;
+
+/// Ce que Java prend vraiment en plus de sa mémoire (-Xmx), pour compter la place : 15 % (512 Mo au moins).
+pub fn marge_java(ram_mo: u64) -> u64 {
+    (ram_mo * 15 / 100).max(512)
+}
 
 /// Un serveur allumé sur la machine.
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -37,7 +42,7 @@ pub struct Manque {
 
 /// Ce qu'un serveur prend vraiment quand il est allumé.
 pub fn empreinte(ram_mo: u64) -> u64 {
-    ram_mo + MARGE_JAVA_MO
+    ram_mo + marge_java(ram_mo)
 }
 
 /// La RAM réservée par les serveurs allumés (la jauge « Mémoire réservée » de la barre de gauche).
@@ -76,7 +81,7 @@ pub fn au_demarrage(total_mo: u64, serveurs: &[(String, u64)]) -> (Vec<String>, 
 
 /// Créer un serveur : la mémoire la plus haute du curseur, en Go (un serveur seul doit pouvoir démarrer).
 pub fn ram_max_go(total_mo: u64) -> u64 {
-    (total_mo.saturating_sub(SYSTEME_MO + MARGE_JAVA_MO) / GO).max(1)
+    (1..=1024).take_while(|go| SYSTEME_MO + empreinte(go * GO) <= total_mo).last().unwrap_or(1)
 }
 
 /// Le plus petit stockage max (5 Go).
@@ -119,7 +124,7 @@ mod tests {
 
     #[test]
     fn demarrage_quand_ca_rentre() {
-        // 16 Go : 1,5 (système) + 8+1 + 2+1 = 13,5 ; un serveur de 1 Go (+1) rentre encore.
+        // 16 Go : système + 8 Go et 2 Go (+ leur marge Java) ; un serveur de 1 Go rentre encore.
         let allumes = [s("public", 8), s("test", 2)];
         assert_eq!(verifier_demarrage(16 * GO, &allumes, GO), Ok(()));
         // Rien d'allumé : un serveur de 12 Go rentre sur 16 Go, pas un de 14 Go.
@@ -132,16 +137,16 @@ mod tests {
         // L'aperçu « Pas assez de mémoire » : Entre amis (4 Go) à côté de Serveur public (8) et Test (2).
         let allumes = [s("test", 2), s("public", 8)];
         let m = verifier_demarrage(16 * GO, &allumes, 4 * GO).unwrap_err();
-        // 1,5 + 9 + 3 + 5 = 18,5 Go pour 16 : il manque 2,5 Go.
-        assert_eq!(m.manque_mo, 2 * GO + 512);
+        // 768 Mo + (8 Go + 15 %) + (2 Go + 512 Mo) + (4 Go + 15 %) = 17 458 Mo pour 16 384 : il manque 1 074 Mo.
+        assert_eq!(m.manque_mo, 1074);
         assert_eq!(m.allumes.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), ["public", "test"]);
         let json = serde_json::to_string(&m).unwrap();
-        assert!(json.contains("\"manqueMo\":2560") && json.contains("\"ramMo\":8192"));
+        assert!(json.contains("\"manqueMo\":1074") && json.contains("\"ramMo\":8192"));
     }
 
     #[test]
     fn redemarrage_de_la_machine() {
-        // 8 Go : 1,5 + (4+1) = 6,5 ; le 3 Go (+1) ne rentre plus ; le 512 Mo (+1) si.
+        // 8 Go : système + 4 Go (+ marge) ; le 3 Go ne rentre plus ; le 512 Mo si.
         let liste = [("a".to_string(), 4 * GO), ("b".to_string(), 3 * GO), ("c".to_string(), 512)];
         let (lances, laisses) = au_demarrage(8 * GO, &liste);
         assert_eq!(lances, ["a", "c"]);
@@ -152,6 +157,9 @@ mod tests {
     #[test]
     fn curseurs_de_l_assistant() {
         assert_eq!(ram_max_go(16 * GO), 13);
+        // Une machine de 8 Go (7,8 Go vus par Linux) : 6 Go pour un serveur.
+        assert_eq!(ram_max_go(7987), 6);
+        assert_eq!(ram_max_go(4 * GO), 2);
         assert_eq!(ram_max_go(2 * GO), 1); // jamais moins de 1 Go
         // Un serveur seul réglé au maximum peut toujours démarrer.
         assert_eq!(verifier_demarrage(16 * GO, &[], ram_max_go(16 * GO) * GO), Ok(()));

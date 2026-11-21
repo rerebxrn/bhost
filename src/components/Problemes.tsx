@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { IconAlertOctagon, IconCoffee, IconCpu, IconPlugX, IconWifiOff, IconX } from "@tabler/icons-react";
+import { IconAlertOctagon, IconCoffee, IconCpu, IconDatabase, IconPlugX, IconWifiOff, IconX } from "@tabler/icons-react";
 import {
   activerExtension,
   choisirJava,
@@ -94,6 +94,9 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
   const [cause, setCause] = useState<{ nom: string; fichier: string; panne: string } | null>(null);
   const [sauvegarde, setSauvegarde] = useState<number | null>(null);
   const id = serveur.id;
+  // Sur une machine dédiée, les textes parlent de la machine (pas de ce PC).
+  const ici = serveur.machine ? "la machine" : "ce PC";
+  const ton = serveur.machine ? "la machine" : "ton PC";
 
   useEffect(() => {
     setCause(null);
@@ -165,17 +168,19 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
         <button type="button" className="btn acc" disabled={occupe} onClick={() => faire(() => installerJava(id, v).then(() => {}))}>
           Installer Java {v}
         </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={occupe}
-          onClick={async () => {
-            const chemin = await choisirJava();
-            if (chemin) faire(() => reglages({ javaChoix: chemin }));
-          }}
-        >
-          J'ai déjà Java…
-        </button>
+        {!serveur.machine && (
+          <button
+            type="button"
+            className="btn"
+            disabled={occupe}
+            onClick={async () => {
+              const chemin = await choisirJava();
+              if (chemin) faire(() => reglages({ javaChoix: chemin }));
+            }}
+          >
+            J'ai déjà Java…
+          </button>
+        )}
       </Carte>,
     );
   }
@@ -188,7 +193,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
         ton="warn"
         icone={<IconPlugX size={18} stroke={2} />}
         titre={`Le port ${port} est déjà pris`}
-        texte={montre.serveur ? `Ton serveur « ${montre.serveur} » l'utilise déjà.` : "Un autre programme l'utilise déjà sur ce PC."}
+        texte={montre.serveur ? `Ton serveur « ${montre.serveur} » l'utilise déjà.` : `Un autre programme l'utilise déjà sur ${ici}.`}
         onFermer={() => setMasque(montre)}
       >
         {libre !== null && (
@@ -250,7 +255,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
           ton="bad"
           icone={<IconCpu size={18} stroke={2} />}
           titre="Pas assez de mémoire pour démarrer"
-          texte={`Il demande ${nombre(go)} Go, et ton PC n'en a que ${nombre(libreGo)} de libres.`}
+          texte={`Il demande ${nombre(go)} Go, et ${ton} n'en a que ${nombre(libreGo)} de libres.`}
           cause="Ferme des programmes, ou baisse sa mémoire."
           lien={regler}
           onFermer={() => setMasque(montre)}
@@ -265,7 +270,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
           ton="bad"
           icone={<IconCpu size={18} stroke={2} />}
           titre="Le serveur a manqué de mémoire"
-          texte={`Il a utilisé les ${nombre(go)} Go alloués. ${nombre(libreGo)} Go libres sur ton PC.`}
+          texte={`Il a utilisé les ${nombre(go)} Go alloués. ${nombre(libreGo)} Go libres sur ${ton}.`}
           cause="Souvent : grosses fermes ou joueurs éparpillés."
           lien={regler}
           onFermer={() => setMasque(montre)}
@@ -283,9 +288,29 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
     );
   }
 
+  if (montre?.genre === "stockage") {
+    cartes.push(
+      <Carte
+        key="stockage"
+        ton="bad"
+        icone={<IconDatabase size={18} stroke={2} />}
+        titre="Stockage max atteint"
+        texte={`Il a rempli ses ${nombre(montre.go)} Go : BHOST l'a arrêté proprement.`}
+        cause="Libère de la place, ou monte son stockage max."
+        lien={{ texte: "Monter le stockage", action: () => onOnglet("parametres") }}
+        onFermer={() => setMasque(montre)}
+      >
+        <button type="button" className="btn acc" disabled={occupe} onClick={() => onOnglet("fichiers")}>
+          Voir les fichiers
+        </button>
+      </Carte>,
+    );
+  }
+
   // Plus de connexion : seulement pour un serveur ouvert aux amis et allumé.
   const allume = serveur.statut === "en-ligne" || serveur.statut === "demarrage";
-  if (!internet && serveur.ouvertAmis && allume) {
+  // (Machine dédiée : c'est Internet de la machine qui compte ; sans lui, elle serait hors ligne.)
+  if (!internet && serveur.ouvertAmis && allume && !serveur.machine) {
     cartes.push(
       <Carte
         key="net"

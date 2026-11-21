@@ -13,6 +13,8 @@ use std::sync::{Arc, Mutex};
 fn main() {
     let dossier = std::env::var_os("BHOST_DOSSIER").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/var/lib/bhost"));
     let stdio = std::env::args().any(|a| a == "--stdio");
+    // BHOST OS : chaque serveur aura son groupe (mémoire max, part du processeur). Avant tout lancement.
+    bhost_lib::processus::cgroupes::preparer();
     let runtime = tokio::runtime::Runtime::new().expect("tokio");
     let _dedans = runtime.enter();
 
@@ -44,6 +46,7 @@ fn main() {
             std::process::exit(1);
         }
     };
+    agent::nettoyer_envois(&dossier);
     match (pilotage::code(&dossier), pilotage::id(&dossier)) {
         (Ok(code), Ok(id)) => {
             agent::noter_machine(id.clone());
@@ -74,6 +77,8 @@ fn main() {
     }
 
     if !stdio {
+        // En direct (réseau de la maison, VPS) et par le relais : les deux à la fois.
+        pilotage::ecouter_direct(dossier.clone(), app.clone(), sessions.clone(), runtime.handle().clone());
         pilotage::servir(dossier, app, sessions, runtime.handle().clone(), Arc::new(pilotage::EtatRelais::default()));
         // Le travail se fait dans les autres fils : on attend l'arrêt (signal ci-dessus).
         loop {

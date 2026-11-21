@@ -71,8 +71,14 @@ find "$RACINE/var/lib/apt/lists" "$RACINE/usr/share/doc" "$RACINE/usr/share/man"
 
 # ---------- 3. BHOST OS ----------
 cp -r "$ICI/fichiers/." "$RACINE/"
-chmod 755 "$RACINE/usr/local/bin/bhost-ecran" "$RACINE/usr/local/sbin/bhost-"*
+chmod 755 "$RACINE/usr/local/bin/bhost-ecran" "$RACINE/usr/local/sbin/bhost-"* "$RACINE/etc/kernel/postinst.d/zz-bhost-grub" "$RACINE/etc/kernel/postrm.d/zz-bhost-grub"
 install -m 755 "$AGENT" "$RACINE/usr/local/bin/bhost-agent"
+# Essais seulement (agent compilé en mode debug) : un autre relais, par exemple RELAIS_ESSAI=10.0.2.2:4499.
+rm -rf "$RACINE/etc/systemd/system/bhost-agent.service.d"
+if [ -n "${RELAIS_ESSAI:-}" ]; then
+	mkdir -p "$RACINE/etc/systemd/system/bhost-agent.service.d"
+	printf '[Service]\nEnvironment=BHOST_RELAIS=%s\n' "$RELAIS_ESSAI" >"$RACINE/etc/systemd/system/bhost-agent.service.d/essai.conf"
+fi
 chmod 600 "$RACINE/etc/netplan/"*.yaml
 dans id bhost >/dev/null 2>&1 || dans useradd --system --home-dir /var/lib/bhost --shell /usr/sbin/nologin bhost
 dans install -d -o bhost -g bhost -m 750 /var/lib/bhost
@@ -85,7 +91,7 @@ ln -sf /usr/share/zoneinfo/Europe/Paris "$RACINE/etc/localtime"
 echo Europe/Paris >"$RACINE/etc/timezone"
 dans setupcon --save-only 2>/dev/null || true
 # Services : l'agent, l'écran et les performances sur la machine installée ; l'installeur sur la clé.
-dans systemctl enable bhost-agent bhost-ecran bhost-performances bhost-installeur NetworkManager systemd-timesyncd systemd-resolved >/dev/null
+dans systemctl enable bhost-agent bhost-ecran bhost-performances bhost-installeur bhost-systeme.path bhost-systeme-etat NetworkManager systemd-timesyncd systemd-resolved >/dev/null
 dans systemctl mask getty@tty1.service sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null
 dans systemctl disable apt-daily.timer >/dev/null 2>&1 || true
 dans systemctl enable apt-daily.timer apt-daily-upgrade.timer >/dev/null
@@ -100,14 +106,50 @@ rm -f "$RACINE/usr/sbin/policy-rc.d"
 demonter
 
 # ---------- 4. L'ISO ----------
+# BIOS : GRUB (El Torito + MBR hybride pour la clé USB). UEFI : shim et GRUB signés (Secure Boot accepté).
+# Sur la clé, la partition du système est de type Linux et il n'y a pas de partition de remplissage :
+# Windows ne lui donne pas de lettre et ne propose pas de « formater le disque ».
 rm -rf "$ISO"
-mkdir -p "$ISO/boot/grub" "$ISO/bhost"
+mkdir -p "$ISO/boot/grub/i386-pc" "$ISO/bhost" "$ISO/.disk"
 cp "$RACINE/boot/vmlinuz-$K" "$ISO/boot/vmlinuz"
 cp "$RACINE/boot/initrd.img-$K" "$ISO/boot/initrd"
 cp "$ICI/iso/grub.cfg" "$ISO/boot/grub/grub.cfg"
+echo "BHOST OS $(cat "$ICI/fichiers/etc/bhost-os-version")" >"$ISO/.disk/info"
+# La zone du Wi-Fi : BHOST la remplit en écrivant la clé (étape « Clé USB »), sans refaire l'ISO.
+# Taille fixe ; la 1re ligne sert de repère pour la retrouver dans l'image.
+python3 - "$ISO/bhost/wifi.txt" <<'FIN'
+import sys
+debut = b"# BHOST-WIFI v1\nnom=\nmotdepasse=\n"
+open(sys.argv[1], "wb").write(debut + b"\n" * (4096 - len(debut)))
+FIN
 # Le noyau et l'image de démarrage ne sont pas dans le système (l'installeur les copie depuis la clé).
-rm -f "$TRAVAIL/systeme.squashfs"
 mksquashfs "$RACINE" "$ISO/bhost/systeme.squashfs" -comp xz -Xbcj x86 -b 1M -noappend -quiet \
 	-e boot/vmlinuz-"$K" boot/initrd.img-"$K" boot/System.map-"$K" boot/vmlinuz boot/initrd.img boot/vmlinuz.old boot/initrd.img.old
-grub-mkrescue -o "$TRAVAIL/bhost-os.iso" "$ISO" -- -volid BHOST_OS 2>/dev/null
+
+# BIOS
+cp /usr/lib/grub/i386-pc/*.mod /usr/lib/grub/i386-pc/*.lst "$ISO/boot/grub/i386-pc/"
+grub-mkimage -O i386-pc-eltorito -p /boot/grub -o "$ISO/boot/grub/i386-pc/eltorito.img" \
+	biosdisk iso9660 part_gpt part_msdos ext2 fat search search_fs_file configfile normal linux echo test
+# UEFI : petite partition FAT avec shim (signé par Microsoft) → GRUB (signé par Canonical) → noyau signé.
+ESP=$TRAVAIL/efi.img
+rm -f "$ESP"
+mkfs.vfat -C -n BHOST_EFI "$ESP" 10240 >/dev/null
+mmd -i "$ESP" ::/EFI ::/EFI/BOOT ::/boot ::/boot/grub
+mcopy -i "$ESP" "$RACINE/usr/lib/shim/shimx64.efi.signed.latest" ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i "$ESP" "$RACINE/usr/lib/shim/mmx64.efi" ::/EFI/BOOT/mmx64.efi
+mcopy -i "$ESP" "$RACINE/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed" ::/EFI/BOOT/grubx64.efi
+# Le GRUB signé cherche /.disk/info puis /boot/grub/grub.cfg sur le DVD ; à défaut, ce petit relais.
+printf 'search --no-floppy --file --set=root /.disk/info\nset prefix=($root)/boot/grub\nconfigfile $prefix/grub.cfg\n' >"$TRAVAIL/relais.cfg"
+mcopy -i "$ESP" "$TRAVAIL/relais.cfg" ::/EFI/BOOT/grub.cfg
+mcopy -i "$ESP" "$TRAVAIL/relais.cfg" ::/boot/grub/grub.cfg
+
+rm -f "$TRAVAIL/bhost-os.iso"
+xorriso -as mkisofs -iso-level 3 -r -J -joliet-long -V BHOST_OS \
+	--grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img -partition_offset 16 \
+	-iso_mbr_part_type 0FC63DAF-8483-4772-8E79-3D69D8477DE4 \
+	-append_partition 2 0xef "$ESP" -appended_part_as_gpt -no-pad \
+	-c boot.catalog \
+	-b boot/grub/i386-pc/eltorito.img -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \
+	-eltorito-alt-boot -e '--interval:appended_partition_2:all::' -no-emul-boot \
+	-o "$TRAVAIL/bhost-os.iso" "$ISO" 2>/dev/null
 ls -lh "$TRAVAIL/bhost-os.iso"

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconCopy, IconEye, IconEyeOff } from "@tabler/icons-react";
 import IconeServeur, { couleurDe } from "../components/IconeServeur";
 import { afficherCode } from "../code";
+import Confirmer from "../components/Confirmer";
+import { changerCodeMachine, etatSysteme, systemeMachine, type EtatSysteme } from "../api";
 import { nombre, type Machine as MachineT, type Serveur } from "../types";
 import "./Reglages.css";
 import "./Machine.css";
@@ -12,8 +14,20 @@ type Props = {
   onRenommer: () => void;
   onRetirer: () => void;
   onCopie: (texte: string) => void;
-  onBientot: () => void; // Changer le code, mises à jour, Redémarrer, Éteindre : avec BHOST OS
+  onMessage: (texte: string) => void;
 };
+
+type Question = "code" | "redemarrer" | "eteindre" | "mettre-a-jour" | null;
+
+// « il y a 3 h » (dernière recherche de mises à jour).
+function ilYa(secondes?: number) {
+  if (!secondes) return "";
+  const m = Math.max(0, Math.round((Date.now() / 1000 - secondes) / 60));
+  if (m < 2) return "à l’instant";
+  if (m < 60) return `il y a ${m} min`;
+  if (m < 48 * 60) return `il y a ${Math.round(m / 60)} h`;
+  return `il y a ${Math.round(m / 1440)} jours`;
+}
 
 const pct = (a: number, b: number) => (b > 0 ? Math.min(100, Math.round((a / b) * 100)) : 0);
 const classe = (p: number) => (p >= 90 ? " plein" : p >= 75 ? " haut" : "");
@@ -27,9 +41,56 @@ function Barre({ p, label }: { p: number; label: string }) {
 }
 
 // La page « Machine » d'une machine dédiée (clic sur son état, en haut de la barre de gauche).
-export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, onCopie, onBientot }: Props) {
+export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, onCopie, onMessage }: Props) {
   const [codeVu, setCodeVu] = useState(false);
+  const [question, setQuestion] = useState<Question>(null);
+  const [systeme, setSysteme] = useState<EtatSysteme | null>(null);
   const enLigne = m.etat === "en-ligne";
+
+  // L'état du système : relu toutes les 5 s (plus souvent rien ne change ; pendant une recherche, il bouge).
+  useEffect(() => {
+    if (!enLigne) return;
+    let fini = false;
+    const lire = () => etatSysteme(m.id).then((e) => !fini && setSysteme(e), () => {});
+    lire();
+    const minuterie = window.setInterval(lire, 5000);
+    return () => {
+      fini = true;
+      window.clearInterval(minuterie);
+    };
+  }, [m.id, enLigne]);
+
+  const demander = (action: "redemarrer" | "eteindre" | "verifier" | "mettre-a-jour") =>
+    systemeMachine(m.id, action).then(
+      () => {
+        if (action === "redemarrer") onMessage("Redémarrage… La machine revient dans une minute.");
+        else if (action === "eteindre") onMessage("La machine s’éteint.");
+        else setSysteme((e) => (e ? { ...e, enCours: action === "verifier" ? "verification" : "installation" } : e));
+      },
+      (e) => onMessage(typeof e === "string" ? e : "Ça n’a pas marché."),
+    );
+  const changerCode = () =>
+    changerCodeMachine(m.id).then(
+      () => {
+        setCodeVu(true);
+        onMessage("Nouveau code. Les autres appareils devront l’entrer.");
+      },
+      (e) => onMessage(typeof e === "string" ? e : "Ça n’a pas marché."),
+    );
+
+  const enCours = systeme?.enCours;
+  const attente = systeme?.attente ?? 0;
+  const etatMaj = !systeme
+    ? "–"
+    : enCours === "verification"
+      ? "Recherche…"
+      : enCours === "installation"
+        ? "Installation…"
+        : systeme.redemarrage
+          ? "Redémarre pour finir la mise à jour."
+          : attente > 0
+            ? `${attente} mise${attente > 1 ? "s" : ""} à jour${systeme.verifie ? ` · ${ilYa(systeme.verifie)}` : ""}`
+            : `À jour${systeme.verifie ? ` · ${ilYa(systeme.verifie)}` : ""}`;
   const t = m.temperature ?? null;
   return (
     <div className="page etroite reglages machine">
@@ -151,19 +212,25 @@ export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, o
                 {codeVu ? <IconEyeOff size={14} stroke={2} aria-hidden /> : <IconEye size={14} stroke={2} aria-hidden />}
                 <span className="tnum">{codeVu ? afficherCode(m.code) : "••••-••••"}</span>
               </button>
-              <button type="button" className="btn" disabled={!enLigne} onClick={onBientot}>
+              <button type="button" className="btn" disabled={!enLigne} onClick={() => setQuestion("code")}>
                 Changer…
               </button>
             </div>
           </div>
           <div className="row">
             <div className="lbl">
-              <span>BHOST OS 0.1.0</span>
-              <span className="t2">À jour.</span>
+              <span>BHOST OS{systeme?.version ? ` ${systeme.version}` : ""}</span>
+              <span className="t2">{enLigne ? etatMaj : "–"}</span>
             </div>
-            <button type="button" className="btn" disabled={!enLigne} onClick={onBientot}>
-              Rechercher les mises à jour
-            </button>
+            {attente > 0 && !enCours ? (
+              <button type="button" className="btn" disabled={!enLigne} onClick={() => setQuestion("mettre-a-jour")}>
+                Mettre à jour…
+              </button>
+            ) : (
+              <button type="button" className="btn" disabled={!enLigne || !!enCours} onClick={() => demander("verifier")}>
+                Rechercher
+              </button>
+            )}
           </div>
         </section>
 
@@ -174,7 +241,7 @@ export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, o
               <span>Redémarrer</span>
               <span className="t2">Les serveurs s’arrêtent proprement, puis repartent.</span>
             </div>
-            <button type="button" className="btn" disabled={!enLigne} onClick={onBientot}>
+            <button type="button" className="btn" disabled={!enLigne} onClick={() => setQuestion("redemarrer")}>
               Redémarrer…
             </button>
           </div>
@@ -183,7 +250,7 @@ export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, o
               <span>Éteindre</span>
               <span className="t2">Il faudra la rallumer à la main.</span>
             </div>
-            <button type="button" className="btn danger" disabled={!enLigne} onClick={onBientot}>
+            <button type="button" className="btn danger" disabled={!enLigne} onClick={() => setQuestion("eteindre")}>
               Éteindre…
             </button>
           </div>
@@ -198,6 +265,43 @@ export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, o
           </div>
         </section>
       </div>
+
+      {question === "code" && (
+        <Confirmer
+          titre="Changer le code ?"
+          texte="Ce PC garde l’accès. Les autres appareils devront entrer le nouveau code."
+          bouton="Changer le code"
+          onOui={changerCode}
+          onFermer={() => setQuestion(null)}
+        />
+      )}
+      {question === "redemarrer" && (
+        <Confirmer
+          titre={`Redémarrer ${m.nom} ?`}
+          texte="Les serveurs s’arrêtent proprement. Ceux qui démarrent avec la machine repartent tout seuls."
+          bouton="Redémarrer"
+          onOui={() => demander("redemarrer")}
+          onFermer={() => setQuestion(null)}
+        />
+      )}
+      {question === "eteindre" && (
+        <Confirmer
+          titre={`Éteindre ${m.nom} ?`}
+          texte="Les serveurs s’arrêtent proprement. Il faudra rallumer la machine à la main."
+          bouton="Éteindre"
+          onOui={() => demander("eteindre")}
+          onFermer={() => setQuestion(null)}
+        />
+      )}
+      {question === "mettre-a-jour" && (
+        <Confirmer
+          titre="Installer les mises à jour ?"
+          texte="Les serveurs continuent de tourner. Quelques minutes."
+          bouton="Installer"
+          onOui={() => demander("mettre-a-jour")}
+          onFermer={() => setQuestion(null)}
+        />
+      )}
     </div>
   );
 }

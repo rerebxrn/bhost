@@ -109,18 +109,18 @@ preparer_qr() {
 # Une valeur en Go, avec une virgule (« 6,4 »).
 go() { awk -v o="$1" 'BEGIN { v = o / 1073741824; f = (v < 10) ? "%.1f" : "%.0f"; s = sprintf(f, v); sub(/\./, ",", s); print s }'; }
 
+# Processeur (%) entre deux tours de boucle. Résultat dans CPU (pas de sous-shell : PRECEDENT doit rester).
 PRECEDENT=""
+CPU=0
 processeur() {
 	local cpu a b c d e f g h total inactif
 	read -r cpu a b c d e f g h _ </proc/stat
 	total=$((a + b + c + d + e + f + g + h))
 	inactif=$((d + e))
 	if [ -n "$PRECEDENT" ]; then
-		set -- $PRECEDENT
-		local dt=$((total - $1)) di=$((inactif - $2))
-		[ "$dt" -gt 0 ] && echo $(((100 * (dt - di)) / dt)) || echo 0
-	else
-		echo 0
+		local avant_total=${PRECEDENT% *} avant_inactif=${PRECEDENT#* }
+		local dt=$((total - avant_total)) di=$((inactif - avant_inactif))
+		[ "$dt" -gt 0 ] && CPU=$(((100 * (dt - di)) / dt)) || CPU=0
 	fi
 	PRECEDENT="$total $inactif"
 }
@@ -150,7 +150,8 @@ etat() {
 	mem_total=$(awk '/^MemTotal/ { print $2 * 1024 }' /proc/meminfo)
 	mem_dispo=$(awk '/^MemAvailable/ { print $2 * 1024 }' /proc/meminfo)
 	read -r utilise taille < <(df -B1 --output=used,size "$DOSSIER" 2>/dev/null | tail -1)
-	cpu=$(processeur)
+	processeur
+	cpu=$CPU
 	temp=$(temperature)
 	ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1) }')
 	lien=$(nmcli -t -f TYPE,STATE device 2>/dev/null | awk -F: '$2 == "connected" && ($1 == "ethernet" || $1 == "wifi") { print $1; exit }')
@@ -195,6 +196,11 @@ etat() {
 dessiner() {
 	local code=$1 colonnes lignes marge l i
 	read -r lignes colonnes < <(stty size 2>/dev/null || echo "25 80")
+	# L'écran a changé de taille (pilote graphique chargé après nous) : on efface tout.
+	if [ "$lignes $colonnes" != "${TAILLE:-}" ]; then
+		TAILLE="$lignes $colonnes"
+		printf '\e[40m\e[2J'
+	fi
 	printf '\e[H\e[40m'
 	# Centré en hauteur (à peu près) sur les grands écrans.
 	local contenu=$((14 + ${#QR[@]} + 2))

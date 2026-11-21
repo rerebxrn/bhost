@@ -95,10 +95,18 @@ impl Processus {
     }
 
     /// Donne au serveur sa priorité, et coupe le bridage de Windows (voir `freins_coupes`).
-    /// Marche aussi pendant qu'il tourne. Ailleurs que sur Windows : rien pour l'instant.
+    /// Sous Linux (BHOST OS) : sa part du processeur face aux autres serveurs (groupe du serveur).
+    /// Marche aussi pendant qu'il tourne.
     pub fn regler_priorite(&self, priorite: Priorite) -> Result<(), String> {
+        self.groupe.priorite(priorite);
         let enfant = self.enfant.lock().unwrap();
         vitesse::regler(&enfant, priorite)
+    }
+
+    /// BHOST OS : la mémoire que le serveur ne peut pas dépasser (Java et tout ce qu'il lance).
+    /// Au-delà, c'est lui qui s'arrête, pas la machine ni les autres serveurs. Ailleurs : rien.
+    pub fn limiter_memoire(&self, mo: u64) {
+        self.groupe.memoire_max(mo);
     }
 
     /// Coupe le serveur tout de suite, sans sauvegarder : Java et tout ce qu'il a lancé.
@@ -213,15 +221,144 @@ mod groupe {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(windows)]
+    impl Groupe {
+        pub fn priorite(&self, _priorite: super::Priorite) {}
+        pub fn memoire_max(&self, _mo: u64) {}
+    }
+
+    // Linux (BHOST OS) : un groupe de contrôle (cgroup v2) par serveur, sous celui de l'agent
+    // (systemd le lui confie : Delegate= dans bhost-agent.service). Voir `preparer`.
+    #[cfg(target_os = "linux")]
+    pub struct Groupe(Option<std::path::PathBuf>);
+
+    #[cfg(target_os = "linux")]
+    impl Groupe {
+        pub fn ranger(enfant: &std::process::Child) -> Groupe {
+            let Some(base) = super::cgroupes::base() else { return Groupe(None) };
+            let dossier = base.join(format!("serveur-{}", enfant.id()));
+            let pret = std::fs::create_dir(&dossier).is_ok() && std::fs::write(dossier.join("cgroup.procs"), enfant.id().to_string()).is_ok();
+            if !pret {
+                let _ = std::fs::remove_dir(&dossier);
+                return Groupe(None);
+            }
+            Groupe(Some(dossier))
+        }
+        /// Coupe tous les programmes du groupe d'un coup (Java et ce qu'il a lancé).
+        pub fn couper(&self) {
+            if let Some(d) = &self.0 {
+                let _ = std::fs::write(d.join("cgroup.kill"), "1");
+            }
+        }
+        pub fn priorite(&self, priorite: super::Priorite) {
+            if let Some(d) = &self.0 {
+                let _ = std::fs::write(d.join("cpu.weight"), super::cgroupes::poids(priorite).to_string());
+            }
+        }
+        pub fn memoire_max(&self, mo: u64) {
+            if let Some(d) = &self.0 {
+                let _ = std::fs::write(d.join("memory.max"), (mo * 1024 * 1024).to_string());
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    impl Drop for Groupe {
+        fn drop(&mut self) {
+            // Le serveur est arrêté : le groupe est vide, on le retire (sinon `preparer` le fera au prochain démarrage).
+            if let Some(d) = &self.0 {
+                let _ = std::fs::remove_dir(d);
+            }
+        }
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub struct Groupe;
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     impl Groupe {
         pub fn ranger(_enfant: &std::process::Child) -> Groupe {
             Groupe
         }
         pub fn couper(&self) {}
+        pub fn priorite(&self, _priorite: super::Priorite) {}
+        pub fn memoire_max(&self, _mo: u64) {}
+    }
+}
+
+/// BHOST OS : les groupes de contrôle (cgroup v2) des serveurs.
+/// systemd confie à l'agent son propre groupe (Delegate=). Une règle du noyau interdit d'y mettre à la fois
+/// des programmes et des sous-groupes réglés : l'agent passe donc dans le sous-groupe « agent », et chaque
+/// serveur a le sien (« serveur-<numéro> ») avec sa mémoire max et sa part de processeur.
+pub mod cgroupes {
+    use super::Priorite;
+    #[cfg(target_os = "linux")]
+    use std::path::{Path, PathBuf};
+    #[cfg(target_os = "linux")]
+    use std::sync::OnceLock;
+
+    /// Part du processeur quand plusieurs serveurs le veulent (100 = normal pour le noyau).
+    pub fn poids(priorite: Priorite) -> u32 {
+        match priorite {
+            Priorite::Basse => 25,
+            Priorite::Normale => 100,
+            Priorite::Haute => 400,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    static BASE: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+    /// Le groupe confié à l'agent, prêt pour les serveurs (ou rien : pas BHOST OS, pas de cgroup v2…).
+    #[cfg(target_os = "linux")]
+    pub fn base() -> Option<PathBuf> {
+        BASE.get_or_init(|| preparer_dans(Path::new("/sys/fs/cgroup"), &std::fs::read_to_string("/proc/self/cgroup").unwrap_or_default())).clone()
+    }
+
+    /// Vrai si les serveurs ont leur groupe (BHOST OS).
+    pub fn actives() -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            BASE.get().is_some_and(|b| b.is_some())
+        }
+        #[cfg(not(target_os = "linux"))]
+        false
+    }
+
+    /// À appeler au démarrage de l'agent, avant de lancer quoi que ce soit.
+    pub fn preparer() {
+        #[cfg(target_os = "linux")]
+        {
+            let _ = base();
+        }
+    }
+
+    /// `racine` : où est monté cgroup2 ; `moi` : le contenu de /proc/self/cgroup (« 0::/chemin »).
+    #[cfg(target_os = "linux")]
+    pub fn preparer_dans(racine: &Path, moi: &str) -> Option<PathBuf> {
+        let chemin = moi.lines().find_map(|l| l.strip_prefix("0::"))?.trim();
+        let chemin = chemin.trim_start_matches('/');
+        let mut base = racine.join(chemin);
+        // Déjà dans « agent » (l'agent a redémarré sans que systemd recrée son groupe) : on remonte.
+        if base.file_name().is_some_and(|n| n == "agent") {
+            base.pop();
+        }
+        if chemin.is_empty() || !base.join("cgroup.subtree_control").exists() {
+            return None;
+        }
+        let agent = base.join("agent");
+        std::fs::create_dir_all(&agent).ok()?;
+        std::fs::write(agent.join("cgroup.procs"), std::process::id().to_string()).ok()?;
+        // Les groupes de serveurs vides laissés par un arrêt brutal.
+        if let Ok(liste) = std::fs::read_dir(&base) {
+            for e in liste.flatten() {
+                if e.file_name().to_string_lossy().starts_with("serveur-") {
+                    let _ = std::fs::remove_dir(e.path());
+                }
+            }
+        }
+        std::fs::write(base.join("cgroup.subtree_control"), "+memory +cpu").ok()?;
+        Some(base)
     }
 }
 
@@ -352,6 +489,28 @@ pub fn lancer(dossier: &Path, programme: &str, arguments: &[String], variables: 
 
 #[cfg(test)]
 mod tests_priorite {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn groupes_de_bhost_os() {
+        let d = std::env::temp_dir().join(format!("bhost-cgroupes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let service = d.join("system.slice/bhost-agent.service");
+        std::fs::create_dir_all(service.join("serveur-12")).unwrap();
+        std::fs::write(service.join("cgroup.subtree_control"), "").unwrap();
+        let base = cgroupes::preparer_dans(&d, "0::/system.slice/bhost-agent.service\n").unwrap();
+        assert_eq!(base, service);
+        assert_eq!(std::fs::read_to_string(service.join("agent/cgroup.procs")).unwrap(), std::process::id().to_string());
+        assert_eq!(std::fs::read_to_string(service.join("cgroup.subtree_control")).unwrap(), "+memory +cpu");
+        assert!(!service.join("serveur-12").exists(), "un ancien groupe vide est retiré");
+        // L'agent a redémarré dans « agent » : même base.
+        assert_eq!(cgroupes::preparer_dans(&d, "0::/system.slice/bhost-agent.service/agent\n").unwrap(), service);
+        // Pas de groupe confié (pas BHOST OS) : rien.
+        assert!(cgroupes::preparer_dans(&d, "0::/\n").is_none());
+        assert!(cgroupes::preparer_dans(&d, "0::/user.slice/ailleurs\n").is_none());
+        assert_eq!(cgroupes::poids(Priorite::Haute), 400);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     use super::*;
 
     #[test]

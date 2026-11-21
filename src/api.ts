@@ -23,6 +23,23 @@ function invoke<T>(commande: string, args?: Record<string, unknown>, machine?: s
   return invokeTauri<T>("machine_appel", { machine: cible, commande, args: args ?? {} });
 }
 
+// La machine dédiée d'un serveur (pas les machines de test, jouées par ce PC) ; absente : ce PC.
+function surMachine(id: string) {
+  const m = machineDe.get(id);
+  return m && !m.startsWith("7e57") ? m : undefined;
+}
+
+// Les machines dédiées en ligne (pas celles de test).
+async function machinesEnLigne() {
+  const machines = await machinesLiees().catch(() => [] as Machine[]);
+  return machines.filter((m) => m.etat === "en-ligne" && !m.id.startsWith("7e57")).map((m) => m.id);
+}
+
+// Des fichiers de ce PC vers un serveur d'une machine dédiée : envoyés, puis rangés là-bas (machine.rs).
+function envoyer<T>(machine: string, id: string, sources: string[], quoi: "fichiers" | "monde" | "icone", dossier: string | null, actuel: boolean | null) {
+  return invokeTauri<T>("envoyer_a_machine", { machine, id, sources, quoi, dossier, actuel });
+}
+
 // Les serveurs de ce PC, puis ceux de chaque machine dédiée en ligne.
 export async function listerServeurs() {
   const [ici, machines] = await Promise.all([invokeTauri<Serveur[]>("lister_serveurs"), machinesLiees().catch(() => [] as Machine[])]);
@@ -73,10 +90,14 @@ export type DemandeCreation = {
   stockageGo?: number; // machine dédiée : stockage max
 };
 // Crée le serveur. L'avancement arrive par la nouvelle « creation ».
-export const creerServeur = ({ machine, ...demande }: DemandeCreation) =>
-  machine && !machine.startsWith("7e57")
-    ? invoke<Serveur>("creer_serveur", { demande }, machine).then((s) => noter([s])[0])
-    : invokeTauri<Serveur>("creer_serveur", { demande: { ...demande, machine } });
+// Machine dédiée : elle n'a pas les Réglages de ce PC. Le pseudo d'ici devient OP sur le nouveau serveur.
+export async function creerServeur({ machine, ...demande }: DemandeCreation) {
+  if (!machine || machine.startsWith("7e57")) return invokeTauri<Serveur>("creer_serveur", { demande: { ...demande, machine } });
+  const s = noter([await invoke<Serveur>("creer_serveur", { demande }, machine)])[0];
+  const pseudo = await invokeTauri<VueReglages>("reglages_bhost").then((r) => r.pseudo, () => "");
+  if (pseudo) await invoke("action_joueur", { id: s.id, action: "op", nom: pseudo, motif: null }, machine).catch(() => {});
+  return s;
+}
 
 // S'abonne à l'avancement de la création (tâche 0 = Java, 1 = serveur, 2 = monde).
 export function ecouterCreation(recu: (tache: number, pourcent: number) => void) {
@@ -143,8 +164,32 @@ export function ecouterJoueurs(recu: (id: string, joueurs: string[]) => void) {
 }
 
 // Ouvert à tes amis : l'état des ports ouverts sur la box, et ses changements.
-export const etatsAcces = () => invoke<Acces[]>("etats_acces");
+// Ceux de ce PC et ceux de chaque machine dédiée, gardés à part (chacun envoie sa liste entière).
+const accesDe = new Map<string, Acces[]>(); // « ici » ou l'id de la machine → sa liste
+const tousLesAcces = () => [...accesDe.values()].flat();
+export async function etatsAcces() {
+  const [ici, machines] = await Promise.all([invokeTauri<Acces[]>("etats_acces"), machinesEnLigne()]);
+  accesDe.set("ici", ici);
+  await Promise.all(machines.map((m) => invoke<Acces[]>("etats_acces", {}, m).then((l) => accesDe.set(m, l), () => {})));
+  return tousLesAcces();
+}
 export const ouvrirAuxAmis = (id: string, ouvert: boolean) => invoke<Serveur>("ouvrir_aux_amis", { id, ouvert });
+// L'adresse par le relais (« survie.bhost.app ») : le mot est-il libre ? pris (proposition : « survie2 ») ?
+export type EtatAdresse = { etat: "actuelle" | "libre" | "pris" | "invalide" | "trop" | "injoignable" | "ancienne"; proposition?: string };
+export const adresseLibre = (id: string, mot: string) => invoke<EtatAdresse>("adresse_libre", { id, mot });
+// Change l'adresse ; la nouvelle arrive par la nouvelle « acces ».
+export const changerAdresse = (id: string, mot: string) => invoke<void>("changer_adresse", { id, mot });
+// Ce que la personne tape : minuscules, chiffres et tirets (comme le relais, protocole.rs › mot_adresse).
+export function motAdresse(texte: string) {
+  return texte
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[ _.]/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/--+/g, "-")
+    .slice(0, 32);
+}
 
 // Paramètres › Joueurs Bedrock (Geyser + Floodgate).
 export type VueBedrock = {
@@ -158,9 +203,17 @@ export type VueBedrock = {
 export const bedrockServeur = (id: string) => invoke<VueBedrock>("bedrock_serveur", { id });
 export const reglerBedrock = (id: string, actif: boolean) => invoke<VueBedrock>("regler_bedrock", { id, actif });
 export function ecouterAcces(recu: (liste: Acces[]) => void) {
-  const abonnement = listen<Acces[]>("acces", (e) => recu(e.payload));
+  const ici = listen<Acces[]>("acces", (e) => {
+    accesDe.set("ici", e.payload);
+    recu(tousLesAcces());
+  });
+  const machines = listen<{ machine: string; liste: Acces[] }>("acces-machine", (e) => {
+    accesDe.set(e.payload.machine, e.payload.liste);
+    recu(tousLesAcces());
+  });
   return () => {
-    abonnement.then((arreter) => arreter());
+    ici.then((arreter) => arreter());
+    machines.then((arreter) => arreter());
   };
 }
 
@@ -212,7 +265,7 @@ export function ecouterConsole(recu: (id: string, n: number, ligne: string) => v
 // ---- Onglet Paramètres ----
 
 export type Partie = { mode: string; difficulte: string; joueursMax: number };
-export type Parametres = { partie: Partie; javaAuto: number | null; commande: string; memoireGo: number };
+export type Parametres = { partie: Partie; javaAuto: number | null; commande: string; memoireGo: number; disqueLibreGo: number };
 export type ReglagesServeur = {
   ramMo: number;
   demarrerAuto: boolean;
@@ -220,7 +273,12 @@ export type ReglagesServeur = {
   optimise: boolean;
   arguments: string;
   priorite: Priorite;
+  disqueMaxMo?: number; // machine dédiée : le stockage max
 };
+
+// Le code de conduite (1.21.9 et plus) : vide s'il n'y en a pas. Vide en écrivant : coupé.
+export const codeConduite = (id: string) => invoke<string>("code_conduite", { id });
+export const reglerCodeConduite = (id: string, texte: string) => invoke<string>("regler_code_conduite", { id, texte });
 
 export const parametresServeur = (id: string) => invoke<Parametres>("parametres_serveur", { id });
 // Enregistre les réglages gardés par BHOST. Renvoie le serveur et l'aperçu à jour.
@@ -275,10 +333,14 @@ export const supprimerMonde = (id: string, dossier: string) => invoke<Monde[]>("
 export const reinitialiserMonde = (id: string, dossier: string, memeGraine: boolean) =>
   invoke<Monde[]>("reinitialiser_monde", { id, dossier, memeGraine });
 export const exporterMonde = (id: string, dossier: string, fichier: string) => invoke<void>("exporter_monde", { id, dossier, fichier });
-// Les mondes du jeu solo (%APPDATA%\.minecraft\saves).
-export const mondesSolo = (id: string) => invoke<MondeSolo[]>("mondes_solo", { id });
+// Les mondes du jeu solo de ce PC (%APPDATA%\.minecraft\saves). version : celle du serveur (trop récent ?).
+export const mondesSolo = (id: string, version: string) => invokeTauri<MondeSolo[]>("mondes_solo", { id, version });
 // source : un dossier de monde, ou une archive .zip. actuel : il devient le monde joué.
-export const importerMonde = (id: string, source: string, actuel: boolean) => invoke<Monde[]>("importer_monde", { id, source, actuel });
+// Serveur sur une machine dédiée : le monde part de ce PC vers la machine.
+export function importerMonde(id: string, source: string, actuel: boolean) {
+  const m = surMachine(id);
+  return m ? envoyer<Monde[]>(m, id, [source], "monde", null, actuel) : invoke<Monde[]>("importer_monde", { id, source, actuel });
+}
 
 // Choisir où enregistrer une archive .zip. Renvoie null si on annule.
 export async function choisirEnregistrement(nom: string) {
@@ -390,8 +452,15 @@ export type FichierLu = ContenuFichier & { taille: number; modifie: number | nul
 export const fichiersServeur = (id: string, dossier: string) => invoke<Element[]>("fichiers_serveur", { id, dossier });
 export const lireFichier = (id: string, chemin: string) => invoke<FichierLu>("lire_fichier", { id, chemin });
 export const ecrireFichier = (id: string, chemin: string, texte: string) => invoke<void>("ecrire_fichier", { id, chemin, texte });
-export const importerFichiers = (id: string, dossier: string, sources: string[]) => invoke<number>("importer_fichiers", { id, dossier, sources });
-export const iconeServeur = (id: string, source: string) => invoke<void>("icone_serveur", { id, source });
+// Serveur sur une machine dédiée : les fichiers (plugins, mods, dossiers…) partent de ce PC vers la machine.
+export function importerFichiers(id: string, dossier: string, sources: string[]) {
+  const m = surMachine(id);
+  return m ? envoyer<number>(m, id, sources, "fichiers", dossier, null) : invoke<number>("importer_fichiers", { id, dossier, sources });
+}
+export function iconeServeur(id: string, source: string) {
+  const m = surMachine(id);
+  return m ? envoyer<void>(m, id, [source], "icone", null, null) : invoke<void>("icone_serveur", { id, source });
+}
 /** Pose l'icône BHOST comme icône dans Minecraft (sauf image à soi, ou `remettre`) ; vrai si c'est une image à soi. */
 export const iconeDuJeu = (id: string, remettre = false) => invoke<boolean>("icone_du_jeu", { id, remettre });
 export const montrerFichier = (id: string, chemin: string) => invoke<void>("montrer_fichier", { id, chemin });
@@ -554,6 +623,23 @@ export const remettreDatapack = (id: string, fichier: string) => invoke<string>(
 export const mettreAJourExtensions = (id: string, fichiers: string[], genre: G = null) =>
   invoke<{ vue: VueExtensions; faits: number }>("mettre_a_jour_extensions", { id, fichiers, genre });
 
+// ---- Accueil › Pourquoi ça lag ? (spark) ----
+
+// Lance l'analyse (30 s) ; secondes = 0 : spark vient d'être installé, il marchera au prochain démarrage.
+export const pourquoiLag = (id: string) => invoke<{ secondes: number }>("pourquoi_lag", { id });
+// Les analyses en cours : id du serveur → heure de fin (ms). Gardées ici pour changer de page sans les perdre.
+export const analysesLag = new Map<string, number>();
+// La fin d'une analyse : l'adresse du rapport (à ouvrir), ou la phrase d'erreur.
+export function ecouterLag(recu: (id: string, lien: string | null, erreur: string | null) => void) {
+  const abonnement = listen<{ id: string; lien?: string; erreur?: string }>("lag", (e) => {
+    analysesLag.delete(e.payload.id);
+    recu(e.payload.id, e.payload.lien ?? null, e.payload.erreur ?? null);
+  });
+  return () => {
+    abonnement.then((arreter) => arreter());
+  };
+}
+
 // ---- Problèmes (cartes d'erreur de l'Accueil) ----
 
 // Ce qui empêche un serveur de tourner (problemes.rs). Disparaît au démarrage suivant.
@@ -561,9 +647,15 @@ export type Probleme =
   | { genre: "java"; version: number }
   | { genre: "port"; port: number; libre: number | null; serveur: string | null } // serveur : un autre de BHOST qui a ce port
   | { genre: "crash" }
-  | { genre: "memoire"; go: number; libreGo: number; demarrage: boolean }; // demarrage : le PC n'avait pas assez de mémoire libre
+  | { genre: "memoire"; go: number; libreGo: number; demarrage: boolean } // demarrage : le PC n'avait pas assez de mémoire libre
+  | { genre: "stockage"; go: number }; // machine dédiée : stockage max atteint, BHOST l'a arrêté
 
-export const problemesServeurs = () => invoke<Record<string, Probleme>>("problemes_serveurs");
+// Ceux des serveurs de ce PC, et ceux des serveurs de chaque machine dédiée en ligne.
+export async function problemesServeurs() {
+  const [ici, machines] = await Promise.all([invokeTauri<Record<string, Probleme>>("problemes_serveurs"), machinesEnLigne()]);
+  const autres = await Promise.all(machines.map((m) => invoke<Record<string, Probleme>>("problemes_serveurs", {}, m).catch(() => ({}))));
+  return Object.assign({}, ici, ...autres) as Record<string, Probleme>;
+}
 export function ecouterProblemes(recu: (id: string, probleme: Probleme | null) => void) {
   const abonnement = listen<{ id: string; probleme: Probleme | null }>("probleme", (e) => recu(e.payload.id, e.payload.probleme));
   return () => {
@@ -584,13 +676,47 @@ export function ecouterInternet(recu: (ok: boolean) => void) {
 }
 
 // Machine dédiée (BHOST OS) : les clés USB branchées sur ce PC.
-export type CleUsb = { lecteur: string; nom: string; totalGo: number };
+export type CleUsb = { disque: number; lecteur: string; nom: string; totalGo: number };
 export const listerClesUsb = () => invoke<CleUsb[]>("lister_cles_usb");
+// Écrire BHOST OS sur une clé (étape « Clé USB ») : Windows demande la permission. `iso` vide : dernière version téléchargée.
+export const ecrireCle = (disque: number, iso: string | null, wifiNom: string, wifiMotdepasse: string) =>
+  invokeTauri<null>("ecrire_cle", { disque, iso, wifiNom, wifiMotdepasse });
+export const wifiDuPc = () => invokeTauri<{ nom: string; motdepasse: string }>("wifi_du_pc");
+export type AvancementCle = { etape: "telechargement" | "autorisation" | "ecriture" | "verification"; pct: number };
+export function ecouterCle(recu: (a: AvancementCle) => void) {
+  const abonnement = listen<AvancementCle>("cle", (e) => recu(e.payload));
+  return () => {
+    abonnement.then((arreter) => arreter());
+  };
+}
+export async function choisirIso() {
+  const choix = await open({ multiple: false, title: "Choisis l’ISO de BHOST OS", filters: [{ name: "ISO", extensions: ["iso"] }] });
+  return typeof choix === "string" ? choix : null;
+}
 
 // ---- Machines dédiées (BHOST OS) ----
 
 // Les machines reliées à ce PC. Leurs serveurs arriveront avec lister_serveurs (champ `machine`).
 export const machinesLiees = () => invokeTauri<Machine[]>("machines_liees");
+
+// Le système d'une machine dédiée (BHOST OS) : version, mises à jour, redémarrer, éteindre, code.
+export type EtatSysteme = {
+  version: string;
+  attente?: number; // mises à jour en attente
+  enCours?: "verification" | "installation" | null;
+  redemarrage?: boolean; // un nouveau noyau attend un redémarrage
+  verifie?: number; // dernière recherche (secondes depuis 1970)
+};
+export const etatSysteme = (machine: string) => invoke<EtatSysteme>("etat_systeme", {}, machine);
+export const systemeMachine = (machine: string, action: "redemarrer" | "eteindre" | "verifier" | "mettre-a-jour") =>
+  invoke<null>("systeme_machine", { action }, machine);
+// Renvoie le nouveau code ; ce PC le garde, les autres appareils devront l'entrer.
+export const changerCodeMachine = (machine: string) => invoke<string>("changer_code", {}, machine);
+// VPS (Ubuntu ou Debian) : la commande qui en fait une machine BHOST, avec un code tiré ici.
+// À coller dans le terminal du VPS, ou dans son script « au démarrage » (cloud-init). Le script passe root tout seul.
+export const INSTALLEUR_VPS = "https://github.com/rerebxrn/bhost/releases/latest/download/installer-vps.sh";
+export const commandeVps = (code: string) => `curl -fsSL ${INSTALLEUR_VPS} | BHOST_CODE=${code} bash`;
+
 // Relie une machine avec son code (8 caractères, sans tiret). Rejetée avec une phrase si le code est faux.
 export const lierMachine = (code: string) => invoke<Machine>("lier_machine", { code });
 export const delierMachine = (id: string) => invoke<void>("delier_machine", { id });

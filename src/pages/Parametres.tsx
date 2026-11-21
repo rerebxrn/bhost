@@ -26,10 +26,12 @@ import {
   type ReglagesServeur,
   ouvrirAuxAmis,
   bedrockServeur,
+  codeConduite,
+  reglerCodeConduite,
   reglerBedrock,
   type VueBedrock,
 } from "../api";
-import { nomLogiciel, type Acces, type Priorite, type Serveur } from "../types";
+import { conduitePossible, nombre, nomLogiciel, ramMaxMachine, type Acces, type Priorite, type Serveur } from "../types";
 import "./Parametres.css";
 
 const MODES = [
@@ -115,6 +117,33 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serveur.id, serveur.version]);
 
+  // Le code de conduite (1.21.9 et plus) : enregistré en quittant la zone de texte.
+  const [conduite, setConduite] = useState<string | null>(null);
+  const [conduiteLue, setConduiteLue] = useState("");
+  const avecConduite = conduitePossible(serveur.version);
+  useEffect(() => {
+    setConduite(null);
+    if (!avecConduite) return;
+    codeConduite(serveur.id).then(
+      (t) => {
+        setConduite(t);
+        setConduiteLue(t);
+      },
+      () => setConduite(""),
+    );
+  }, [serveur.id, avecConduite]);
+  const garderConduite = () => {
+    if (conduite === null || conduite.trim() === conduiteLue) return;
+    reglerCodeConduite(serveur.id, conduite).then(
+      (t) => {
+        setConduite(t);
+        setConduiteLue(t);
+        onInfo(t ? "Code de conduite enregistré." : "Code de conduite retiré.");
+      },
+      (e) => onErreur(phrase(e)),
+    );
+  };
+
   // Joueurs Bedrock : relu aussi quand le serveur démarre ou s'arrête (« Au prochain démarrage » s'efface).
   useEffect(() => {
     bedrockServeur(serveur.id).then(setBedrock, () => setBedrock(null));
@@ -152,6 +181,15 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
     setRam(go);
     window.clearTimeout(attenteRam.current);
     attenteRam.current = window.setTimeout(() => regler({ ramMo: go * 1024 }), 400);
+  };
+
+  // Machine dédiée : le stockage max, enregistré quand le curseur se calme.
+  const [stockage, setStockage] = useState(Math.max(1, Math.round((serveur.disqueMaxMo ?? 0) / 1024)));
+  const attenteStockage = useRef(0);
+  const changerStockage = (go: number) => {
+    setStockage(go);
+    window.clearTimeout(attenteStockage.current);
+    attenteStockage.current = window.setTimeout(() => regler({ disqueMaxMo: go * 1024 }), 400);
   };
 
   const changerPartie = (change: Partial<Partie>) => {
@@ -217,7 +255,8 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
 
   const versionPossible = familles(serveur.logiciel).length > 0;
 
-  const memoireMax = Math.max(2, Math.floor(infos?.memoireGo ?? 16));
+  const memoireMax = serveur.machine && infos ? ramMaxMachine(infos.memoireGo) : Math.max(2, Math.floor(infos?.memoireGo ?? 16));
+  const stockageMax = Math.max(5, Math.min(2000, Math.floor((serveur.disqueMaxMo ?? 0) / 1024 + (infos?.disqueLibreGo ?? 0))));
   const plusTard = allume ? <span className="t2">Au prochain démarrage</span> : null;
 
   // Joueurs Bedrock : installer (ou couper) Geyser et Floodgate.
@@ -331,6 +370,20 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
             <b className="tnum">{ram} Go</b>
           </div>
         </div>
+        {serveur.disqueMaxMo ? (
+          <div className="row">
+            <div className="lbl">
+              <span>Stockage max</span>
+              <span className="t2">
+                {serveur.disqueMo !== undefined ? `${nombre(serveur.disqueMo / 1024)} Go pris. ` : ""}Le monde, les plugins et les sauvegardes.
+              </span>
+            </div>
+            <div className="ps-ram">
+              <Curseur min={5} max={stockageMax} valeur={Math.min(stockage, stockageMax)} onChange={changerStockage} etiquette="Stockage max" unite="Go" />
+              <b className="tnum">{Math.min(stockage, stockageMax)} Go</b>
+            </div>
+          </div>
+        ) : null}
         <div className="row">
           <div className="lbl">
             <span>Priorité</span>
@@ -434,6 +487,34 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
           </>
         )}
       </section>
+
+      {avecConduite && (
+        <>
+          <div className="grp-t">Code de conduite</div>
+          <section className="surf">
+            <div className="row">
+              <div className="lbl">
+                <span>Montré aux joueurs à leur arrivée</span>
+                <span className="t2">Ils doivent l'accepter pour jouer. Vide : pas de code de conduite.</span>
+              </div>
+            </div>
+            <div className="ps-conduite">
+              <textarea
+                className="field"
+                aria-label="Code de conduite"
+                rows={5}
+                maxLength={4000}
+                placeholder={"Sois respectueux avec tout le monde.\nPas de triche, pas de grief.\nPas de pub pour d'autres serveurs."}
+                value={conduite ?? ""}
+                disabled={conduite === null}
+                onChange={(e) => setConduite(e.target.value)}
+                onBlur={garderConduite}
+              />
+            </div>
+            {allume && <p className="ps-note">Au prochain démarrage.</p>}
+          </section>
+        </>
+      )}
 
       <div className="grp-t">Mondes</div>
       <section className="surf">

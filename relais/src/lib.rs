@@ -42,6 +42,9 @@ const LIGNE_MAX: usize = 300;
 const CONNEXIONS_MAX: usize = 20_000;
 /// Noms enregistrés au plus.
 const NOMS_MAX: usize = 200_000;
+/// « Ce nom est-il libre ? » : questions permises par adresse IP (bloc /64) en 10 minutes.
+const QUESTIONS_MAX: u32 = 120;
+const QUESTIONS_DUREE: Duration = Duration::from_secs(600);
 /// Machines dédiées : codes faux permis par adresse IP avant d'attendre.
 const ESSAIS_MAX: u32 = 5;
 /// … et l'attente après le 5ᵉ code faux.
@@ -112,6 +115,8 @@ pub struct Relais {
     machines: Mutex<HashMap<String, MachineEnLigne>>,
     /// Codes de machine faux, par adresse IP : (depuis quand, combien).
     essais: Mutex<HashMap<IpAddr, (Instant, u32)>>,
+    /// Questions « LIBRE » par adresse IP : (depuis quand, combien).
+    questions: Mutex<HashMap<IpAddr, (Instant, u32)>>,
     compteur: AtomicU64,
 }
 
@@ -194,6 +199,7 @@ impl Relais {
             nouveaux_ip: Mutex::default(),
             machines: Mutex::default(),
             essais: Mutex::default(),
+            questions: Mutex::default(),
             compteur: AtomicU64::new(1),
         })
     }
@@ -227,6 +233,40 @@ impl Relais {
 
     pub fn en_ligne(&self) -> usize {
         self.agents.lock().unwrap().len()
+    }
+
+    /// « LIBRE » : le nom peut-il être pris par cette clé ? Libre, ou déjà à elle.
+    fn libre(&self, nom: &str, cle: &str, ip: IpAddr) -> DuRelais {
+        {
+            let mut q = self.questions.lock().unwrap();
+            q.retain(|_, (debut, _)| debut.elapsed() < QUESTIONS_DUREE);
+            let (_, n) = q.entry(bloc(ip)).or_insert((Instant::now(), 0));
+            if *n >= QUESTIONS_MAX {
+                return DuRelais::Non { raison: "trop".into() };
+            }
+            *n += 1;
+        }
+        if !protocole::nom_valide(nom) {
+            return DuRelais::Non { raison: "nom".into() };
+        }
+        match self.registre.lock().unwrap().noms.get(nom) {
+            Some(p) if p.cle != cle => DuRelais::Non { raison: "pris".into() },
+            _ => DuRelais::Ok { adresse: format!("{nom}.{}", self.domaine) },
+        }
+    }
+
+    /// « LACHER » (signature vérifiée) : le nom est rendu, s'il est à cette clé et pas en ligne.
+    fn lacher(&self, nom: &str, cle: &str) -> bool {
+        if self.agents.lock().unwrap().contains_key(nom) {
+            return false;
+        }
+        let mut r = self.registre.lock().unwrap();
+        if r.noms.get(nom).is_some_and(|p| p.cle == cle) {
+            r.noms.remove(nom);
+            self.modifie.store(true, Ordering::Relaxed);
+            return true;
+        }
+        false
     }
 
     /// Le nom est à cette clé (nouveau ou revu). `ip` : pour limiter les nouveaux noms.
@@ -475,6 +515,23 @@ async fn agent(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()> 
             ecrire(&mut flux, &reponse).await
         }
         Some(DeBhost::Piloter { code, id }) => piloter(rel, flux, ip, code, id).await,
+        Some(DeBhost::Libre { nom, cle }) => {
+            let reponse = rel.libre(&nom, &cle, ip);
+            ecrire(&mut flux, &reponse).await
+        }
+        Some(DeBhost::Lacher { nom, cle }) => {
+            // Preuve de la clé, comme pour prendre le nom.
+            let defi = protocole::hexa(&hasard::<16>());
+            ecrire(&mut flux, &DuRelais::Defi { defi: defi.clone() }).await?;
+            let Some(ligne) = lire_ligne(&mut flux, DELAI_DEBUT).await? else { return Ok(()) };
+            let Some(DeBhost::Signe { signature }) = protocole::lire_de_bhost(&ligne) else { return Ok(()) };
+            let reponse = if signature_valide(&cle, &signature, &protocole::a_signer_lacher(&nom, &defi)) && rel.lacher(&nom, &cle) {
+                DuRelais::Ok { adresse: nom }
+            } else {
+                DuRelais::Non { raison: "refus".into() }
+            };
+            ecrire(&mut flux, &reponse).await
+        }
         _ => Ok(()),
     }
 }

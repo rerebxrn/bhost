@@ -14,7 +14,7 @@
     "core:window:allow-internal-toggle-maximize",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://modrinth.com/project/*" }, { "url": "https://www.minecraft.net/eula" }]
+      "allow": [{ "url": "https://modrinth.com/project/*" }, { "url": "https://www.minecraft.net/eula" }, { "url": "https://github.com/rerebxrn/bhost/releases/latest" }]
     },
     "dialog:allow-open",
     "dialog:allow-save"

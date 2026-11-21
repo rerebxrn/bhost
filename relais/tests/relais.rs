@@ -302,3 +302,52 @@ async fn un_pc_pilote_la_machine_par_son_code() {
     }
     assert_eq!(lier(agents, "PQRS2345").await, DuRelais::Liee { id }, "pas bloqué par les essais d'une machine éteinte");
 }
+
+/// Une ligne envoyée au relais, sa réponse.
+async fn demander(agents: SocketAddr, m: &DeBhost) -> (DuRelais, BufReader<TcpStream>) {
+    let mut f = BufReader::new(TcpStream::connect(agents).await.unwrap());
+    f.get_mut().write_all(format!("BHOST 1\n{}", protocole::ecrire_de_bhost(m)).as_bytes()).await.unwrap();
+    let mut ligne = String::new();
+    f.read_line(&mut ligne).await.unwrap();
+    (protocole::lire_du_relais(&ligne).expect("réponse illisible"), f)
+}
+
+#[tokio::test]
+async fn nom_libre_puis_rendu() {
+    let (_, agents) = relais().await;
+    let cle = SigningKey::from_bytes(&[7; 32]);
+    let a = protocole::hexa(cle.verifying_key().as_bytes());
+    let b = protocole::hexa(SigningKey::from_bytes(&[8; 32]).verifying_key().as_bytes());
+    let libre = |nom: &str, cle: &str| DeBhost::Libre { nom: nom.into(), cle: cle.into() };
+    // Libre pour tous, au début.
+    assert_eq!(demander(agents, &libre("survie", &b)).await.0, DuRelais::Ok { adresse: format!("survie.{DOMAINE}") });
+    // A le prend : il est pris pour B, mais encore « libre » pour A (c'est le sien).
+    let (ok, connexion) = presenter(agents, "survie", 7, false).await;
+    assert!(matches!(ok, DuRelais::Ok { .. }));
+    assert_eq!(demander(agents, &libre("survie", &b)).await.0, DuRelais::Non { raison: "pris".into() });
+    assert!(matches!(demander(agents, &libre("survie", &a)).await.0, DuRelais::Ok { .. }));
+    // Un nom réservé, ou mal écrit.
+    assert_eq!(demander(agents, &libre("panel", &b)).await.0, DuRelais::Non { raison: "nom".into() });
+    assert_eq!(demander(agents, &libre("Pas-Bon", &b)).await.0, DuRelais::Non { raison: "nom".into() });
+    // Rendre le nom : refusé tant qu'il est en ligne, puis accepté (avec la bonne signature seulement).
+    let lacher = |signer: &SigningKey, vrai: bool| {
+        let signer = signer.clone();
+        let a = a.clone();
+        async move {
+            let (defi, mut f) = demander(agents, &DeBhost::Lacher { nom: "survie".into(), cle: a }).await;
+            let DuRelais::Defi { defi } = defi else { panic!("pas de défi") };
+            let texte = protocole::a_signer_lacher("survie", if vrai { &defi } else { "autre" });
+            let signature = protocole::hexa(&signer.sign(texte.as_bytes()).to_bytes());
+            f.get_mut().write_all(protocole::ecrire_de_bhost(&DeBhost::Signe { signature }).as_bytes()).await.unwrap();
+            let mut ligne = String::new();
+            f.read_line(&mut ligne).await.unwrap();
+            protocole::lire_du_relais(&ligne).unwrap()
+        }
+    };
+    assert_eq!(lacher(&cle, true).await, DuRelais::Non { raison: "refus".into() });
+    drop(connexion);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(lacher(&cle, false).await, DuRelais::Non { raison: "refus".into() });
+    assert_eq!(lacher(&cle, true).await, DuRelais::Ok { adresse: "survie".into() });
+    assert!(matches!(demander(agents, &libre("survie", &b)).await.0, DuRelais::Ok { .. }));
+}

@@ -21,12 +21,21 @@
 /// La version du dialogue entre BHOST et le relais.
 pub const VERSION: u32 = 1;
 
-/// Les noms qu'on ne peut pas prendre (le site et les services de bhost.app, et des noms qui trompent).
-pub const RESERVES: [&str; 46] = [
-    "www", "api", "app", "mail", "smtp", "imap", "pop", "relais", "relay", "status", "statut", "docs", "doc", "blog", "aide", "ns", "ns1",
-    "ns2", "ns3", "play", "jouer", "localhost", "ftp", "cdn", "static", "auth", "login", "compte", "account", "secure", "official", "minecraft",
-    "mojang", "microsoft", "hypixel", "autodiscover", "autoconfig", "wpad", "mta-sts", "dev", "test", "staging", "beta", "shop", "store",
-    "boutique",
+/// Les noms qu'on ne peut pas prendre : le site et les services de bhost.app (aujourd'hui et plus tard),
+/// et des noms qui trompent.
+pub const RESERVES: &[&str] = &[
+    // Techniques
+    "www", "api", "app", "mail", "smtp", "imap", "pop", "relais", "relay", "status", "statut", "ns", "ns1", "ns2", "ns3", "localhost",
+    "ftp", "cdn", "static", "assets", "img", "images", "media", "auth", "login", "logout", "secure", "autodiscover", "autoconfig",
+    "wpad", "mta-sts", "dev", "test", "staging", "beta", "alpha", "demo", "preview", "proxy", "vpn", "git", "ssh", "dns", "root",
+    "system", "systeme", "security", "securite",
+    // Nos services
+    "panel", "site", "web", "docs", "doc", "blog", "aide", "help", "faq", "wiki", "forum", "discord", "telechargement", "telecharger",
+    "download", "downloads", "compte", "comptes", "account", "connexion", "inscription", "register", "signup", "paiement", "payer",
+    "pay", "payment", "don", "dons", "donate", "shop", "store", "boutique", "pub", "pubs", "ads", "stats", "carte", "map", "contact",
+    "news", "actu", "play", "jouer", "staff", "modo", "mod", "owner", "verif", "official", "noreply",
+    // Des marques
+    "minecraft", "mojang", "microsoft", "hypixel", "paypal",
 ];
 
 /// Un nom qui contient l'un de ces mots se ferait passer pour BHOST : refusé.
@@ -34,14 +43,16 @@ const MOTS_INTERDITS: [&str; 5] = ["bhost", "admin", "support", "officiel", "mod
 
 /// Un nom de serveur sur le relais : 3 à 32 caractères, lettres minuscules, chiffres et tirets (pas au bord).
 pub fn nom_valide(nom: &str) -> bool {
-    let n = nom.len();
-    (3..=32).contains(&n)
+    forme_valide(nom) && !RESERVES.contains(&nom) && !MOTS_INTERDITS.iter().any(|m| nom.contains(m))
+}
+
+/// Bien écrit (3 à 32 lettres, chiffres et tirets), réservé ou non.
+pub fn forme_valide(nom: &str) -> bool {
+    (3..=32).contains(&nom.len())
         && nom.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
         && !nom.starts_with('-')
         && !nom.ends_with('-')
         && !nom.contains("--")
-        && !RESERVES.contains(&nom)
-        && !MOTS_INTERDITS.iter().any(|m| nom.contains(m))
 }
 
 /// « Survie entre amis ! » → « survie-entre-amis » (au plus 20 caractères, « serveur » si rien ne reste).
@@ -103,6 +114,45 @@ pub fn a_signer_machine(code: &str, defi: &str) -> String {
 /// Le texte que BHOST signe pour prouver que le nom est à lui.
 pub fn a_signer(nom: &str, defi: &str) -> String {
     format!("bhost-relais-v{VERSION}|{nom}|{defi}")
+}
+
+/// Le texte que BHOST signe pour rendre un nom (il a changé d'adresse).
+pub fn a_signer_lacher(nom: &str, defi: &str) -> String {
+    format!("bhost-lacher-v{VERSION}|{nom}|{defi}")
+}
+
+/// Le nom d'un serveur, puis « 2 », « 3 »… quand il est déjà pris : survie, survie2, survie3.
+/// Un nom refusé (réservé, trop court) devient « serveur ».
+pub fn nom_numero(mot: &str, n: u32) -> String {
+    let base = if nom_valide(mot) || (n > 1 && nom_valide(&format!("{mot}{n}"))) { mot.to_string() } else { "serveur".to_string() };
+    if n <= 1 {
+        return base;
+    }
+    let fin = n.to_string();
+    let garde: String = base.chars().take(32 - fin.len()).collect();
+    format!("{}{fin}", garde.trim_end_matches('-'))
+}
+
+/// Ce que l'utilisateur tape pour l'adresse (« Survie Entre-Amis ») : minuscules, chiffres et tirets.
+pub fn mot_adresse(texte: &str) -> String {
+    let mut s = String::new();
+    for c in texte.chars().flat_map(|c| c.to_lowercase()) {
+        let c = match c {
+            'à' | 'â' | 'ä' | 'á' | 'ã' | 'å' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'î' | 'ï' | 'í' | 'ì' => 'i',
+            'ô' | 'ö' | 'ó' | 'ò' | 'õ' => 'o',
+            'ù' | 'û' | 'ü' | 'ú' => 'u',
+            'ç' => 'c',
+            'ñ' => 'n',
+            ' ' | '_' | '.' => '-',
+            c => c,
+        };
+        if c.is_ascii_lowercase() || c.is_ascii_digit() || (c == '-' && !s.ends_with('-')) {
+            s.push(c);
+        }
+    }
+    s.chars().take(32).collect()
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -286,6 +336,10 @@ pub enum DeBhost {
     /// Un PC veut relier la machine qui a ce code.
     Lier { code: String },
     Piloter { code: String, id: String },
+    /// « Ce nom est-il libre (pour cette clé) ? » Réponse : OK <nom>, ou NON pris / nom / trop.
+    Libre { nom: String, cle: String },
+    /// Rendre un nom (BHOST a pris une autre adresse) : puis un défi à signer.
+    Lacher { nom: String, cle: String },
 }
 
 /// Ce que le relais répond.
@@ -317,6 +371,8 @@ pub fn ecrire_de_bhost(m: &DeBhost) -> String {
         DeBhost::Machine { cle, code } => format!("MACHINE {cle} {code}\n"),
         DeBhost::Lier { code } => format!("LIER {code}\n"),
         DeBhost::Piloter { code, id } => format!("PILOTER {code} {id}\n"),
+        DeBhost::Libre { nom, cle } => format!("LIBRE {nom} {cle}\n"),
+        DeBhost::Lacher { nom, cle } => format!("LACHER {nom} {cle}\n"),
     }
 }
 
@@ -330,6 +386,11 @@ pub fn lire_de_bhost(ligne: &str) -> Option<DeBhost> {
         ["MACHINE", cle, code] if hexa_valide(cle, 64) && code_valide(code) => Some(DeBhost::Machine { cle: cle.to_ascii_lowercase(), code: code.to_string() }),
         ["LIER", code] if code_valide(code) => Some(DeBhost::Lier { code: code.to_string() }),
         ["PILOTER", code, id] if code_valide(code) && hexa_valide(id, 16) => Some(DeBhost::Piloter { code: code.to_string(), id: id.to_ascii_lowercase() }),
+        // Un nom refusé arrive quand même au relais : il répond « NON nom » (BHOST le dit à l'utilisateur).
+        ["LIBRE", nom, cle] if (1..=64).contains(&nom.len()) && nom.bytes().all(|c| c.is_ascii_graphic()) && hexa_valide(cle, 64) => {
+            Some(DeBhost::Libre { nom: nom.to_string(), cle: cle.to_ascii_lowercase() })
+        }
+        ["LACHER", nom, cle] if nom_valide(nom) && hexa_valide(cle, 64) => Some(DeBhost::Lacher { nom: nom.to_string(), cle: cle.to_ascii_lowercase() }),
         _ => None,
     }
 }
@@ -446,6 +507,24 @@ mod tests {
         assert_eq!(slug("Créatif d'été 2026"), "creatif-d-ete-2026");
         assert_eq!(slug("!!!"), "serveur");
         assert_eq!(slug("Le très très très long nom de serveur"), "le-tres-tres-tres-lo");
+        // Nos futurs services : réservés.
+        assert!(!nom_valide("panel") && !nom_valide("site") && !nom_valide("discord") && !nom_valide("paiement"));
+        assert!(nom_valide("survie") && nom_valide("survie2"));
+    }
+
+    #[test]
+    fn noms_numerotes() {
+        assert!(forme_valide("test") && !nom_valide("test"));
+        assert!(!forme_valide("te") && !forme_valide("a--b") && !forme_valide("Test"));
+        assert_eq!(nom_numero("survie", 1), "survie");
+        assert_eq!(nom_numero("survie", 2), "survie2");
+        assert_eq!(nom_numero("survie", 13), "survie13");
+        assert_eq!(nom_numero("panel", 1), "serveur");
+        assert_eq!(nom_numero("panel", 2), "panel2");
+        assert_eq!(nom_numero(&"a".repeat(32), 2).len(), 32);
+        assert_eq!(mot_adresse("Survie Entre_Amis"), "survie-entre-amis");
+        assert_eq!(mot_adresse("survie-"), "survie-"); // on tape encore
+        assert_eq!(mot_adresse("Été 2026"), "ete-2026");
     }
 
     #[test]
@@ -475,6 +554,8 @@ mod tests {
             DeBhost::Donnees { id: 17, jeton: "0f".repeat(16) },
             DeBhost::Machine { cle: cle.clone(), code: "K7M2Q9XR".into() },
             DeBhost::Lier { code: "K7M2Q9XR".into() },
+            DeBhost::Libre { nom: "survie".into(), cle: cle.clone() },
+            DeBhost::Lacher { nom: "survie".into(), cle: cle.clone() },
         ] {
             assert_eq!(lire_de_bhost(&ecrire_de_bhost(&m)), Some(m));
         }

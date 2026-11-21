@@ -145,3 +145,18 @@ export function listeOnglets(logiciel: Logiciel): { id: Onglet; nom: string }[] 
     { id: "parametres", nom: "Paramètres" },
   ];
 }
+
+// Le plus gros serveur qui tient seul sur une machine dédiée (Go), comme ressources.rs › ram_max_go.
+export function ramMaxMachine(totalGo: number) {
+  const total = totalGo * 1024;
+  let go = 1;
+  while (768 + (go + 1) * 1024 + Math.max(512, Math.floor(((go + 1) * 1024 * 15) / 100)) <= total) go++;
+  return go;
+}
+
+// Le code de conduite existe depuis Minecraft 1.21.9 (comme conduite.rs › possible).
+export function conduitePossible(version: string) {
+  if (version.includes("w") && !version.includes("-")) return false;
+  const [a = 0, b = 0, c = 0] = (version.match(/\d+/g) ?? []).map(Number);
+  return a >= 2 || (a === 1 && (b > 21 || (b === 21 && c >= 9)));
+}

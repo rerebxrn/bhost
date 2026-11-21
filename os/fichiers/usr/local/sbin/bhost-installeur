@@ -1,6 +1,7 @@
 #!/bin/bash
 # BHOST OS : l'installeur (démarré tout seul quand on démarre sur la clé, voir bhost-installeur.service).
 # Deux questions au plus : le Wi-Fi (seulement sans câble et sans Wi-Fi écrit sur la clé), puis le disque.
+# Câble branché sans DHCP (un VPS, souvent) : l'écran « IP fixe » à la place du Wi-Fi.
 # Le disque choisi est entièrement effacé.
 
 set -u
@@ -58,19 +59,81 @@ echec() {
 	done
 }
 
+# Internet joignable pour de vrai (une IP fixe mal tapée laisse NetworkManager « connecté »).
+internet() { local i; for i in 1 2 3; do timeout 4 bash -c '</dev/tcp/1.1.1.1/443' 2>/dev/null || timeout 4 bash -c '</dev/tcp/9.9.9.9/443' 2>/dev/null && return 0; sleep 2; done; return 1; }
+
 en_ligne() { [ "$(nmcli -t -f STATE general 2>/dev/null)" = "connected" ] || [ "$(nmcli -t -f STATE general 2>/dev/null)" = "connected (site only)" ]; }
+
+# La carte réseau filaire dont le câble est branché (rien si aucune).
+cable_branche() {
+	local c d
+	for c in /sys/class/net/*/carrier; do
+		d=${c%/carrier}
+		d=${d##*/}
+		[ "$d" = lo ] || [ -d "/sys/class/net/$d/wireless" ] || [ ! -e "/sys/class/net/$d/device" ] && continue
+		[ "$(cat "$c" 2>/dev/null)" = 1 ] && { echo "$d"; return 0; }
+	done
+	return 1
+}
+
+ipv4() { [[ $1 =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] && ((BASH_REMATCH[1] <= 255 && BASH_REMATCH[2] <= 255 && BASH_REMATCH[3] <= 255 && BASH_REMATCH[4] <= 255)); }
+
+# Câble branché mais pas d'adresse (pas de DHCP : souvent un VPS ou un réseau d'entreprise) : l'IP fixe, à la main.
+# Le DNS, c'est BHOST qui le choisit. La connexion est copiée sur la machine installée.
+ip_fixe() {
+	local carte=$1 adresse="" passerelle="" ip masque
+	while true; do
+		adresse=$(demander --title "IP fixe" --cancel-button "Retour" --inputbox "Le câble est branché, mais le réseau ne donne pas d'adresse.\n\nL'adresse de la machine (donnée par l'hébergeur), avec son masque :" 13 66 "$adresse") || return 1
+		adresse=${adresse// /}
+		ip=${adresse%%/*}
+		masque=24
+		[[ $adresse == */* ]] && masque=${adresse#*/}
+		if ! ipv4 "$ip" || ! [[ $masque =~ ^[0-9]{1,2}$ ]] || ((masque < 1 || masque > 32)); then
+			dire "IP fixe" "Adresse illisible. Exemple : 203.0.113.10/24"
+			continue
+		fi
+		adresse="$ip/$masque"
+		[ -n "$passerelle" ] || passerelle="${ip%.*}.1"
+		passerelle=$(demander --title "IP fixe" --cancel-button "Retour" --inputbox "La passerelle (la box, le routeur ou celle de l'hébergeur) :" 10 66 "$passerelle") || continue
+		passerelle=${passerelle// /}
+		if ! ipv4 "$passerelle"; then
+			dire "IP fixe" "Passerelle illisible. Exemple : 203.0.113.1"
+			continue
+		fi
+		printf '\e[2J\e[H\n  \e[1;94mBHOST\e[0;97m OS\n\n  \e[90mConnexion avec %s…\e[0m\n' "$adresse" >"$TTY"
+		nmcli connection delete bhost-ip-fixe >/dev/null 2>&1
+		nmcli connection add type ethernet ifname "$carte" con-name bhost-ip-fixe connection.autoconnect yes connection.autoconnect-priority 10 \
+			ipv4.method manual ipv4.addresses "$adresse" ipv4.gateway "$passerelle" ipv4.dns "1.1.1.1 9.9.9.9" ipv6.method auto >/dev/null 2>&1
+		nmcli connection up bhost-ip-fixe >/dev/null 2>&1
+		nm-online -q -t 10 >/dev/null 2>&1
+		internet && { note "réseau : IP fixe $adresse, passerelle $passerelle"; return 0; }
+		nmcli connection delete bhost-ip-fixe >/dev/null 2>&1
+		dire "IP fixe" "Toujours pas d'Internet. Vérifie l'adresse et la passerelle."
+	done
+}
 
 # ---------- 1. Internet : câble tout seul, sinon Wi-Fi écrit sur la clé, sinon on demande ----------
 reseau() {
+	local carte
 	printf '\e[2J\e[H\n  \e[1;94mBHOST\e[0;97m OS\n\n  \e[90mRecherche du réseau…\e[0m\n' >"$TTY"
 	nm-online -q -t 15 >/dev/null 2>&1
 	en_ligne && { note "réseau : déjà connecté"; return; }
+	# Câble branché sans adresse : on laisse encore un peu de temps au DHCP, puis l'IP fixe.
+	if carte=$(cable_branche); then
+		nm-online -q -t 15 >/dev/null 2>&1
+		en_ligne && { note "réseau : câble"; return; }
+		ip_fixe "$carte" && return
+	fi
 
 	if ! nmcli -t -f TYPE device 2>/dev/null | grep -qx wifi; then
 		while ! en_ligne; do
 			demander --title "Pas de réseau" --yes-button "Réessayer" --no-button "Continuer" \
 				--yesno "Branche un câble réseau sur la machine.\n\nSans Internet, tu pourras l'installer quand même, mais BHOST ne pourra pas la piloter." 12 64 || return
 			nm-online -q -t 10 >/dev/null 2>&1
+			if ! en_ligne && carte=$(cable_branche); then
+				nm-online -q -t 10 >/dev/null 2>&1
+				en_ligne || { ip_fixe "$carte" && return; }
+			fi
 		done
 		return
 	fi

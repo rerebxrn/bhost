@@ -1,0 +1,4 @@
+#!/bin/sh
+# BHOST OS : après l'installation (ou le retrait) d'un noyau, le menu de démarrage est refait.
+[ -f /boot/grub/grub.cfg ] && command -v update-grub >/dev/null && update-grub >/dev/null 2>&1
+exit 0

@@ -74,6 +74,10 @@ getrandom = "0.3"
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 # Retrouver la fenêtre de BHOST pour changer son icône.
 raw-window-handle = { version = "0.6", optional = true }
+# Le pilotage d'une machine dédiée est chiffré (TLS 1.3), par le relais comme en direct.
+# La machine se présente avec sa clé ed25519 (celle de son id) ; BHOST la retient à la première connexion.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
 # Ouvrir le port du serveur sur la box (UPnP), pour « Ouvert à tes amis ».
 igd-next = "0.18"
 
