@@ -65,6 +65,8 @@ sha2 = "0.10"
 sha1 = "0.10"
 md-5 = "0.10"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Les archives .tar.gz de Java pour Linux (BHOST OS).
+tar = { version = "0.4", default-features = false }
 # Le relais BHOST (tunnel.rs) : la clé qui prouve que nos noms sont à nous, et le hasard pour la créer.
 ed25519-dalek = "2"
 getrandom = "0.3"

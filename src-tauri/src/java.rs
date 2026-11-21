@@ -5,7 +5,7 @@
 
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Taille maximale d'un Java téléchargé : 400 Mo (un JRE fait environ 50 Mo, un JDK jusqu'à 210 Mo).
@@ -45,10 +45,13 @@ pub fn installe(racine: &Path, version: u32, jdk: bool) -> Option<PathBuf> {
     (programme.is_file() && complet).then_some(programme)
 }
 
-/// L'adresse où Adoptium décrit le dernier Java (JRE ou JDK, Windows 64 bits) d'une version.
+/// Le système pour lequel on demande Java : Windows (le logiciel), Linux (BHOST OS).
+const SYSTEME: &str = if cfg!(windows) { "windows" } else { "linux" };
+
+/// L'adresse où Adoptium décrit le dernier Java (JRE ou JDK, 64 bits) d'une version.
 pub fn adresse_api(version: u32, jdk: bool) -> String {
     let sorte = if jdk { "jdk" } else { "jre" };
-    format!("https://api.adoptium.net/v3/assets/latest/{version}/hotspot?architecture=x64&image_type={sorte}&os=windows&vendor=eclipse")
+    format!("https://api.adoptium.net/v3/assets/latest/{version}/hotspot?architecture=x64&image_type={sorte}&os={SYSTEME}&vendor=eclipse")
 }
 
 /// Le fichier à télécharger, tel que décrit par Adoptium.
@@ -60,14 +63,14 @@ pub struct Paquet {
     pub taille: u64,
 }
 
-/// Lit la réponse d'Adoptium : on prend l'archive .zip (pas l'installeur .msi).
+/// Lit la réponse d'Adoptium : on prend l'archive .zip (Windows) ou .tar.gz (Linux), pas l'installeur .msi.
 pub fn lire_paquet(reponse: &[u8]) -> Option<Paquet> {
     let json: serde_json::Value = serde_json::from_slice(reponse).ok()?;
     let paquet = json.as_array()?.first()?.get("binary")?.get("package")?;
     let adresse = paquet.get("link")?.as_str()?;
     let empreinte = paquet.get("checksum")?.as_str()?.to_ascii_lowercase();
     let taille = paquet.get("size")?.as_u64()?;
-    let bon = adresse.starts_with("https://") && adresse.ends_with(".zip") && empreinte.len() == 64 && empreinte.chars().all(|c| c.is_ascii_hexdigit());
+    let bon = adresse.starts_with("https://") && (adresse.ends_with(".zip") || adresse.ends_with(".tar.gz")) && empreinte.len() == 64 && empreinte.chars().all(|c| c.is_ascii_hexdigit());
     (bon && taille <= TAILLE_MAX).then(|| Paquet { adresse: adresse.to_string(), empreinte, taille })
 }
 
@@ -101,6 +104,9 @@ pub fn recopier(mut flux: impl Read, fichier: &Path, taille: u64, avancement: &m
 
 /// Ouvre l'archive dans `destination`. Les chemins qui voudraient sortir du dossier sont refusés.
 pub fn extraire(archive: &Path, destination: &Path) -> Result<(), String> {
+    if archive.to_string_lossy().ends_with(".tar.gz") {
+        return extraire_tar(archive, destination);
+    }
     let illisible = |e: zip::result::ZipError| format!("Archive abîmée ({e}).");
     let fichier = fs::File::open(archive).map_err(|e| format!("Archive introuvable ({e})."))?;
     let mut zip = zip::ZipArchive::new(fichier).map_err(illisible)?;
@@ -120,6 +126,50 @@ pub fn extraire(archive: &Path, destination: &Path) -> Result<(), String> {
         }
         let mut sortie = fs::File::create(&chemin).map_err(|e| e.to_string())?;
         crate::garde::copier_limite(&mut entree, &mut sortie, &mut budget)?;
+    }
+    Ok(())
+}
+
+/// La même chose pour une archive .tar.gz (le Java de Linux). Les liens sont ignorés :
+/// Java n'en a pas besoin, et un lien pourrait pointer hors du dossier.
+fn extraire_tar(archive: &Path, destination: &Path) -> Result<(), String> {
+    let abimee = |e: io::Error| format!("Archive abîmée ({e}).");
+    let fichier = fs::File::open(archive).map_err(|e| format!("Archive introuvable ({e})."))?;
+    let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(fichier));
+    let mut budget = crate::garde::budget_extraction(destination);
+    for (n, entree) in tar.entries().map_err(abimee)?.enumerate() {
+        if n >= crate::garde::ENTREES_MAX {
+            return Err("Archive trop grosse : trop de fichiers.".into());
+        }
+        let mut entree = entree.map_err(abimee)?;
+        let relatif = entree.path().map_err(abimee)?.into_owned();
+        if !relatif.components().all(|c| matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir)) {
+            return Err("Archive suspecte : un chemin sort du dossier.".into());
+        }
+        crate::garde::verifier_chemin(&relatif)?;
+        let chemin = destination.join(&relatif);
+        let sorte = entree.header().entry_type();
+        if sorte.is_dir() {
+            fs::create_dir_all(&chemin).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if !sorte.is_file() {
+            continue;
+        }
+        if let Some(parent) = chemin.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mode = entree.header().mode().unwrap_or(0o644);
+        let mut sortie = fs::File::create(&chemin).map_err(|e| e.to_string())?;
+        crate::garde::copier_limite(&mut entree, &mut sortie, &mut budget)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            // On garde « exécutable » (bin/java), jamais les droits spéciaux.
+            fs::set_permissions(&chemin, fs::Permissions::from_mode(mode & 0o755)).map_err(|e| e.to_string())?;
+        }
+        #[cfg(not(unix))]
+        let _ = mode;
     }
     Ok(())
 }
@@ -161,9 +211,10 @@ pub fn installer(
     avancement: &mut dyn FnMut(u8),
 ) -> Result<PathBuf, String> {
     let reponse = lire_texte(&adresse_api(version, jdk))?;
-    let paquet = lire_paquet(&reponse).ok_or("Adoptium n'a pas donné de Java pour Windows.")?;
+    let paquet = lire_paquet(&reponse).ok_or("Adoptium n'a pas donné de Java pour ce système.")?;
     fs::create_dir_all(racine).map_err(|e| e.to_string())?;
-    let archive = racine.join(format!(".{}{version}.zip", if jdk { "jdk-" } else { "" }));
+    let extension = if paquet.adresse.ends_with(".tar.gz") { "tar.gz" } else { "zip" };
+    let archive = racine.join(format!(".{}{version}.{extension}", if jdk { "jdk-" } else { "" }));
     let resultat = (|| {
         let empreinte = recopier(ouvrir(&paquet.adresse)?, &archive, paquet.taille, avancement)?;
         if empreinte != paquet.empreinte {
@@ -212,8 +263,8 @@ mod tests {
         assert_eq!(paquet.taille, 49106397);
         assert_eq!(lire_paquet(b"[]"), None);
         assert_eq!(lire_paquet(REPONSE.replace("https://github", "http://github").as_bytes()), None);
-        assert_eq!(adresse_api(8, false), "https://api.adoptium.net/v3/assets/latest/8/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse");
-        assert_eq!(adresse_api(21, true), "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse");
+        assert_eq!(adresse_api(8, false), format!("https://api.adoptium.net/v3/assets/latest/8/hotspot?architecture=x64&image_type=jre&os={SYSTEME}&vendor=eclipse"));
+        assert_eq!(adresse_api(21, true), format!("https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jdk&os={SYSTEME}&vendor=eclipse"));
     }
 
     fn dossier_test(nom: &str) -> PathBuf {
@@ -304,6 +355,56 @@ mod tests {
         fs::write(&fichier, fausse_archive(&["../../evade.txt"])).unwrap();
         assert!(ranger(&fichier, &racine, 8, false).is_err());
         assert!(!racine.parent().unwrap().join("evade.txt").exists());
+        let _ = fs::remove_dir_all(&racine);
+    }
+
+    /// Une archive .tar.gz comme celles de Linux : bin/java exécutable, un lien (ignoré).
+    fn faux_tar(mauvais: bool) -> Vec<u8> {
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        {
+            let mut tar = tar::Builder::new(&mut gz);
+            let mut ajouter = |chemin: &str, mode: u32| {
+                let mut h = tar::Header::new_gnu();
+                h.set_size(7);
+                h.set_mode(mode);
+                h.set_entry_type(tar::EntryType::Regular);
+                // set_path refuse « .. » : on écrit le nom à la main pour fabriquer une archive piégée.
+                let nom = &mut h.as_old_mut().name;
+                nom[..chemin.len()].copy_from_slice(chemin.as_bytes());
+                h.set_cksum();
+                tar.append(&h, &b"contenu"[..]).unwrap();
+            };
+            ajouter("jdk-21-jre/bin/java", 0o4755);
+            ajouter("jdk-21-jre/release", 0o644);
+            if mauvais {
+                ajouter("../dehors.txt", 0o644);
+            }
+            let mut lien = tar::Header::new_gnu();
+            lien.set_entry_type(tar::EntryType::Symlink);
+            lien.set_size(0);
+            tar.append_link(&mut lien, "jdk-21-jre/lien", "/etc/passwd").unwrap();
+            tar.finish().unwrap();
+        }
+        gz.finish().unwrap()
+    }
+
+    #[test]
+    fn ouvre_le_java_de_linux() {
+        let racine = dossier_test("tar");
+        let fichier = racine.join(".21.tar.gz");
+        fs::write(&fichier, faux_tar(false)).unwrap();
+        let java = ranger(&fichier, &racine, 21, false).unwrap();
+        assert_eq!(fs::read(&java).unwrap(), b"contenu");
+        assert!(!racine.join("21/lien").exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&java).unwrap().permissions().mode() & 0o7777, 0o755);
+        }
+        let piege = racine.join(".8.tar.gz");
+        fs::write(&piege, faux_tar(true)).unwrap();
+        assert!(ranger(&piege, &racine, 8, false).is_err());
+        assert!(!racine.parent().unwrap().join("dehors.txt").exists());
         let _ = fs::remove_dir_all(&racine);
     }
 
