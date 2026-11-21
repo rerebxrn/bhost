@@ -142,7 +142,8 @@ fn une_connexion(dossier: &Path, app: &AppHandle, sessions: &Arc<Sessions>, rt: 
             }
         }
     });
-    flux.set_read_timeout(Some(SILENCE))?;
+    // Le délai se règle sur la prise qui lit (sous Windows, une copie a ses propres réglages).
+    lecteur.get_ref().set_read_timeout(Some(SILENCE))?;
     loop {
         let ligne = lire_ligne(&mut lecteur)?;
         match protocole::lire_du_relais(&ligne) {

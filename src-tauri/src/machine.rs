@@ -443,6 +443,7 @@ fn ouvrir_lien(app: &AppHandle, m: &MachineLiee) -> Result<Arc<Lien>, String> {
     }
     // Les commandes peuvent être longues (création d'un serveur) : plus de délai de lecture.
     let _ = flux.set_read_timeout(None);
+    let _ = lecteur.get_ref().set_read_timeout(None);
     let l = Arc::new(Lien { ecriture: Mutex::new(flux), attentes: Mutex::new(HashMap::new()), compteur: AtomicU64::new(1), vivant: AtomicBool::new(true) });
     let (lu, app, id) = (l.clone(), app.clone(), m.id.clone());
     std::thread::spawn(move || {
