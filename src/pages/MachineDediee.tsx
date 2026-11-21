@@ -14,7 +14,10 @@ import {
   IconWifi,
 } from "@tabler/icons-react";
 import Tabs from "../components/Tabs";
-import { listerClesUsb, type CleUsb } from "../api";
+import { lierMachine, listerClesUsb, type CleUsb } from "../api";
+import { ChampCode } from "../components/CodeMachine";
+import { codeComplet } from "../code";
+import type { Machine } from "../types";
 import { nombre } from "../types";
 import { Tuile } from "./PremierLancement";
 import "./NouveauServeur.css";
@@ -37,7 +40,7 @@ const TITRES: Record<Etape, [string, string]> = {
   cle: ["Prépare la clé USB", "Branche la clé sur ce PC et choisis-la. BHOST télécharge le système et l’écrit dessus."],
   demarrage: ["Démarre l’autre PC sur la clé", ""],
   installation: ["Installe BHOST OS", "Sur l’autre PC, BHOST OS te guide. Ça prend environ 5 minutes."],
-  liaison: ["Relie la machine", "L’autre PC affiche un code et un QR code."],
+  liaison: ["Relie la machine", "L’autre PC affiche un code de 8 caractères et un QR code."],
 };
 const TOUCHES: [string, string][] = [
   ["Dell", "F12"],
@@ -50,7 +53,7 @@ const TOUCHES: [string, string][] = [
 ];
 const PAS_ENCORE = "BHOST OS n’est pas encore disponible : cette étape marchera dans une prochaine version.";
 
-export default function MachineDediee({ onQuitter }: { onQuitter: () => void }) {
+export default function MachineDediee({ onQuitter, onLiee }: { onQuitter: () => void; onLiee: (m: Machine) => void }) {
   const [etape, setEtape] = useState<Etape>("materiel");
   const [atteinte, setAtteinte] = useState(0); // la plus loin des étapes déjà ouvertes
   const rang = ETAPES.indexOf(etape);
@@ -79,7 +82,7 @@ export default function MachineDediee({ onQuitter }: { onQuitter: () => void }) 
               </div>
               <div className="md-texte">
                 {sousTitre && <p className="md-intro">{sousTitre}</p>}
-                <Contenu etape={etape} />
+                <Contenu etape={etape} onLiee={onLiee} />
               </div>
             </div>
           </div>
@@ -113,7 +116,7 @@ export default function MachineDediee({ onQuitter }: { onQuitter: () => void }) 
 
 // ---------- Ce qu'on lit et ce qu'on fait, à droite ----------
 
-function Contenu({ etape }: { etape: Etape }) {
+function Contenu({ etape, onLiee }: { etape: Etape; onLiee: (m: Machine) => void }) {
   switch (etape) {
     case "materiel":
       return (
@@ -162,7 +165,7 @@ function Contenu({ etape }: { etape: Etape }) {
         </>
       );
     case "liaison":
-      return <Liaison />;
+      return <Liaison onLiee={onLiee} />;
   }
 }
 
@@ -253,42 +256,45 @@ function ChoixCle() {
   );
 }
 
-function Liaison() {
+function Liaison({ onLiee }: { onLiee: (m: Machine) => void }) {
   const [code, setCode] = useState("");
   const [note, setNote] = useState("");
-  const complet = code.length === 6;
+  const [envoi, setEnvoi] = useState(false);
+
+  const relier = () => {
+    if (!codeComplet(code) || envoi) return;
+    setEnvoi(true);
+    lierMachine(code).then(onLiee, (e) => {
+      setNote(typeof e === "string" ? e : PAS_ENCORE);
+      setEnvoi(false);
+    });
+  };
 
   return (
     <>
       <div className="wz-sec">Sur ce PC, tape le code</div>
-      <input
-        className="md-code"
-        type="text"
-        inputMode="text"
-        maxLength={6}
-        spellCheck={false}
-        autoComplete="off"
-        aria-label="Code de liaison"
-        placeholder="······"
-        value={code}
-        onChange={(e) => {
+      <ChampCode
+        grand
+        code={code}
+        onChange={(c) => {
           setNote("");
-          setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6));
+          setCode(c);
         }}
       />
       <div className="md-actions">
-        <button type="button" className="btn acc" disabled={!complet} onClick={() => setNote(PAS_ENCORE)}>
-          Relier
+        <button type="button" className="btn acc" disabled={!codeComplet(code) || envoi} onClick={relier}>
+          {envoi ? "Connexion…" : "Relier"}
         </button>
       </div>
       {note && (
-        <p className="aide" role="status">
+        <p className="aide md-erreur" role="alert">
           {note}
         </p>
       )}
+      <p className="aide">Le code reste dans les réglages de la machine. Garde-le pour toi : il donne accès à tes serveurs.</p>
       <p className="wz-note">
         <IconDeviceMobile size={15} stroke={2} aria-hidden />
-        <span>Pour piloter tes serveurs depuis ton téléphone, scanne le QR code avec l’appareil photo.</span>
+        <span>Sur ton téléphone, scanne le QR code : tu pilotes tes serveurs sans rien installer.</span>
       </p>
     </>
   );
@@ -370,7 +376,7 @@ function Scene({ etape }: { etape: Etape }) {
             <div className="md-carte md-code-carte">
               <div>
                 <span>Code de liaison</span>
-                <b>K7P 2QX</b>
+                <b>K7M2-Q9XR</b>
               </div>
               <IconQrcode size={64} stroke={1.4} />
             </div>

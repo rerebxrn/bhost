@@ -21,7 +21,13 @@ import "./PremierLancement.css";
 // « Sur cet ordinateur » ouvre l'appli, « Sur une machine dédiée » ouvre le tutoriel.
 type Choix = "local" | "machine";
 
-export default function PremierLancement({ onLocal, onMachine }: { onLocal: () => void; onMachine: () => void }) {
+type Props = {
+  onLocal: () => void;
+  onMachine: () => void; // tutoriel « Préparer la machine »
+  onDejaMachine: () => void; // la machine est déjà prête : on tape son code
+};
+
+export default function PremierLancement({ onLocal, onMachine, onDejaMachine }: Props) {
   const [choix, setChoix] = useState<Choix>("local");
   const choisir = (c: Choix) => setChoix(c);
 
@@ -69,7 +75,16 @@ export default function PremierLancement({ onLocal, onMachine }: { onLocal: () =
             {choix === "local" ? "Héberger sur ce PC" : "Préparer la machine"}
             <IconArrowRight size={17} stroke={2.2} aria-hidden />
           </button>
-          <p className="pl-note">Pas sûr ? Commence ici. Tu pourras passer sur une machine dédiée plus tard.</p>
+          {choix === "local" ? (
+            <p className="pl-note">Pas sûr ? Commence ici. Tu pourras passer sur une machine dédiée plus tard.</p>
+          ) : (
+            <p className="pl-note">
+              Ta machine est déjà prête ?{" "}
+              <button type="button" className="pl-lien" onClick={onDejaMachine}>
+                Entre son code
+              </button>
+            </p>
+          )}
         </div>
       </section>
     </div>

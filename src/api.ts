@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Acces, Serveur, Statut } from "./types";
+import type { Acces, Machine, Serveur, Statut } from "./types";
 
 export function listerServeurs() {
   return invoke<Serveur[]>("lister_serveurs");
@@ -552,3 +552,19 @@ export function ecouterInternet(recu: (ok: boolean) => void) {
 // Machine dédiée (BHOST OS) : les clés USB branchées sur ce PC.
 export type CleUsb = { lecteur: string; nom: string; totalGo: number };
 export const listerClesUsb = () => invoke<CleUsb[]>("lister_cles_usb");
+
+// ---- Machines dédiées (BHOST OS) ----
+
+// Les machines reliées à ce PC. Leurs serveurs arriveront avec lister_serveurs (champ `machine`).
+export const machinesLiees = () => invoke<Machine[]>("machines_liees");
+// Relie une machine avec son code (8 caractères, sans tiret). Rejetée avec une phrase si le code est faux.
+export const lierMachine = (code: string) => invoke<Machine>("lier_machine", { code });
+export const delierMachine = (id: string) => invoke<void>("delier_machine", { id });
+export const renommerMachine = (id: string, nom: string) => invoke<void>("renommer_machine", { id, nom });
+// S'abonne aux changements (une machine s'allume, s'éteint, est reliée). Renvoie de quoi se désabonner.
+export function ecouterMachines(recu: (machines: Machine[]) => void) {
+  const abonnement = listen<Machine[]>("machines", (e) => recu(e.payload));
+  return () => {
+    abonnement.then((arreter) => arreter());
+  };
+}

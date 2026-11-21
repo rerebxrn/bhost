@@ -36,6 +36,22 @@ export type Serveur = {
   arguments?: string; // Paramètres › Arguments en plus
 };
 
+// Une machine dédiée (BHOST OS) reliée à ce PC avec son code.
+export type Machine = {
+  id: string;
+  nom: string; // « Salon », modifiable
+  code: string; // 8 caractères, sans tiret
+  etat: "en-ligne" | "hors-ligne" | "connexion";
+  serveurs: number; // combien de serveurs elle héberge
+  ip?: string; // sur le réseau de la maison (« 192.168.1.42 »)
+  // Mesures de la machine (absentes si elle est hors ligne ou ne sait pas les donner).
+  disque?: { utiliseGo: number; totalGo: number };
+  memoire?: { reserveeGo: number; totalGo: number }; // RAM réservée par les serveurs allumés
+  processeur?: number; // %
+  temperature?: number | null; // °C du processeur ; null : pas de capteur
+  vueIlYa?: number; // hors ligne : dernière fois vue (ms)
+};
+
 // Ouvert à tes amis : où en est l'ouverture du port sur la box (absent = fermé).
 export type Acces = {
   id: string;

@@ -1,0 +1,69 @@
+/* Fenêtre « Ajouter une machine dédiée » et champ du code (« K7M2-Q9XR »). */
+.g.dialog.code-dlg {
+  width: 340px;
+  padding: 20px 18px 16px;
+}
+
+.code-champ {
+  box-sizing: border-box;
+  width: 100%;
+  height: 48px;
+  margin: 0 0 8px;
+  border: 1px solid var(--surf-edge);
+  border-radius: var(--r-ctl);
+  background: var(--field);
+  color: var(--text);
+  font: 600 22px/46px var(--mono);
+  letter-spacing: 0.16em;
+  text-align: center;
+  outline: 0;
+  transition: box-shadow var(--dur-fade);
+}
+
+.code-champ::placeholder {
+  color: var(--text3);
+}
+
+.code-champ:focus {
+  box-shadow: 0 0 0 2px var(--acc);
+}
+
+/* Dans le tutoriel : plus grand, sur toute la largeur. */
+.code-champ.grand {
+  height: 60px;
+  border-radius: var(--r-surf);
+  font-size: 28px;
+  line-height: 58px;
+}
+
+.code-aide {
+  margin: 0 0 14px;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.code-dlg .dlg-err {
+  margin: 0 0 14px;
+}
+
+.code-pied {
+  margin: 14px -18px -16px;
+  padding: 11px 18px 12px;
+  border-top: 1px solid var(--sep);
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.code-lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.code-lien:hover {
+  text-decoration: underline;
+}

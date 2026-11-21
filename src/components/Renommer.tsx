@@ -3,12 +3,13 @@ import "./Menus.css";
 
 type Props = {
   nom: string; // le nom actuel
+  titre?: string; // « Renommer la machine » ; par défaut, un serveur
   onEnregistrer: (nom: string) => Promise<void>; // rejetée avec une phrase si Rust refuse
   onFermer: () => void;
 };
 
-// La petite fenêtre « Renommer le serveur ».
-export default function Renommer({ nom, onEnregistrer, onFermer }: Props) {
+// La petite fenêtre « Renommer le serveur » (ou « Renommer la machine »).
+export default function Renommer({ nom, titre = "Renommer le serveur", onEnregistrer, onFermer }: Props) {
   const [valeur, setValeur] = useState(nom);
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
@@ -48,14 +49,14 @@ export default function Renommer({ nom, onEnregistrer, onFermer }: Props) {
       }}
     >
       <form className="g dialog" data-lens="panel" role="dialog" aria-modal="true" aria-labelledby="ren-titre" onSubmit={enregistrer}>
-        <h4 id="ren-titre">Renommer le serveur</h4>
+        <h4 id="ren-titre">{titre}</h4>
         <input
           ref={champ}
           className="field dlg-field"
           type="text"
           value={valeur}
           maxLength={40}
-          aria-label="Nom du serveur"
+          aria-label="Nouveau nom"
           onChange={(e) => {
             setValeur(e.target.value);
             setErreur("");

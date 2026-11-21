@@ -9,7 +9,7 @@ const fenetre = getCurrentWindow();
 
 // Barre de titre maison : on retire celle de Windows pour garder le style BHOST,
 // mais on garde les vrais boutons − ▢ ✕ de Windows 11.
-export default function TitleBar({ sousTitre }: { sousTitre?: string }) {
+export default function TitleBar() {
   const [agrandie, setAgrandie] = useState(false);
   const theme = useTheme();
 
@@ -36,7 +36,6 @@ export default function TitleBar({ sousTitre }: { sousTitre?: string }) {
     <header className="titlebar" data-tauri-drag-region>
       <div className="tb-app">
         <LogoBhost hauteur={18} />
-        {sousTitre && <span>{sousTitre}</span>}
       </div>
 
       <div className="tb-right">

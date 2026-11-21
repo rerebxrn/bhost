@@ -366,6 +366,20 @@
   text-align: center;
 }
 
+.pl-lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc-text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pl-lien:hover {
+  text-decoration: underline;
+}
+
 /* ---------- Illustrations ---------- */
 .pl-st-jour-1 { stop-color: var(--pl-jour-1); }
 .pl-st-jour-2 { stop-color: var(--pl-jour-2); }

@@ -2732,6 +2732,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             lister_serveurs,
             machine::lister_cles_usb,
+            machine::machines_liees,
+            machine::lier_machine,
+            machine::delier_machine,
+            machine::renommer_machine,
             importer_serveur,
             demarrer_serveur,
             installer_java_serveur,

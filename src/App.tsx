@@ -11,6 +11,8 @@ import Renommer from "./components/Renommer";
 import Apparence from "./components/Apparence";
 import Supprimer from "./components/Supprimer";
 import DemandePop from "./components/DemandePop";
+import AjouterMachine from "./components/CodeMachine";
+import Confirmer from "./components/Confirmer";
 import Reglages from "./pages/Reglages";
 import NouveauServeur from "./pages/NouveauServeur";
 import PremierLancement from "./pages/PremierLancement";
@@ -53,8 +55,12 @@ import {
   ouvrirDossier,
   redemarrerServeur,
   renommerServeur,
+  machinesLiees,
+  ecouterMachines,
+  delierMachine,
+  renommerMachine,
 } from "./api";
-import { listeOnglets, nomLogiciel, texteStatut, type Acces, type Mesures, type Onglet, type Serveur } from "./types";
+import { listeOnglets, nomLogiciel, texteStatut, type Acces, type Machine, type Mesures, type Onglet, type Serveur } from "./types";
 
 import "./App.css";
 
@@ -90,7 +96,8 @@ const retenirAccueil = () => {
 };
 
 // Ce qu'on affiche à droite de la barre latérale.
-type Vue = "serveur" | "nouveau" | "reglages";
+// « machine » : le tutoriel « Préparer une machine dédiée », ouvert depuis Réglages.
+type Vue = "serveur" | "nouveau" | "reglages" | "machine";
 
 export default function App() {
   // null : la liste n'est pas encore arrivée de la partie Rust.
@@ -102,6 +109,10 @@ export default function App() {
   const [defile, setDefile] = useState(false); // la page a défilé : effet de bord sous les onglets
   const [accueilVu, setAccueilVu] = useState(accueilDejaVu);
   const [tutoMachine, setTutoMachine] = useState(false); // premier lancement : tutoriel « machine dédiée » ouvert
+  const [machines, setMachines] = useState<Machine[]>([]); // machines dédiées reliées
+  const [ajoutMachine, setAjoutMachine] = useState(false); // fenêtre « Ajouter une machine dédiée »
+  const [aDelier, setADelier] = useState<Machine | null>(null);
+  const [machineARenommer, setMachineARenommer] = useState<Machine | null>(null);
   const theme = useTheme();
   useLiquidGlass(theme.reel, theme.teinte, theme.sombre);
 
@@ -123,6 +134,29 @@ export default function App() {
         setVue("nouveau");
       });
   }, []);
+
+  // Les machines dédiées reliées, et leurs changements (allumée, éteinte…).
+  useEffect(() => {
+    machinesLiees().then(setMachines, () => {});
+    return ecouterMachines(setMachines);
+  }, []);
+  // Une machine vient d'être reliée : ses serveurs arrivent dans la liste.
+  const machineAjoutee = (m: Machine) => {
+    setMachines((l) => [...l.filter((x) => x.id !== m.id), m]);
+    listerServeurs().then(setServeurs, () => {});
+    retenirAccueil();
+    setAccueilVu(true);
+    setTutoMachine(false);
+    setVue((v) => (v === "machine" ? "reglages" : v));
+  };
+  const retirerMachine = (m: Machine) =>
+    delierMachine(m.id).then(
+      () => {
+        setMachines((l) => l.filter((x) => x.id !== m.id));
+        prevenir(`« ${m.nom} » retirée`);
+      },
+      (e) => setErreur(typeof e === "string" ? e : "Ça n'a pas marché."),
+    );
 
   // Rust nous prévient à chaque changement d'état d'un serveur.
   useEffect(
@@ -354,17 +388,33 @@ export default function App() {
   const nomOnglet = onglets.find((o) => o.id === onglet)?.nom ?? "";
   const avecConsole = onglet === "accueil" || onglet === "console"; // la console remplit la page
   const avecExtensions = onglet === "extensions" && !!serveur && ["Paper", "Purpur", "Spigot", "Fabric", "Forge", "NeoForge", "Vanilla", "Youer", "Arclight", "Mohist"].includes(serveur.logiciel);
-  const sousTitre = vue === "reglages" ? "Réglages" : surServeur ? serveur.nom : "Nouveau serveur";
   // Premier lancement : rien à gauche, seulement le choix (on attend la liste pour ne rien faire clignoter).
   const accueil = !accueilVu && (serveurs === null || serveurs.length === 0 || revoirAccueil());
 
-  if (accueil) {
+  const fenetreAjout = ajoutMachine && (
+    <AjouterMachine
+      onAjoutee={machineAjoutee}
+      onPreparer={
+        tutoMachine || vue === "machine"
+          ? undefined
+          : () => {
+              setAjoutMachine(false);
+              if (accueil) setTutoMachine(true);
+              else setVue("machine");
+            }
+      }
+      onFermer={() => setAjoutMachine(false)}
+    />
+  );
+
+  if (accueil || vue === "machine") {
+    const tuto = accueil ? tutoMachine : true;
     return (
-      <div className={"fenetre" + (tutoMachine ? " sans-cote" : "")}>
-        <TitleBar sousTitre={tutoMachine ? "Machine dédiée" : undefined} />
+      <div className={"fenetre" + (tuto ? " sans-cote" : "")}>
+        <TitleBar />
         {serveurs !== null &&
-          (tutoMachine ? (
-            <MachineDediee onQuitter={() => setTutoMachine(false)} />
+          (tuto ? (
+            <MachineDediee onQuitter={() => (accueil ? setTutoMachine(false) : setVue("reglages"))} onLiee={machineAjoutee} />
           ) : (
             <PremierLancement
               onLocal={() => {
@@ -372,15 +422,17 @@ export default function App() {
                 setAccueilVu(true);
               }}
               onMachine={() => setTutoMachine(true)}
+              onDejaMachine={() => setAjoutMachine(true)}
             />
           ))}
+        {fenetreAjout}
       </div>
     );
   }
 
   return (
     <div className="fenetre">
-      <TitleBar sousTitre={serveurs === null ? undefined : sousTitre} />
+      <TitleBar />
       <div className="corps">
         <Sidebar
           serveurs={liste}
@@ -396,7 +448,7 @@ export default function App() {
         <main className="main">
           {serveurs === null ? null : vue === "reglages" ? (
             <div className="scroll sans-barres">
-              <Reglages />
+              <Reglages machines={machines} onAjouterMachine={() => setAjoutMachine(true)} onRenommerMachine={setMachineARenommer} onDelierMachine={setADelier} />
             </div>
           ) : !surServeur ? (
             <NouveauServeur onCree={ajouter} onAnnuler={liste.length > 0 ? () => setVue("serveur") : undefined} />
@@ -547,6 +599,28 @@ export default function App() {
           nom={serveurARenommer.nom}
           onEnregistrer={(nom) => renommer(serveurARenommer.id, nom)}
           onFermer={() => setARenommer(null)}
+        />
+      )}
+      {fenetreAjout}
+      {machineARenommer && (
+        <Renommer
+          titre="Renommer la machine"
+          nom={machineARenommer.nom}
+          onEnregistrer={(nom) =>
+            renommerMachine(machineARenommer.id, nom).then(() =>
+              setMachines((l) => l.map((x) => (x.id === machineARenommer.id ? { ...x, nom } : x))),
+            )
+          }
+          onFermer={() => setMachineARenommer(null)}
+        />
+      )}
+      {aDelier && (
+        <Confirmer
+          titre={`Retirer « ${aDelier.nom} » ?`}
+          texte="Ses serveurs continuent de tourner dessus. Tu pourras la rajouter avec son code."
+          bouton="Retirer"
+          onOui={() => retirerMachine(aDelier)}
+          onFermer={() => setADelier(null)}
         />
       )}
     </div>

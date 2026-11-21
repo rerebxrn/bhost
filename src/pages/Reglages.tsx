@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { IconFolder } from "@tabler/icons-react";
+import { IconEye, IconEyeOff, IconFolder, IconPlus } from "@tabler/icons-react";
 import Curseur from "../components/Curseur";
 import {
   changerDossierServeurs,
@@ -15,7 +15,8 @@ import {
 } from "../api";
 import { useTheme } from "../theme/ThemeProvider";
 import type { Fond, Mode } from "../theme/palette";
-import { nombre } from "../types";
+import { nombre, type Machine } from "../types";
+import { afficherCode } from "../code";
 import "./Parametres.css";
 import "./Reglages.css";
 
@@ -62,12 +63,26 @@ type Maj =
   | { etape: "erreur"; texte: string };
 
 // Réglages de BHOST (bouton en bas de la barre latérale), d'après la maquette.
-export default function Reglages() {
+type Props = {
+  machines: Machine[];
+  onAjouterMachine: () => void;
+  onRenommerMachine: (m: Machine) => void;
+  onDelierMachine: (m: Machine) => void;
+};
+
+const ETATS_MACHINE: Record<Machine["etat"], string> = {
+  "en-ligne": "En ligne",
+  "hors-ligne": "Hors ligne",
+  connexion: "Connexion…",
+};
+
+export default function Reglages({ machines, onAjouterMachine, onRenommerMachine, onDelierMachine }: Props) {
   const theme = useTheme();
   const [vue, setVue] = useState<VueReglages | null>(null);
   const [pseudo, setPseudo] = useState("");
   const [erreur, setErreur] = useState("");
   const [maj, setMaj] = useState<Maj>({ etape: "rien" });
+  const [codeVu, setCodeVu] = useState<string | null>(null); // la machine dont on montre le code
 
   const recevoir = (v: VueReglages) => {
     setVue(v);
@@ -237,6 +252,48 @@ export default function Reglages() {
                 Changer…
               </button>
             </div>
+          </div>
+        </section>
+
+        <div className="grp-t">Machines dédiées</div>
+        <section className="surf">
+          {machines.map((m) => (
+            <div className="row" key={m.id}>
+              <div className="lbl">
+                <span>{m.nom}</span>
+                <span className="t2">
+                  <span className={"rg-etat " + m.etat} aria-hidden />
+                  {ETATS_MACHINE[m.etat]} · {m.serveurs} serveur{m.serveurs > 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="rg-btns">
+                <button
+                  type="button"
+                  className="btn rg-code"
+                  aria-label={codeVu === m.id ? "Cacher le code" : "Afficher le code"}
+                  onClick={() => setCodeVu((v) => (v === m.id ? null : m.id))}
+                >
+                  {codeVu === m.id ? <IconEyeOff size={14} stroke={2} aria-hidden /> : <IconEye size={14} stroke={2} aria-hidden />}
+                  <span className="tnum">{codeVu === m.id ? afficherCode(m.code) : "••••-••••"}</span>
+                </button>
+                <button type="button" className="btn" onClick={() => onRenommerMachine(m)}>
+                  Renommer…
+                </button>
+                <button type="button" className="btn" onClick={() => onDelierMachine(m)}>
+                  Retirer…
+                </button>
+              </div>
+            </div>
+          ))}
+          <div className="row">
+            <div className="lbl">
+              <span>{machines.length === 0 ? "Aucune machine" : "Une autre machine"}</span>
+              <span className="t2">Un 2ᵉ PC qui héberge tes serveurs jour et nuit.</span>
+            </div>
+            <button type="button" className="btn" onClick={onAjouterMachine}>
+              <IconPlus size={14} stroke={2} aria-hidden />
+              Ajouter…
+            </button>
           </div>
         </section>
 

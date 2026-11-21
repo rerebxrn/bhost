@@ -410,3 +410,12 @@
     animation: none;
   }
 }
+
+.aide.md-erreur {
+  color: var(--danger);
+}
+
+.md-code-carte b {
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+}
