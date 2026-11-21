@@ -96,8 +96,9 @@ fn faux(b: &bool) -> bool {
 
 /// Les icônes qu'on peut choisir pour un serveur (les mêmes que dans src/theme/icones.ts).
 /// Les 10 premières sont les anciennes couleurs : les serveurs déjà créés gardent la leur.
-pub const ICONES: [&str; 34] = [
+pub const ICONES: [&str; 44] = [
     "graphite", "bleu", "indigo", "violet", "rose", "rouge", "orange", "jaune", "vert", "menthe", "serveur-acier", "serveur-dore", "serveur-titane", "serveur-noir", "serveur-orrose", "cadeau-rouge", "cadeau-bleu", "cadeau-vert", "gateau", "gateau-chocolat", "fromage", "pain", "guimauve", "bento", "carton", "de", "camera", "aquarium", "terminal", "damier", "caisse", "herbe", "hiver", "grenouille",
+    "numero-0", "numero-1", "numero-2", "numero-3", "numero-4", "numero-5", "numero-6", "numero-7", "numero-8", "numero-9",
 ];
 
 /// Vérifie une icône avant de l'enregistrer.

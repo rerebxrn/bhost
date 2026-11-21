@@ -1,12 +1,12 @@
 // L'icône du serveur dans Minecraft (server-icon.png, 64 × 64) : par défaut, la même que dans BHOST.
-// Les 34 icônes sont dessinées en PNG par docs/logo/icones.py (sortie/jeu) et rangées dans le programme.
+// Les 44 icônes sont dessinées en PNG par docs/logo/icones.py (sortie/jeu) et rangées dans le programme.
 // Si l'utilisateur a mis sa propre image (Fichiers › Icône du serveur), BHOST n'y touche plus.
 
 use std::fs;
 use std::path::Path;
 
-/// Les 34 icônes, en PNG 64 × 64, dans l'ordre de `serveurs::ICONES`.
-const PNGS: [(&str, &[u8]); 34] = [
+/// Les 44 icônes, en PNG 64 × 64, dans l'ordre de `serveurs::ICONES`.
+const PNGS: [(&str, &[u8]); 44] = [
     ("graphite", include_bytes!("../icones-jeu/graphite.png")),
     ("bleu", include_bytes!("../icones-jeu/bleu.png")),
     ("indigo", include_bytes!("../icones-jeu/indigo.png")),
@@ -41,6 +41,16 @@ const PNGS: [(&str, &[u8]); 34] = [
     ("herbe", include_bytes!("../icones-jeu/herbe.png")),
     ("hiver", include_bytes!("../icones-jeu/hiver.png")),
     ("grenouille", include_bytes!("../icones-jeu/grenouille.png")),
+    ("numero-0", include_bytes!("../icones-jeu/numero-0.png")),
+    ("numero-1", include_bytes!("../icones-jeu/numero-1.png")),
+    ("numero-2", include_bytes!("../icones-jeu/numero-2.png")),
+    ("numero-3", include_bytes!("../icones-jeu/numero-3.png")),
+    ("numero-4", include_bytes!("../icones-jeu/numero-4.png")),
+    ("numero-5", include_bytes!("../icones-jeu/numero-5.png")),
+    ("numero-6", include_bytes!("../icones-jeu/numero-6.png")),
+    ("numero-7", include_bytes!("../icones-jeu/numero-7.png")),
+    ("numero-8", include_bytes!("../icones-jeu/numero-8.png")),
+    ("numero-9", include_bytes!("../icones-jeu/numero-9.png")),
 ];
 
 /// L'icône par défaut selon le logiciel, quand l'utilisateur n'en a pas choisi (comme `IconeServeur.tsx`).

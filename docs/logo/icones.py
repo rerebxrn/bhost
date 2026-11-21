@@ -292,7 +292,36 @@ icone("Objets", "Caisse en bois", "caisse",
       d=["FFFFFF", "FMMMMF", "FmmmmF", "FMMMMF", "FmmmmF", "FFFFFF"])
 
 # On range les icônes par groupe, dans l'ordre de la planche.
-ORDRE = ["Couleurs", "Serveurs", "Fête", "Gourmandises", "Objets", "Ambiances", "Personnages"]
+# Numéros 0 à 9 (21/11, style D « ardoise bleutée ») : cube mat, chiffre blanc 3 × 5 sur la façade gauche,
+# colonnes 2 à 4, collé en haut (rangées 0 à 4) : il ne touche jamais le bas, sinon il disparaît sur fond blanc.
+CHIFFRES = {
+    "0": ["###", "#.#", "#.#", "#.#", "###"],
+    "1": [".#.", "##.", ".#.", ".#.", "###"],
+    "2": ["###", "..#", "###", "#..", "###"],
+    "3": ["###", "..#", ".##", "..#", "###"],
+    "4": ["#.#", "#.#", "###", "..#", "..#"],
+    "5": ["###", "#..", "###", "..#", "###"],
+    "6": ["###", "#..", "###", "#.#", "###"],
+    "7": ["###", "..#", "..#", ".#.", ".#."],
+    "8": ["###", "#.#", "###", "#.#", "###"],
+    "9": ["###", "#.#", "###", "..#", "###"],
+}
+
+
+def face_chiffre(c, x0=2):
+    g = [list("M" * N) for _ in range(N)]
+    for r, ligne in enumerate(CHIFFRES[c]):
+        for i, ch in enumerate(ligne):
+            if ch == "#":
+                g[r][x0 + i] = "x"
+    return ["".join(l) for l in g]
+
+
+for c in "0123456789":
+    icone("Numéros", f"Numéro {c}", f"numero-{c}", {"M": ("m", "#66789A"), "x": ("x", "#FFFFFF")}, g=face_chiffre(c))
+
+
+ORDRE = ["Couleurs", "Numéros", "Serveurs", "Fête", "Gourmandises", "Objets", "Ambiances", "Personnages"]
 ICONES.sort(key=lambda ic: ORDRE.index(ic["groupe"]))
 PROPOSITIONS = []
 

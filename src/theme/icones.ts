@@ -23,6 +23,21 @@ export const GROUPES: Groupe[] = [
     ],
   },
   {
+    nom: "Numéros",
+    icones: [
+      { cle: "numero-0", nom: "Numéro 0" },
+      { cle: "numero-1", nom: "Numéro 1" },
+      { cle: "numero-2", nom: "Numéro 2" },
+      { cle: "numero-3", nom: "Numéro 3" },
+      { cle: "numero-4", nom: "Numéro 4" },
+      { cle: "numero-5", nom: "Numéro 5" },
+      { cle: "numero-6", nom: "Numéro 6" },
+      { cle: "numero-7", nom: "Numéro 7" },
+      { cle: "numero-8", nom: "Numéro 8" },
+      { cle: "numero-9", nom: "Numéro 9" },
+    ],
+  },
+  {
     nom: "Serveurs",
     icones: [
       { cle: "serveur-acier", nom: "Acier" },
