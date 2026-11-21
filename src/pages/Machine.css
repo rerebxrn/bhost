@@ -1,0 +1,56 @@
+/* La page « Machine » d'une machine dédiée : comme Réglages, avec l'état en haut. */
+.machine .ma-etat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  font: var(--f-sous-titre);
+  color: var(--text);
+}
+
+.machine .ma-etat .sm-point {
+  width: 8px;
+  height: 8px;
+}
+
+.surf.strip.ma-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+
+.ma-strip .cell-disque .sm-barre {
+  flex: 0 1 64px;
+  min-width: 36px;
+  margin-top: 14px;
+}
+
+.ma-strip .v.ma-tiede {
+  color: var(--st-busy);
+}
+
+.ma-strip .v.ma-chaud {
+  color: var(--stop);
+}
+
+/* Une ligne par serveur : icône, nom, puis son stockage (texte + barre). */
+.row.ma-srv {
+  gap: 12px;
+}
+
+.row.ma-srv .lbl {
+  flex: 1;
+  min-width: 0;
+}
+
+.ma-disque {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  width: 150px;
+}
+
+.ma-disque .sm-barre {
+  width: 100%;
+}

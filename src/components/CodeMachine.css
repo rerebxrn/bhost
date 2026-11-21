@@ -67,3 +67,66 @@
 .code-lien:hover {
   text-decoration: underline;
 }
+
+/* Pas assez de mémoire (machine dédiée) : choisir le serveur à arrêter. */
+.mm .dlg-txt {
+  margin-bottom: 12px;
+}
+
+.mm-liste {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 14px;
+  overflow: hidden;
+  border-radius: var(--r-ctl);
+  background: var(--surf);
+  box-shadow: 0 0 0 0.5px var(--surf-edge);
+  text-align: left;
+}
+
+.mm-ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: var(--f-corps);
+  cursor: pointer;
+}
+
+.mm-ligne + .mm-ligne {
+  border-top: 1px solid var(--sep);
+}
+
+.mm-ligne:hover {
+  background: var(--hover);
+}
+
+.mm-rond {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--text3);
+  transition: box-shadow var(--dur-fast);
+}
+
+.mm-ligne.sel .mm-rond {
+  box-shadow: inset 0 0 0 5px var(--acc);
+}
+
+.mm-nom {
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-ram {
+  color: var(--text2);
+}

@@ -61,6 +61,12 @@ pub struct Serveur {
     /// Onglet Automatisations.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub automatisations: Vec<crate::automatisations::Automatisation>,
+    /// Machine dédiée : l'id de la machine qui l'héberge (absent = ce PC).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub machine: Option<String>,
+    /// Machine dédiée : son stockage max, en Mo (Créer un serveur › Stockage max). Un plafond, pas une réservation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disque_max_mo: Option<u64>,
 }
 
 /// La sauvegarde automatique d'un serveur.

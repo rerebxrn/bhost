@@ -99,6 +99,9 @@ pub struct MachineVue {
     processeur: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f64>,
+    /// Son adresse dans la maison (« 192.168.1.42 »), pour l'Accueil d'un serveur.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ip: Option<String>,
 }
 
 /// Une jauge de la machine (Go). Les noms suivent `Machine` de src/types.ts.
@@ -136,6 +139,7 @@ fn vue(m: &MachineLiee) -> MachineVue {
         memoire: None,
         processeur: None,
         temperature: None,
+        ip: None,
     };
     if cfg!(debug_assertions) && m.id == TEST_EN_LIGNE.1 {
         // La température monte et descend toute seule (54 → 86 °C) pour voir le gris, l'orange et le rouge.
@@ -143,11 +147,95 @@ fn vue(m: &MachineLiee) -> MachineVue {
         let t = 54.0 + 32.0 * (((s / 10) % 9) as f64 / 8.0);
         v.etat = "en-ligne";
         v.disque = Some(Jauge { utilise_go: Some(168.0), reservee_go: None, total_go: 476.0 });
-        v.memoire = Some(Jauge { utilise_go: None, reservee_go: Some(11.8), total_go: 16.0 });
+        // La mémoire réservée suit les serveurs de test allumés.
+        let reservee = crate::ressources::reservee_mo(&allumes_de_test()) as f64 / 1024.0;
+        v.memoire = Some(Jauge { utilise_go: None, reservee_go: Some((reservee * 10.0).round() / 10.0), total_go: TEST_RAM_GO as f64 });
         v.processeur = Some(18.0);
         v.temperature = Some(t.round());
+        v.serveurs = SERVEURS_DE_TEST.len() as u32;
+        v.ip = Some("192.168.1.42".into());
     }
     v
+}
+
+// Les serveurs de la machine de test (16 Go) : de quoi voir « Pas assez de mémoire » et la case Stockage.
+// Rien ne tourne vraiment : Démarrer et Arrêter changent seulement leur état.
+const TEST_RAM_GO: u64 = 16;
+/// (id, nom, logiciel, icône, RAM en Go, stockage pris en Mo, stockage max en Go, allumé au départ)
+const SERVEURS_DE_TEST: [(&str, &str, &str, &str, u64, u64, u64, bool); 3] = [
+    ("test-public", "Serveur public", "Paper", "serveur-acier", 8, 6554, 30, true),
+    ("test-amis", "Entre amis", "Purpur", "gateau", 4, 2150, 20, false),
+    ("test-121", "Test 1.21", "Paper", "terminal", 2, 19354, 20, true),
+];
+
+/// Les serveurs de test allumés, et depuis quand (ms). Absent : l'état du départ.
+static ALLUMES_TEST: Mutex<Option<Vec<(String, u64)>>> = Mutex::new(None);
+
+fn avec_allumes<T>(f: impl FnOnce(&mut Vec<(String, u64)>) -> T) -> T {
+    let mut g = ALLUMES_TEST.lock().unwrap();
+    let liste = g.get_or_insert_with(|| {
+        let il_y_a_2h = crate::maintenant_ms().saturating_sub(2 * 3600 * 1000);
+        SERVEURS_DE_TEST.iter().filter(|s| s.7).map(|s| (s.0.to_string(), il_y_a_2h)).collect()
+    });
+    f(liste)
+}
+
+fn allumes_de_test() -> Vec<crate::ressources::Allume> {
+    let allumes = avec_allumes(|l| l.clone());
+    SERVEURS_DE_TEST
+        .iter()
+        .filter(|s| allumes.iter().any(|(id, _)| id == s.0))
+        .map(|s| crate::ressources::Allume { id: s.0.into(), nom: s.1.into(), ram_mo: s.4 * 1024 })
+        .collect()
+}
+
+/// Un id de serveur de la machine de test (version de dev seulement).
+pub fn est_de_test(id: &str) -> bool {
+    cfg!(debug_assertions) && SERVEURS_DE_TEST.iter().any(|s| s.0 == id)
+}
+
+/// Les serveurs de test, si la machine « TEST-TEST » est reliée : (serveur, statut, en ligne depuis, stockage pris en Mo).
+pub fn serveurs_de_test(dossier: &Path) -> Vec<(crate::serveurs::Serveur, &'static str, Option<u64>, u64)> {
+    if !cfg!(debug_assertions) || !lire(dossier).iter().any(|m| m.id == TEST_EN_LIGNE.1) {
+        return Vec::new();
+    }
+    let allumes = avec_allumes(|l| l.clone());
+    SERVEURS_DE_TEST
+        .iter()
+        .map(|s| {
+            let depuis = allumes.iter().find(|(id, _)| id == s.0).map(|(_, t)| *t);
+            let serveur = crate::serveurs::Serveur {
+                id: s.0.into(),
+                nom: s.1.into(),
+                logiciel: s.2.into(),
+                version: "1.21.4".into(),
+                couleur: Some(s.3.into()),
+                ram_mo: (s.4 * 1024) as u32,
+                machine: Some(TEST_EN_LIGNE.1.into()),
+                disque_max_mo: Some(s.6 * 1024),
+                ..Default::default()
+            };
+            (serveur, if depuis.is_some() { "en-ligne" } else { "arrete" }, depuis, s.5)
+        })
+        .collect()
+}
+
+/// Démarre un serveur de test, si la mémoire de la machine le permet. Renvoie « en ligne depuis ».
+pub fn demarrer_test(id: &str) -> Result<Option<u64>, crate::ressources::Manque> {
+    let ram = SERVEURS_DE_TEST.iter().find(|s| s.0 == id).map(|s| s.4 * 1024).unwrap_or(0);
+    let deja: Vec<_> = allumes_de_test().into_iter().filter(|a| a.id != id).collect();
+    crate::ressources::verifier_demarrage(TEST_RAM_GO * 1024, &deja, ram)?;
+    let maintenant = crate::maintenant_ms();
+    avec_allumes(|l| {
+        if !l.iter().any(|(x, _)| x == id) {
+            l.push((id.to_string(), maintenant));
+        }
+    });
+    Ok(Some(maintenant))
+}
+
+pub fn arreter_test(id: &str) {
+    avec_allumes(|l| l.retain(|(x, _)| x != id));
 }
 
 /// Une seule écriture du fichier à la fois.
@@ -329,8 +417,21 @@ mod tests {
         assert_eq!(en_ligne.etat, "en-ligne");
         assert!(en_ligne.temperature.is_some_and(|t| (54.0..=86.0).contains(&t)));
         let json = serde_json::to_string(&en_ligne).unwrap();
-        assert!(json.contains("\"utiliseGo\":168.0") && json.contains("\"reserveeGo\":11.8"));
+        assert!(json.contains("\"utiliseGo\":168.0") && json.contains("\"reserveeGo\":") && json.contains("\"ip\":\"192.168.1.42\""));
         assert_eq!(vue(&MachineLiee { id: TEST_HORS_LIGNE.1.into(), nom: "Test".into(), code: "TEST2222".into() }).etat, "hors-ligne");
+    }
+
+    #[test]
+    fn serveurs_de_la_machine_de_test() {
+        // Au départ : Serveur public (8 Go) et Test 1.21 (2 Go) tournent ; Entre amis (4 Go) ne rentre pas.
+        let manque = demarrer_test("test-amis").unwrap_err();
+        assert_eq!(manque.allumes.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), ["test-public", "test-121"]);
+        arreter_test("test-121");
+        assert!(demarrer_test("test-amis").is_ok_and(|d| d.is_some()));
+        assert!(est_de_test("test-amis") && !est_de_test("survie"));
+        // Remis comme au départ pour les autres tests.
+        arreter_test("test-amis");
+        demarrer_test("test-121").unwrap();
     }
 
     #[test]

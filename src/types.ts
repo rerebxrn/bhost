@@ -36,6 +36,8 @@ export type Serveur = {
   arguments?: string; // Paramètres › Arguments en plus
   priorite?: Priorite; // Paramètres › Performances › Priorité (absente : normale)
   machine?: string; // id de la machine dédiée qui l'héberge ; absent = ce PC
+  disqueMo?: number; // machine dédiée : place prise par le serveur
+  disqueMaxMo?: number; // machine dédiée : son stockage max (Créer un serveur › Stockage max)
 };
 
 export type Priorite = "basse" | "normale" | "haute";

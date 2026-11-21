@@ -39,7 +39,7 @@ import {
   type InfosCreation,
   type VersionMc,
 } from "../api";
-import { nombre, type Logiciel as NomLogiciel, type Serveur } from "../types";
+import { nombre, type Logiciel as NomLogiciel, type Machine, type Serveur } from "../types";
 import "./NouveauServeur.css";
 
 type Icone = ComponentType<{ size?: number; stroke?: number; "aria-hidden"?: boolean }>;
@@ -90,10 +90,11 @@ const NOMS_ETAPES: Record<Etape, string> = { dossier: "Dossier", logiciel: "Logi
 type Props = {
   onCree: (s: Serveur) => void; // serveur créé ou importé : on l'ouvre
   onAnnuler?: () => void; // absent s'il n'y a encore aucun serveur
+  machine?: Machine; // la machine dédiée choisie à gauche ; absente = ce PC
 };
 
 // L'assistant « Créer un serveur », comme dans la maquette.
-export default function NouveauServeur({ onCree, onAnnuler }: Props) {
+export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
   const [infos, setInfos] = useState<InfosCreation | null>(null);
   const [etape, setEtape] = useState<Etape>("logiciel");
   const [logiciel, setLogiciel] = useState("Paper");
@@ -107,6 +108,7 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
   const [difficulte, setDifficulte] = useState("normale");
   const [joueurs, setJoueurs] = useState(10);
   const [ram, setRam] = useState(4);
+  const [stockage, setStockage] = useState(20); // machine dédiée : stockage max, en Go
   const [eula, setEula] = useState(false);
   const [amis, setAmis] = useState(true); // Ouvert à tes amis (oui par défaut)
   const [erreur, setErreur] = useState("");
@@ -159,7 +161,13 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
   const visibles = Array.isArray(liste) ? liste.filter((v) => v.id.toLowerCase().startsWith(cherche)) : [];
   const cube = couleur ?? couleurDe({ couleur: undefined, logiciel: logiciel as NomLogiciel });
 
-  const ramMax = Math.max(2, Math.min(16, Math.floor((infos?.memoireGo ?? 8) - 2)));
+  // Sur une machine dédiée : jusqu'à sa RAM, moins ≈ 1,5 Go pour le système et ≈ 1 Go pour Java
+  // (ressources.rs : un serveur seul réglé au maximum peut toujours démarrer). Rien n'est réservé tant qu'il est éteint.
+  const ramMax = machine?.memoire
+    ? Math.max(1, Math.floor(machine.memoire.totalGo - 2.5))
+    : Math.max(2, Math.min(16, Math.floor((infos?.memoireGo ?? 8) - 2)));
+  const libreGo = machine?.disque ? Math.floor(machine.disque.totalGo - machine.disque.utiliseGo) : 0;
+  const stockageMax = Math.max(5, Math.min(500, libreGo));
   const nomPropre = nom.trim();
   const peutContinuer =
     etape === "version" ? !!versionChoisie : etape === "monde" ? nomPropre.length > 0 && eula : etape === "logiciel" ? !!choisi.pret : true;
@@ -201,7 +209,7 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
   const creer = () => {
     if (!versionChoisie) return;
     setCreation({ taches: [0, 0, 0] });
-    creerServeur({ nom: nomPropre, logiciel, version: versionChoisie.id, ramGo: ram, eula, mode, difficulte, joueursMax: joueurs, couleur: cube, ouvertAmis: amis })
+    creerServeur({ nom: nomPropre, logiciel, version: versionChoisie.id, ramGo: ram, eula, mode, difficulte, joueursMax: joueurs, couleur: cube, ouvertAmis: amis, machine: machine?.id, stockageGo: machine ? Math.min(stockage, stockageMax) : undefined })
       .then((s) => {
         setCreation({ taches: [100, 100, 100], fini: true });
         window.setTimeout(() => onCree(s), 900);
@@ -246,6 +254,7 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
         <div className="page wz" key={enCreation ? "creation" : etape}>
           <div className="wz-head">
             <span className="wz-kick">{enCreation ? "Installation" : `Étape ${rang + 1} sur ${etapes.length}`}</span>
+            {machine && !enCreation && <span className="wz-ou">Sur {machine.nom}</span>}
             <h1>{titre}</h1>
             {sousTitre && <p>{sousTitre}</p>}
           </div>
@@ -490,7 +499,9 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
                     <span>Mémoire réservée</span>
                     <span className={"t2" + (ram < choisi.ram ? " warn" : "")}>
                       {ram < choisi.ram ? "Un peu juste. " : ""}
-                      {infos ? `Ton PC a ${nombre(Math.round(infos.memoireGo))} Go. ` : ""}Conseillé : {choisi.ram} Go.
+                      {machine?.memoire
+                        ? `${machine.nom} a ${nombre(Math.round(machine.memoire.totalGo))} Go. Réservée seulement quand il est allumé.`
+                        : `${infos ? `Ton PC a ${nombre(Math.round(infos.memoireGo))} Go. ` : ""}Conseillé : ${choisi.ram} Go.`}
                     </span>
                   </div>
                   <div className="ram">
@@ -498,6 +509,18 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
                     <b className="tnum">{ram} Go</b>
                   </div>
                 </div>
+                {machine && (
+                  <div className="row">
+                    <div className="lbl">
+                      <span>Stockage max</span>
+                      <span className="t2">{`Le monde, les plugins et les sauvegardes. ${nombre(libreGo)} Go libres.`}</span>
+                    </div>
+                    <div className="ram">
+                      <Curseur min={5} max={stockageMax} valeur={Math.min(stockage, stockageMax)} onChange={setStockage} etiquette="Stockage max" unite="Go" />
+                      <b className="tnum">{Math.min(stockage, stockageMax)} Go</b>
+                    </div>
+                  </div>
+                )}
               </section>
               <div className="wz-sec">Accès</div>
               <section className="surf">
@@ -547,8 +570,9 @@ export default function NouveauServeur({ onCree, onAnnuler }: Props) {
                     ["Difficulté", mode === "hardcore" ? "Difficile" : DIFFICULTES.find((d) => d.id === difficulte)?.nom],
                     ["Joueurs", `${joueurs} en même temps`],
                     ["Mémoire", `${ram} Go`],
-                    ["Accès", amis ? "Ouvert à tes amis" : "Sur ce PC"],
-                    ["Dossier", infos ? `${infos.dossier}\\…` : "…"],
+                    ...(machine ? [["Stockage max", `${Math.min(stockage, stockageMax)} Go`]] : []),
+                    ["Accès", amis ? "Ouvert à tes amis" : machine ? "À la maison" : "Sur ce PC"],
+                    machine ? ["Machine", machine.nom] : ["Dossier", infos ? `${infos.dossier}\\…` : "…"],
                   ].map(([k, v]) => (
                     <div className="fact" key={k}>
                       <span>{k}</span>

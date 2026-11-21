@@ -624,3 +624,18 @@
   text-align: center;
   color: var(--text2);
 }
+
+/* Serveur sur une machine dédiée : une 5ᵉ case, le stockage (une barre, pas une courbe). */
+.surf.strip.cinq {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.cell.cell-disque {
+  align-items: center;
+}
+
+.cell-barre {
+  flex: 0 1 64px;
+  min-width: 36px;
+  margin-top: 14px;
+}

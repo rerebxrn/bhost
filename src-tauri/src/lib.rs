@@ -31,6 +31,7 @@ mod problemes;
 mod processus;
 mod regles;
 mod reseau;
+mod ressources;
 mod reveil;
 mod sauvegarde;
 mod serveurs;
@@ -148,6 +149,9 @@ struct ServeurVu {
     joueurs: Vec<String>,
     #[serde(rename = "joueursMax")]
     joueurs_max: u32,
+    /// Machine dédiée : la place prise par le serveur, en Mo.
+    #[serde(rename = "disqueMo", skip_serializing_if = "Option::is_none")]
+    disque_mo: Option<u64>,
 }
 
 fn vu(etat: &Etat, serveur: &Serveur) -> ServeurVu {
@@ -157,6 +161,7 @@ fn vu(etat: &Etat, serveur: &Serveur) -> ServeurVu {
         depuis: etat.depuis.lock().unwrap().get(&serveur.id).copied(),
         joueurs: etat.joueurs.lock().unwrap().get(&serveur.id).cloned().unwrap_or_default(),
         joueurs_max: serveurs::joueurs_max(Path::new(&serveur.dossier)),
+        disque_mo: None,
         serveur: serveur.clone(),
     }
 }
@@ -743,7 +748,12 @@ fn vivant(etat: &Etat, id: &str) -> Result<Arc<Processus>, String> {
 /// La liste des serveurs connus de BHOST, avec leur état.
 #[tauri::command]
 fn lister_serveurs(etat: State<Etat>) -> Vec<ServeurVu> {
-    etat.liste.lock().unwrap().iter().map(|s| vu(&etat, s)).collect()
+    let mut liste: Vec<ServeurVu> = etat.liste.lock().unwrap().iter().map(|s| vu(&etat, s)).collect();
+    // Version de dev : les serveurs de la machine de test « TEST-TEST ».
+    for (serveur, statut, depuis, disque_mo) in machine::serveurs_de_test(&etat.dossier) {
+        liste.push(ServeurVu { statut: statut.into(), depuis, disque_mo: Some(disque_mo), port: 25565, joueurs: Vec::new(), joueurs_max: 20, serveur });
+    }
+    liste
 }
 
 /// Ajoute à BHOST un serveur qui existe déjà dans un dossier.
@@ -756,9 +766,26 @@ fn importer_serveur(dossier: String, etat: State<Etat>) -> Result<ServeurVu, Str
     Ok(vu(&etat, &serveur))
 }
 
+/// Le refus de démarrer : une phrase, ou (machine dédiée) le manque de mémoire,
+/// pour que l'interface propose d'arrêter un autre serveur.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Refus {
+    Phrase(String),
+    Memoire(ressources::Manque),
+}
+
 #[tauri::command]
-fn demarrer_serveur(app: AppHandle, id: String) -> Result<(), String> {
-    lancer_serveur(&app, &id)
+fn demarrer_serveur(app: AppHandle, id: String) -> Result<(), Refus> {
+    if machine::est_de_test(&id) {
+        return machine::demarrer_test(&id).map(|depuis| dire_statut_test(&app, &id, "en-ligne", depuis)).map_err(Refus::Memoire);
+    }
+    lancer_serveur(&app, &id).map_err(Refus::Phrase)
+}
+
+/// Version de dev : un serveur de la machine de test change d'état (rien ne tourne vraiment).
+fn dire_statut_test(app: &AppHandle, id: &str, statut: &str, depuis: Option<u64>) {
+    let _ = app.emit("statut", NouvelleStatut { id, statut, depuis });
 }
 
 /// Carte « Java introuvable » › Installer Java N : si BHOST ne sait pas quel Java il lui faut,
@@ -783,6 +810,11 @@ fn installer_java_serveur(app: AppHandle, id: String, version: u32) -> Result<()
 /// Arrêt propre : on envoie « stop », le serveur sauvegarde puis se ferme.
 #[tauri::command]
 fn arreter_serveur(app: AppHandle, id: String) -> Result<(), String> {
+    if machine::est_de_test(&id) {
+        machine::arreter_test(&id);
+        dire_statut_test(&app, &id, "arrete", None);
+        return Ok(());
+    }
     arreter(&app, &id)
 }
 
@@ -1129,6 +1161,9 @@ struct DemandeCreation {
     /// Ouvert à tes amis dès le départ (changeable ensuite dans Paramètres).
     #[serde(default)]
     ouvert_amis: bool,
+    /// Machine dédiée choisie à gauche (absente : ce PC).
+    #[serde(default)]
+    machine: Option<String>,
     #[serde(flatten)]
     monde: creation::Monde,
 }
@@ -1147,6 +1182,10 @@ async fn creer_serveur(app: AppHandle, demande: DemandeCreation) -> Result<Serve
 }
 
 fn creer(app: &AppHandle, demande: DemandeCreation) -> Result<ServeurVu, String> {
+    if demande.machine.is_some() {
+        // La machine installe elle-même le serveur : ça arrive avec BHOST OS.
+        return Err("Bientôt : créer un serveur sur une machine dédiée.".into());
+    }
     let nom = demande.nom.trim().to_string();
     if nom.is_empty() || nom.chars().count() > 40 {
         return Err("Donne-lui un nom (40 lettres au plus).".into());

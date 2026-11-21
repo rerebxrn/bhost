@@ -13,10 +13,12 @@ import Supprimer from "./components/Supprimer";
 import DemandePop from "./components/DemandePop";
 import AjouterMachine from "./components/CodeMachine";
 import Confirmer from "./components/Confirmer";
+import ManqueMemoire from "./components/ManqueMemoire";
 import Reglages from "./pages/Reglages";
 import NouveauServeur from "./pages/NouveauServeur";
 import PremierLancement from "./pages/PremierLancement";
 import MachineDediee from "./pages/MachineDediee";
+import PageMachine from "./pages/Machine";
 import Console from "./pages/Console";
 import Accueil from "./pages/Accueil";
 import Parametres from "./pages/Parametres";
@@ -59,6 +61,8 @@ import {
   ecouterMachines,
   delierMachine,
   renommerMachine,
+  estManqueMemoire,
+  type ManqueMemoire as Manque,
 } from "./api";
 import { listeOnglets, nomLogiciel, texteStatut, type Acces, type Machine, type Mesures, type Onglet, type Serveur } from "./types";
 
@@ -342,6 +346,35 @@ export default function App() {
     action.catch((e) => setErreur(typeof e === "string" ? e : "Ça n'a pas marché. Réessaie."));
   };
 
+  // Démarrer. Sur une machine dédiée, la RAM peut manquer : on propose d'arrêter un autre serveur.
+  const [manque, setManque] = useState<{ id: string; nom: string; manque: Manque } | null>(null);
+  const demarrer = (s: Serveur) => {
+    setErreur("");
+    demarrerServeur(s.id).catch((e) =>
+      estManqueMemoire(e) ? setManque({ id: s.id, nom: s.nom, manque: e }) : setErreur(typeof e === "string" ? e : "Ça n'a pas marché. Réessaie."),
+    );
+  };
+  // Arrête `autre` proprement, attend qu'il soit vraiment arrêté (2 min au plus), puis démarre `id`.
+  const arreterPuisDemarrer = (autre: string, id: string) =>
+    new Promise<void>((fini, rate) => {
+      let minuterie = 0;
+      const desabonner = ecouterStatuts((x, statut) => {
+        if (x !== autre || (statut !== "arrete" && statut !== "plante")) return;
+        window.clearTimeout(minuterie);
+        desabonner();
+        demarrerServeur(id).then(fini, rate);
+      });
+      minuterie = window.setTimeout(() => {
+        desabonner();
+        rate("Le serveur met trop de temps à s'arrêter.");
+      }, 120_000);
+      arreterServeur(autre).catch((e) => {
+        window.clearTimeout(minuterie);
+        desabonner();
+        rate(e);
+      });
+    }).catch((e) => setErreur(typeof e === "string" ? e : estManqueMemoire(e) ? "Toujours pas assez de mémoire." : "Ça n'a pas marché. Réessaie."));
+
   // Le menu du clic droit sur un serveur, et la fenêtre « Renommer » qu'il peut ouvrir.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [aRenommer, setARenommer] = useState<string | null>(null);
@@ -397,6 +430,7 @@ export default function App() {
   const serveurADecorer = aDecorer && liste.find((s) => s.id === aDecorer);
   const serveurASupprimer = aSupprimer && liste.find((s) => s.id === aSupprimer.id);
   const serveur = liste.find((s) => s.id === idActif) ?? liste[0];
+  const machineChoisie = machines.find((m) => m.id === machineActive); // absente : ce PC
   const surServeur = vue === "serveur" && serveur !== undefined;
   const onglets = serveur ? listeOnglets(serveur.logiciel) : [];
   const nomOnglet = onglets.find((o) => o.id === onglet)?.nom ?? "";
@@ -468,22 +502,30 @@ export default function App() {
           reglagesOuverts={vue === "reglages"}
           onChoisir={ouvrir}
           onMenu={(id, x, y) => setMenu({ id, x, y })}
-          onCreer={() => (machineActive === "ici" ? setVue("nouveau") : prevenir("Bientôt : créer un serveur sur une machine dédiée.", 3000))}
+          onCreer={() => setVue("nouveau")}
           onReglages={() => setVue("reglages")}
         />
 
         <main className="main">
           {serveurs === null ? null : vue === "infos" ? (
-            <div className="soon">
-              <b>{machines.find((m) => m.id === machineActive)?.nom ?? "Machine"}</b>
-              Bientôt : stockage par serveur, température, redémarrer, éteindre.
-            </div>
+            machineChoisie ? (
+              <div className="scroll sans-barres">
+                <PageMachine
+                  machine={machineChoisie}
+                  serveurs={liste}
+                  onRenommer={() => setMachineARenommer(machineChoisie)}
+                  onRetirer={() => setADelier(machineChoisie)}
+                  onCopie={(texte) => navigator.clipboard?.writeText(texte).then(() => prevenir("Copié."), () => {})}
+                  onBientot={() => prevenir("Bientôt : avec BHOST OS.", 3000)}
+                />
+              </div>
+            ) : null
           ) : vue === "reglages" ? (
             <div className="scroll sans-barres">
               <Reglages machines={machines} onAjouterMachine={() => setAjoutMachine(true)} onRenommerMachine={setMachineARenommer} onDelierMachine={setADelier} />
             </div>
           ) : !surServeur ? (
-            <NouveauServeur onCree={ajouter} onAnnuler={liste.length > 0 ? () => setVue("serveur") : undefined} />
+            <NouveauServeur onCree={ajouter} onAnnuler={liste.length > 0 ? () => setVue("serveur") : undefined} machine={machineChoisie} />
           ) : (
             <>
               <Tabs
@@ -508,7 +550,7 @@ export default function App() {
                 <div className={"page" + (ETROITES.includes(onglet) ? " etroite" : "")} key={serveur.id + onglet}>
                   <Filet>
                   {onglet === "accueil" ? (
-                    <Accueil serveur={serveur} acces={acces[serveur.id]} mesures={mesures[serveur.id]} erreur={erreur} probleme={problemes[serveur.id]} internet={internet} onChange={mettreAJour} onOnglet={setOnglet} onCopie={prevenir} onErreur={setErreur} />
+                    <Accueil serveur={serveur} machine={machineChoisie} acces={acces[serveur.id]} mesures={mesures[serveur.id]} erreur={erreur} probleme={problemes[serveur.id]} internet={internet} onChange={mettreAJour} onOnglet={setOnglet} onCopie={prevenir} onErreur={setErreur} />
                   ) : avecExtensions ? (
                     // L'onglet Plugins / Mods / Datapacks a son propre en-tête (bouton « Ajouter », page « Ajouter »).
                     <Extensions serveur={serveur} erreur={erreur} onErreur={setErreur} onInfo={prevenir} />
@@ -572,7 +614,7 @@ export default function App() {
                     />
                   ) : undefined
                 }
-                onDemarrer={() => agir(demarrerServeur(serveur.id))}
+                onDemarrer={() => demarrer(serveur)}
                 onArreter={() => agir(arreterServeur(serveur.id))}
                 onRedemarrer={() => agir(redemarrerServeur(serveur.id))}
                 onForcer={() => agir(forcerArret(serveur.id))}
@@ -634,6 +676,14 @@ export default function App() {
         />
       )}
       {fenetreAjout}
+      {manque && (
+        <ManqueMemoire
+          nom={manque.nom}
+          manque={manque.manque}
+          onArreterEtDemarrer={(autre) => arreterPuisDemarrer(autre, manque.id)}
+          onFermer={() => setManque(null)}
+        />
+      )}
       {machineARenommer && (
         <Renommer
           titre="Renommer la machine"

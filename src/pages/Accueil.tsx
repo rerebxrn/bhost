@@ -7,10 +7,11 @@ import Inviter from "../components/Inviter";
 import MondeCasse from "../components/MondeCasse";
 import Problemes from "../components/Problemes";
 import { regarderTps, type Probleme } from "../api";
-import { adresseLocale, decimale, duree, nombre, nomLogiciel, texteStatut, type Acces, type Mesures, type Onglet, type Serveur } from "../types";
+import { adresseLocale, decimale, duree, nombre, nomLogiciel, texteStatut, type Acces, type Machine, type Mesures, type Onglet, type Serveur } from "../types";
 
 type Props = {
   serveur: Serveur;
+  machine?: Machine; // la machine dédiée qui l'héberge ; absente = ce PC
   acces?: Acces; // Ouvert à tes amis : absent = fermé
   mesures?: Mesures; // absent tant que le serveur n'a pas tourné
   erreur: string;
@@ -23,7 +24,7 @@ type Props = {
 };
 
 // L'accueil d'un serveur : son état, son adresse, et sa console qui prend la place.
-export default function Accueil({ serveur, acces, mesures, erreur, probleme, internet, onChange, onOnglet, onCopie, onErreur }: Props) {
+export default function Accueil({ serveur, machine, acces, mesures, erreur, probleme, internet, onChange, onOnglet, onCopie, onErreur }: Props) {
   const [inviter, setInviter] = useState<DOMRect | null>(null);
   // L'heure, relue toutes les 30 secondes, pour « En ligne depuis 3 h 42 ».
   const [maintenant, setMaintenant] = useState(Date.now());
@@ -41,7 +42,10 @@ export default function Accueil({ serveur, acces, mesures, erreur, probleme, int
   }, [serveur.id]);
 
   const depuis = serveur.depuis ? duree(serveur.depuis, maintenant) : "";
-  const local = adresseLocale(serveur);
+  // Sur ce PC : « localhost ». Sur une machine dédiée : son adresse dans la maison.
+  const local = machine?.ip ? (serveur.port === 25565 ? machine.ip : `${machine.ip}:${serveur.port}`) : adresseLocale(serveur);
+  const disque = machine && serveur.disqueMaxMo ? { mo: serveur.disqueMo ?? 0, max: serveur.disqueMaxMo } : null;
+  const pctDisque = disque ? Math.min(100, Math.round((disque.mo / disque.max) * 100)) : 0;
 
   // Les chiffres du bandeau. Serveur éteint : des tirets, pas de vieux chiffres.
   const allume = serveur.statut !== "arrete" && serveur.statut !== "plante";
@@ -89,8 +93,8 @@ export default function Accueil({ serveur, acces, mesures, erreur, probleme, int
           )}
         </div>
         <div className="addr">
-          <button type="button" className="me-addr" title="Pour rejoindre depuis ce PC" onClick={copier}>
-            Toi, sur ce PC : <code>{local}</code>
+          <button type="button" className="me-addr" title={machine ? "Pour rejoindre depuis la maison" : "Pour rejoindre depuis ce PC"} onClick={copier}>
+            {machine ? "À la maison" : "Toi, sur ce PC"} : <code>{local}</code>
           </button>
           <label htmlFor="addr">Adresse</label>
           <input
@@ -111,7 +115,7 @@ export default function Accueil({ serveur, acces, mesures, erreur, probleme, int
       <Problemes serveur={serveur} probleme={probleme} internet={internet} onChange={onChange} onOnglet={onOnglet} onInfo={onCopie} onErreur={onErreur} />
       <MondeCasse id={serveur.id} onInfo={onCopie} onErreur={onErreur} />
 
-      <section className="surf strip" aria-label="Indicateurs">
+      <section className={"surf strip" + (disque ? " cinq" : "")} aria-label="Indicateurs">
         <div className="cell">
           <div>
             <div className="k">Joueurs</div>
@@ -152,6 +156,28 @@ export default function Accueil({ serveur, acces, mesures, erreur, probleme, int
           </div>
           <Courbe valeurs={tps === null ? [] : (mesures?.tps ?? [])} max={20} />
         </div>
+        {disque && (
+          // Le stockage bouge lentement : une barre plutôt qu'une courbe.
+          <div className="cell cell-disque">
+            <div>
+              <div className="k">Stockage</div>
+              <div className="v">
+                {nombre(disque.mo / 1024)}
+                <small>sur {nombre(disque.max / 1024)} Go</small>
+              </div>
+            </div>
+            <span
+              className={"sm-barre cell-barre" + (pctDisque >= 90 ? " plein" : pctDisque >= 75 ? " haut" : "")}
+              role="meter"
+              aria-label="Stockage"
+              aria-valuenow={pctDisque}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <i style={{ width: `${pctDisque}%` }} />
+            </span>
+          </div>
+        )}
       </section>
 
       <div className="work">

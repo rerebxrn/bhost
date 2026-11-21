@@ -44,6 +44,8 @@ export type DemandeCreation = {
   joueursMax: number;
   couleur: string; // l'icône du serveur (clé de theme/icones.ts)
   ouvertAmis: boolean; // Ouvert à tes amis dès le départ
+  machine?: string; // id d'une machine dédiée ; absent = ce PC
+  stockageGo?: number; // machine dédiée : stockage max
 };
 // Crée le serveur. L'avancement arrive par la nouvelle « creation ».
 export const creerServeur = (demande: DemandeCreation) => invoke<Serveur>("creer_serveur", { demande });
@@ -79,7 +81,10 @@ export async function choisirDossier(titre: string) {
 
 // Les quatre actions de la capsule. Elles répondent tout de suite :
 // la suite arrive par les nouvelles « statut » et « console ».
+// Machine dédiée : si la RAM ne suffit pas, le refus est un ManqueMemoire (pas une phrase).
 export const demarrerServeur = (id: string) => invoke<void>("demarrer_serveur", { id });
+export type ManqueMemoire = { manqueMo: number; allumes: { id: string; nom: string; ramMo: number }[] };
+export const estManqueMemoire = (e: unknown): e is ManqueMemoire => typeof e === "object" && e !== null && "manqueMo" in e;
 export const arreterServeur = (id: string) => invoke<void>("arreter_serveur", { id });
 export const redemarrerServeur = (id: string) => invoke<void>("redemarrer_serveur", { id });
 export const forcerArret = (id: string) => invoke<void>("forcer_arret", { id });
