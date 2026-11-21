@@ -1,0 +1,246 @@
+#!/bin/bash
+# BHOST OS : l'installeur (démarré tout seul quand on démarre sur la clé, voir bhost-installeur.service).
+# Deux questions au plus : le Wi-Fi (seulement sans câble et sans Wi-Fi écrit sur la clé), puis le disque.
+# Le disque choisi est entièrement effacé.
+
+set -u
+export LC_ALL=C.UTF-8 TERM=linux
+MEDIA=/run/bhost/media
+CIBLE=/mnt/cible
+JOURNAL=/run/bhost-installeur.log
+exec 2>>"$JOURNAL"
+TTY=/dev/tty1
+
+# Couleurs BHOST (voir bhost-ecran) et fenêtres dans les mêmes tons.
+printf '\e]P00D131B\e]P1E5484D\e]P27FB2E0\e]P3F0A04B\e]P44DA3E8\e]P5E8D9B5\e]P6A9C7E6\e]P7F2F5F9\e]P8738196\e]P9E5484D\e]PA7FB2E0\e]PBF0A04B\e]PC4DA3E8\e]PDE8D9B5\e]PEA9C7E6\e]PFFFFFFF' >"$TTY"
+setfont /usr/share/consolefonts/FullGreek-TerminusBold16.psf.gz 2>/dev/null
+setterm --blank 0 --powersave off >"$TTY" 2>/dev/null
+export NEWT_COLORS='
+root=white,black
+border=blue,black
+window=white,black
+shadow=black,black
+title=brightblue,black
+button=black,blue
+actbutton=black,white
+compactbutton=white,black
+checkbox=white,black
+actcheckbox=black,blue
+entry=white,black
+label=white,black
+listbox=white,black
+actlistbox=black,blue
+sellistbox=black,blue
+actsellistbox=black,blue
+textbox=white,black
+acttextbox=white,black
+emptyscale=,black
+fullscale=,blue
+helpline=white,black
+roottext=brightblue,black
+'
+TITRE="BHOST OS"
+
+# whiptail dessine sur l'écran (sortie 1) et donne la réponse sur la sortie 3.
+demander() { whiptail --backtitle "$TITRE" --output-fd 3 "$@" 3>&1 1>"$TTY" <"$TTY"; }
+dire() { whiptail --backtitle "$TITRE" --title "$1" --msgbox "$2" 12 64 >"$TTY" <"$TTY"; }
+note() { echo "[$(date +%T)] $*" >&2; }
+
+echec() {
+	note "ÉCHEC : $*"
+	while true; do
+		choix=$(demander --title "Installation impossible" --nocancel --menu "$*\n\nLe détail est dans $JOURNAL." 15 64 2 \
+			recommencer "Recommencer" eteindre "Éteindre") || choix=recommencer
+		case "$choix" in
+			eteindre) systemctl poweroff; sleep 60 ;;
+			*) exec "$0" ;;
+		esac
+	done
+}
+
+en_ligne() { [ "$(nmcli -t -f STATE general 2>/dev/null)" = "connected" ] || [ "$(nmcli -t -f STATE general 2>/dev/null)" = "connected (site only)" ]; }
+
+# ---------- 1. Internet : câble tout seul, sinon Wi-Fi écrit sur la clé, sinon on demande ----------
+reseau() {
+	printf '\e[2J\e[H\n  \e[1;94mBHOST\e[0;97m OS\n\n  \e[90mRecherche du réseau…\e[0m\n' >"$TTY"
+	nm-online -q -t 15 >/dev/null 2>&1
+	en_ligne && { note "réseau : déjà connecté"; return; }
+
+	if ! nmcli -t -f TYPE device 2>/dev/null | grep -qx wifi; then
+		while ! en_ligne; do
+			demander --title "Pas de réseau" --yes-button "Réessayer" --no-button "Continuer" \
+				--yesno "Branche un câble réseau sur la machine.\n\nSans Internet, tu pourras l'installer quand même, mais BHOST ne pourra pas la piloter." 12 64 || return
+			nm-online -q -t 10 >/dev/null 2>&1
+		done
+		return
+	fi
+
+	# Wi-Fi préparé par BHOST sur la clé (étape « Clé USB ») : fichier bhost/wifi.txt, lignes nom= et motdepasse=.
+	if [ -f "$MEDIA/bhost/wifi.txt" ]; then
+		nom=$(sed -n 's/^nom=//p' "$MEDIA/bhost/wifi.txt" | head -1 | tr -d '\r')
+		mdp=$(sed -n 's/^motdepasse=//p' "$MEDIA/bhost/wifi.txt" | head -1 | tr -d '\r')
+		if [ -n "$nom" ]; then
+			printf '\n  \e[90mConnexion à « %s »…\e[0m\n' "$nom" >"$TTY"
+			nmcli device wifi rescan >/dev/null 2>&1
+			sleep 3
+			if [ -n "$mdp" ]; then
+				nmcli device wifi connect "$nom" password "$mdp" >/dev/null 2>&1
+			else
+				nmcli device wifi connect "$nom" >/dev/null 2>&1
+			fi
+			en_ligne && { note "réseau : Wi-Fi de la clé"; return; }
+		fi
+	fi
+
+	while ! en_ligne; do
+		nmcli device wifi rescan >/dev/null 2>&1
+		sleep 3
+		mapfile -t reseaux < <(nmcli -t -e yes -f SIGNAL,SECURITY,SSID device wifi list 2>/dev/null |
+			awk -F: '{ s = $0; sub(/^[^:]*:[^:]*:/, "", s); if (s != "" && !(s in vu)) { vu[s] = 1; print $1 ":" $2 ":" s } }' | sort -t: -k1,1nr | head -20)
+		args=()
+		for i in "${!reseaux[@]}"; do
+			IFS=: read -r signal securite ssid <<<"${reseaux[i]}"
+			ssid=${ssid//\\:/:}
+			verrou=""
+			[ -n "$securite" ] && [ "$securite" != "--" ] && verrou=" ·  protégé"
+			args+=("$((i + 1))" "$(printf '%-32.32s %3s %%%s' "$ssid" "$signal" "$verrou")")
+		done
+		args+=("r" "Actualiser la liste" "c" "J'ai branché un câble")
+		choix=$(demander --title "Choisis ton Wi-Fi" --nocancel --menu "La machine a besoin d'Internet pour être pilotée depuis BHOST." 22 72 12 "${args[@]}") || continue
+		case "$choix" in
+			r) continue ;;
+			c) nm-online -q -t 10 >/dev/null 2>&1; continue ;;
+		esac
+		IFS=: read -r signal securite ssid <<<"${reseaux[choix - 1]}"
+		ssid=${ssid//\\:/:}
+		if [ -n "$securite" ] && [ "$securite" != "--" ]; then
+			mdp=$(demander --title "$ssid" --cancel-button "Retour" --passwordbox "Mot de passe du Wi-Fi" 10 64) || continue
+			nmcli device wifi connect "$ssid" password "$mdp" >/dev/null 2>&1
+		else
+			nmcli device wifi connect "$ssid" >/dev/null 2>&1
+		fi
+		en_ligne || dire "$ssid" "Connexion impossible. Vérifie le mot de passe."
+	done
+	note "réseau : Wi-Fi choisi"
+}
+
+# ---------- 2. Le disque ----------
+disque_de_la_cle() {
+	local source
+	source=$(findmnt -no SOURCE "$MEDIA" 2>/dev/null)
+	[ -n "$source" ] && lsblk -no PKNAME "$source" 2>/dev/null | head -1
+	[ -n "$source" ] && basename "$source"
+}
+
+choisir_disque() {
+	local cle args nom taille modele go
+	declare -A noms
+	while true; do
+		cle=$(disque_de_la_cle | tr '\n' ' ')
+		args=()
+		while read -r nom taille type modele; do
+			[ "$type" = disk ] || continue
+			case " $cle " in *" $(basename "$nom") "*) continue ;; esac
+			case "$nom" in /dev/loop* | /dev/sr* | /dev/zram* | /dev/ram*) continue ;; esac
+			go=$((taille / 1000000000))
+			[ "$go" -ge 8 ] || continue
+			args+=("$nom" "$(printf '%5s Go   %s' "$go" "${modele:-Disque}")")
+			noms[$nom]="${modele:-Disque} · $go Go"
+		done < <(lsblk -dnpb -o NAME,SIZE,TYPE,MODEL 2>/dev/null)
+
+		if [ ${#args[@]} -eq 0 ]; then
+			demander --title "Aucun disque" --yes-button "Réessayer" --no-button "Éteindre" \
+				--yesno "Aucun disque d'au moins 8 Go n'a été trouvé." 10 64 || { systemctl poweroff; sleep 60; }
+			continue
+		fi
+		DISQUE=$(demander --title "Où installer BHOST OS ?" --nocancel --menu "Choisis le disque avec ↑ ↓ puis Entrée.\nTout ce qu'il contient sera effacé." 18 72 8 "${args[@]}") || continue
+		demander --title "Tout effacer ?" --defaultno --yes-button "Effacer et installer" --no-button "Retour" \
+			--yesno "Tout ce qu'il y a sur ce disque sera effacé :\n\n${noms[$DISQUE]} ($DISQUE)" 11 64 && break
+	done
+	note "disque : $DISQUE"
+}
+
+# ---------- 3. L'installation ----------
+partie() { case "$1" in *[0-9]) echo "${1}p$2" ;; *) echo "$1$2" ;; esac; }
+
+installer() {
+	local efi racine k
+	efi=$(partie "$DISQUE" 2)
+	racine=$(partie "$DISQUE" 3)
+	{
+		echo 2
+		swapoff -a
+		umount -R "$CIBLE" 2>/dev/null
+		for p in "$DISQUE"?*; do umount "$p" 2>/dev/null; done
+		wipefs -a -f "$DISQUE" >&2 || exit 11
+		sgdisk --zap-all "$DISQUE" >&2
+		sgdisk -n1:0:+1M -t1:EF02 -c1:bios -n2:0:+512M -t2:EF00 -c2:EFI -n3:0:0 -t3:8300 -c3:BHOST "$DISQUE" >&2 || exit 12
+		partx -u "$DISQUE" 2>/dev/null
+		udevadm settle
+		sleep 1
+		echo 5
+		mkfs.vfat -F 32 -n EFI "$efi" >&2 || exit 13
+		mkfs.ext4 -F -q -L BHOST -m 1 "$racine" >&2 || exit 13
+		mkdir -p "$CIBLE"
+		mount -o noatime "$racine" "$CIBLE" || exit 14
+		mkdir -p "$CIBLE/boot/efi"
+		mount "$efi" "$CIBLE/boot/efi" || exit 14
+		echo 8
+
+		# Le système : copie de la clé vers le disque (8 → 85 %).
+		unsquashfs -f -d "$CIBLE" -percentage "$MEDIA/bhost/systeme.squashfs" 2>/dev/null |
+			awk '/^[0-9]+$/ { print int(8 + $1 * 0.77); fflush() }'
+		[ -x "$CIBLE/usr/local/bin/bhost-agent" ] || exit 15
+		k=$(ls "$CIBLE/usr/lib/modules" | head -1)
+		cp "$MEDIA/boot/vmlinuz" "$CIBLE/boot/vmlinuz-$k" || exit 16
+		cp "$MEDIA/boot/initrd" "$CIBLE/boot/initrd.img-$k" || exit 16
+		ln -sf "vmlinuz-$k" "$CIBLE/boot/vmlinuz"
+		ln -sf "initrd.img-$k" "$CIBLE/boot/initrd.img"
+		echo 87
+
+		# Réglages propres à cette machine.
+		cat >"$CIBLE/etc/fstab" <<-FIN
+			# BHOST OS
+			UUID=$(blkid -s UUID -o value "$racine")  /          ext4  noatime,errors=remount-ro  0 1
+			UUID=$(blkid -s UUID -o value "$efi")  /boot/efi  vfat  umask=0077,noatime        0 1
+		FIN
+		: >"$CIBLE/etc/machine-id"
+		# Le Wi-Fi choisi ici reste valable sur la machine installée.
+		cp -a /etc/NetworkManager/system-connections/. "$CIBLE/etc/NetworkManager/system-connections/" 2>/dev/null
+		for f in /etc/netplan/90-NM-*.yaml; do [ -f "$f" ] && cp -a "$f" "$CIBLE/etc/netplan/"; done
+		echo 90
+
+		# Démarrage : BIOS (ancien) et UEFI, Secure Boot compris.
+		for d in dev dev/pts proc sys run; do mount --bind "/$d" "$CIBLE/$d"; done
+		[ -d /sys/firmware/efi/efivars ] && mount --bind /sys/firmware/efi/efivars "$CIBLE/sys/firmware/efi/efivars"
+		chroot "$CIBLE" grub-install --target=i386-pc "$DISQUE" >&2 || exit 17
+		chroot "$CIBLE" grub-install --target=x86_64-efi --efi-directory=/boot/efi --uefi-secure-boot --removable --no-nvram >&2 || exit 17
+		echo 95
+		chroot "$CIBLE" update-grub >&2 || exit 18
+		date -Iseconds >"$CIBLE/boot/bhost-installe"
+		cp "$JOURNAL" "$CIBLE/var/log/bhost-installeur.log" 2>/dev/null
+		sync
+		umount -R "$CIBLE" || sync
+		echo 100
+		exit 0
+	} | whiptail --backtitle "$TITRE" --title "Installation" --gauge "\nInstallation de BHOST OS…" 9 64 0 >"$TTY"
+	local code=${PIPESTATUS[0]}
+	[ "$code" -eq 0 ] || echec "L'installation s'est arrêtée (étape $code)."
+}
+
+# ---------- C'est parti ----------
+note "début"
+reseau
+choisir_disque
+installer
+note "fin"
+
+# Éjecter le DVD (machine virtuelle) ; une clé USB, il faut la retirer.
+source=$(findmnt -no SOURCE "$MEDIA" 2>/dev/null)
+umount -l "$MEDIA" 2>/dev/null
+case "$source" in /dev/sr*) eject "$source" 2>/dev/null ;; esac
+for s in 10 9 8 7 6 5 4 3 2 1; do
+	printf '\e[2J\e[H\n  \e[1;94mBHOST\e[0;97m OS est installé.\n\n  \e[97mRetire la clé USB.\n\n  \e[90mRedémarrage dans %s s…\e[0m\n' "$s" >"$TTY"
+	sleep 1
+done
+systemctl reboot

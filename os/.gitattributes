@@ -1,0 +1,3 @@
+# Scripts Linux : toujours en fins de ligne LF.
+* text eol=lf
+*.iso binary

@@ -1,0 +1,11 @@
+[Unit]
+Description=BHOST OS : processeur à pleine vitesse
+ConditionKernelCommandLine=!boot=bhost
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/bhost-performances
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+# BHOST OS : de quoi démarrer depuis la clé USB ou le DVD.
+overlay
+isofs
+vfat
+nls_cp437
+nls_utf8
+usb_storage
+uas

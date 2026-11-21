@@ -109,11 +109,23 @@ fn etat_machine(app: &AppHandle) -> Value {
     if systeme.is_none() {
         *systeme = System::new().ok();
     }
+    // Le processeur se mesure entre deux relevés : trop rapprochés (BHOST demande l'état souvent), ils donnent 0 %.
+    // On garde donc la dernière mesure tant qu'une seconde n'est pas passée.
+    static PROCESSEUR: Mutex<Option<(std::time::Instant, f64)>> = Mutex::new(None);
     let (total, processeur) = match systeme.as_mut() {
         Some(s) => {
             s.refresh_memory();
-            s.refresh_cpu_usage();
-            (s.total_memory(), Some((f64::from(s.global_cpu_usage())).round()))
+            let mut dernier = PROCESSEUR.lock().unwrap();
+            let valeur = match *dernier {
+                Some((quand, v)) if quand.elapsed() < std::time::Duration::from_secs(1) => v,
+                _ => {
+                    s.refresh_cpu_usage();
+                    let v = f64::from(s.global_cpu_usage()).round();
+                    *dernier = Some((std::time::Instant::now(), v));
+                    v
+                }
+            };
+            (s.total_memory(), Some(valeur))
         }
         None => (0, None),
     };

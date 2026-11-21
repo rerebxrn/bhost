@@ -1,0 +1,24 @@
+[Unit]
+Description=Agent BHOST
+ConditionKernelCommandLine=!boot=bhost
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+User=bhost
+Group=bhost
+Environment=BHOST_DOSSIER=/var/lib/bhost
+ExecStart=/usr/local/bin/bhost-agent
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=90
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/bhost
+PrivateTmp=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

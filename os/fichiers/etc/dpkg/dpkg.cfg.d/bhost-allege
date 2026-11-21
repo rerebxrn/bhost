@@ -1,0 +1,17 @@
+# BHOST OS : pas de documentation, ni de pilotes inutiles pour un serveur.
+path-exclude=/usr/share/doc/*
+path-exclude=/usr/share/man/*
+path-exclude=/usr/share/info/*
+path-exclude=/usr/lib/modules/*/kernel/sound/*
+path-exclude=/usr/lib/modules/*/kernel/drivers/media/*
+path-exclude=/usr/lib/modules/*/kernel/drivers/iio/*
+path-exclude=/usr/lib/modules/*/kernel/drivers/infiniband/*
+path-exclude=/usr/lib/modules/*/kernel/drivers/staging/*
+path-exclude=/usr/lib/firmware/nvidia/*
+path-exclude=/usr/lib/firmware/mellanox/*
+path-exclude=/usr/lib/firmware/mrvl/*
+path-exclude=/usr/lib/firmware/qcom/*
+path-exclude=/usr/lib/firmware/qed/*
+path-exclude=/usr/lib/firmware/netronome/*
+path-exclude=/usr/lib/firmware/amdgpu/*
+path-exclude=/usr/lib/firmware/intel/sof*

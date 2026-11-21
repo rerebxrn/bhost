@@ -499,13 +499,15 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
                     <span>Mémoire réservée</span>
                     <span className={"t2" + (ram < choisi.ram ? " warn" : "")}>
                       {ram < choisi.ram ? "Un peu juste. " : ""}
-                      {machine?.memoire
+                      {machine?.memoire && ramMax <= 1
+                        ? `${machine.nom} n'a que ${nombre(Math.round(machine.memoire.totalGo * 10) / 10)} Go : 1 Go au plus. 8 Go conseillés.`
+                        : machine?.memoire
                         ? `${machine.nom} a ${nombre(Math.round(machine.memoire.totalGo))} Go. Réservée seulement quand il est allumé.`
                         : `${infos ? `Ton PC a ${nombre(Math.round(infos.memoireGo))} Go. ` : ""}Conseillé : ${choisi.ram} Go.`}
                     </span>
                   </div>
                   <div className="ram">
-                    <Curseur min={1} max={ramMax} valeur={ram} onChange={setRam} etiquette="Mémoire" unite="Go" />
+                    {ramMax > 1 && <Curseur min={1} max={ramMax} valeur={ram} onChange={setRam} etiquette="Mémoire" unite="Go" />}
                     <b className="tnum">{ram} Go</b>
                   </div>
                 </div>

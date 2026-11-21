@@ -1,0 +1,13 @@
+#!/bin/sh
+# BHOST OS : un serveur Minecraft a besoin de la vitesse maximale d'un cœur, tout le temps.
+for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+	[ -w "$g" ] && echo performance >"$g" 2>/dev/null
+done
+for e in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
+	[ -w "$e" ] && echo performance >"$e" 2>/dev/null
+done
+# Les disques : pas d'économie d'énergie sur le lien SATA (évite des pauses).
+for l in /sys/class/scsi_host/host*/link_power_management_policy; do
+	[ -w "$l" ] && echo max_performance >"$l" 2>/dev/null
+done
+exit 0

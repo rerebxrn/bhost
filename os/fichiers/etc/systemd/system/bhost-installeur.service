@@ -1,0 +1,18 @@
+[Unit]
+Description=Installation de BHOST OS
+ConditionKernelCommandLine=boot=bhost
+After=systemd-user-sessions.service NetworkManager.service
+
+[Service]
+Type=idle
+ExecStart=/usr/local/sbin/bhost-installeur
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

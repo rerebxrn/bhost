@@ -1,0 +1,21 @@
+[Unit]
+Description=Écran de BHOST OS
+ConditionKernelCommandLine=!boot=bhost
+After=systemd-user-sessions.service bhost-agent.service
+
+[Service]
+Type=simple
+Environment=BHOST_DOSSIER=/var/lib/bhost TERM=linux
+ExecStart=/usr/local/bin/bhost-ecran
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Restart=always
+RestartSec=2
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

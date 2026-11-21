@@ -1,0 +1,37 @@
+# BHOST OS : démarrage depuis la clé USB (ou le DVD).
+# Le système est dans /bhost/systeme.squashfs ; on le monte en lecture seule,
+# avec une couche en mémoire par-dessus (rien n'est écrit sur la clé).
+# Utilisé quand le noyau reçoit « boot=bhost » (menu de la clé).
+
+bhost_chercher() {
+	for dev in /dev/sr* /dev/sd* /dev/vd* /dev/nvme*n* /dev/mmcblk*; do
+		[ -b "$dev" ] || continue
+		mount -r "$dev" /run/bhost/media 2>/dev/null || continue
+		if [ -f /run/bhost/media/bhost/systeme.squashfs ]; then
+			return 0
+		fi
+		umount /run/bhost/media
+	done
+	return 1
+}
+
+mountroot() {
+	for m in loop squashfs overlay isofs sr_mod cdrom usb_storage uas sd_mod vfat nls_cp437 nls_utf8 ahci nvme xhci_pci ehci_pci virtio_blk virtio_scsi; do
+		modprobe -q "$m" 2>/dev/null
+	done
+	mkdir -p /run/bhost/media /run/bhost/ro /run/bhost/rw
+
+	essais=0
+	until bhost_chercher; do
+		essais=$((essais + 1))
+		[ "$essais" -lt 60 ] || panic "BHOST OS : clé introuvable."
+		udevadm settle 2>/dev/null
+		sleep 1
+	done
+
+	mount -r -t squashfs -o loop /run/bhost/media/bhost/systeme.squashfs /run/bhost/ro || panic "BHOST OS : système illisible."
+	mount -t tmpfs -o size=50%,mode=755 tmpfs /run/bhost/rw
+	mkdir -p /run/bhost/rw/haut /run/bhost/rw/travail
+	mount -t overlay -o lowerdir=/run/bhost/ro,upperdir=/run/bhost/rw/haut,workdir=/run/bhost/rw/travail overlay "${rootmnt}" || panic "BHOST OS : montage impossible."
+	# /run (et donc /run/bhost) est déplacé dans le système à la fin de l'initramfs : l'installeur y retrouve la clé.
+}

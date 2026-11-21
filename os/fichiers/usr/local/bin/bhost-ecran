@@ -1,0 +1,263 @@
+#!/bin/bash
+# BHOST OS : l'écran de la machine (console texte, tty1).
+# Le code de la machine en grand, un QR code pour le téléphone et l'état de la machine.
+# Lancé par bhost-ecran.service. Rien à taper ici : tout se fait depuis BHOST.
+
+DOSSIER=${BHOST_DOSSIER:-/var/lib/bhost}
+export LC_ALL=C.UTF-8
+
+# Couleurs BHOST (Azur, nuit) : la console Linux accepte 16 couleurs redéfinissables.
+palette() {
+	printf '\e]P00D131B'   # 0 fond : nuit graphite bleutée
+	printf '\e]P1E5484D'   # 1 rouge (alertes)
+	printf '\e]P27FB2E0'   # 2 azur clair (BHOST n'a pas de vert)
+	printf '\e]P3F0A04B'   # 3 orange (attention)
+	printf '\e]P44DA3E8'   # 4 azur
+	printf '\e]P5E8D9B5'   # 5 sable
+	printf '\e]P6A9C7E6'   # 6 bleu pâle
+	printf '\e]P7F2F5F9'   # 7 blanc
+	printf '\e]P8738196'   # 8 gris (textes secondaires)
+	printf '\e]P9E5484D\e]PA7FB2E0\e]PBF0A04B\e]PC4DA3E8\e]PDE8D9B5\e]PEA9C7E6\e]PFFFFFFF'
+}
+
+# Police 5 × 7 des caractères du code (alphabet sans 0 O 1 I).
+declare -A P=(
+	[2]="01110 10001 00001 00010 00100 01000 11111"
+	[3]="11111 00010 00100 00010 00001 10001 01110"
+	[4]="00010 00110 01010 10010 11111 00010 00010"
+	[5]="11111 10000 11110 00001 00001 10001 01110"
+	[6]="00110 01000 10000 11110 10001 10001 01110"
+	[7]="11111 00001 00010 00100 01000 01000 01000"
+	[8]="01110 10001 10001 01110 10001 10001 01110"
+	[9]="01110 10001 10001 01111 00001 00010 01100"
+	[A]="01110 10001 10001 11111 10001 10001 10001"
+	[B]="11110 10001 10001 11110 10001 10001 11110"
+	[C]="01110 10001 10000 10000 10000 10001 01110"
+	[D]="11100 10010 10001 10001 10001 10010 11100"
+	[E]="11111 10000 10000 11110 10000 10000 11111"
+	[F]="11111 10000 10000 11110 10000 10000 10000"
+	[G]="01110 10001 10000 10111 10001 10001 01111"
+	[H]="10001 10001 10001 11111 10001 10001 10001"
+	[J]="00111 00010 00010 00010 00010 10010 01100"
+	[K]="10001 10010 10100 11000 10100 10010 10001"
+	[L]="10000 10000 10000 10000 10000 10000 11111"
+	[M]="10001 11011 10101 10101 10001 10001 10001"
+	[N]="10001 10001 11001 10101 10011 10001 10001"
+	[P]="11110 10001 10001 11110 10000 10000 10000"
+	[Q]="01110 10001 10001 10001 10101 10010 01101"
+	[R]="11110 10001 10001 11110 10100 10010 10001"
+	[S]="01111 10000 10000 01110 00001 00001 11110"
+	[T]="11111 00100 00100 00100 00100 00100 00100"
+	[U]="10001 10001 10001 10001 10001 10001 01110"
+	[V]="10001 10001 10001 10001 10001 01010 00100"
+	[W]="10001 10001 10001 10101 10101 10101 01010"
+	[X]="10001 10001 01010 00100 01010 10001 10001"
+	[Y]="10001 10001 10001 01010 00100 00100 00100"
+	[Z]="11111 00001 00010 00100 01000 10000 11111"
+	[-]="000 000 000 111 000 000 000"
+)
+
+# Le texte en grand : chaque pixel = 2 cases (carré), 2 cases entre les lettres.
+gros() {
+	local texte=$1 marge=$2 r c x bits ligne
+	for r in 0 1 2 3 4 5 6; do
+		ligne="\e[${marge}G"
+		for ((c = 0; c < ${#texte}; c++)); do
+			read -ra bits <<<"${P[${texte:c:1}]}"
+			x=${bits[r]}
+			x=${x//1/$'\e[47m  '}
+			x=${x//0/$'\e[40m  '}
+			ligne+="$x"$'\e[40m    '
+		done
+		printf '%b\e[0m\n' "$ligne"
+	done
+}
+
+largeur_gros() {
+	local texte=$1 c n=0
+	for ((c = 0; c < ${#texte}; c++)); do
+		[ "${texte:c:1}" = "-" ] && n=$((n + 3 + 2)) || n=$((n + 5 + 2))
+	done
+	echo $((n * 2 - 4))
+}
+
+# QR code : deux rangées de modules par ligne (▀ : haut en couleur du texte, bas en couleur du fond).
+# Fond clair, modules sombres : se lit avec tous les téléphones.
+QR=()
+preparer_qr() {
+	local lignes=() l i j haut bas sortie
+	mapfile -t lignes < <(qrencode -t ASCII -m 2 -l M "HTTPS://BHOST.APP/M/$1" 2>/dev/null)
+	QR=()
+	QRW=0
+	[ ${#lignes[@]} -gt 0 ] || return
+	local n=${#lignes[@]} w=$((${#lignes[0]} / 2))
+	QRW=$w
+	for ((i = 0; i < n; i += 2)); do
+		sortie=""
+		for ((j = 0; j < w; j++)); do
+			haut=${lignes[i]:j*2:1}
+			bas=" "
+			[ $((i + 1)) -lt $n ] && bas=${lignes[i + 1]:j*2:1}
+			[ "$haut" = "#" ] && haut=0 || haut=7
+			[ "$bas" = "#" ] && bas=0 || bas=7
+			sortie+=$'\e[3'"$haut"$';4'"$bas"$'m▀'
+		done
+		QR+=("$sortie"$'\e[0m')
+	done
+}
+
+# Une valeur en Go, avec une virgule (« 6,4 »).
+go() { awk -v o="$1" 'BEGIN { v = o / 1073741824; f = (v < 10) ? "%.1f" : "%.0f"; s = sprintf(f, v); sub(/\./, ",", s); print s }'; }
+
+PRECEDENT=""
+processeur() {
+	local cpu a b c d e f g h total inactif
+	read -r cpu a b c d e f g h _ </proc/stat
+	total=$((a + b + c + d + e + f + g + h))
+	inactif=$((d + e))
+	if [ -n "$PRECEDENT" ]; then
+		set -- $PRECEDENT
+		local dt=$((total - $1)) di=$((inactif - $2))
+		[ "$dt" -gt 0 ] && echo $(((100 * (dt - di)) / dt)) || echo 0
+	else
+		echo 0
+	fi
+	PRECEDENT="$total $inactif"
+}
+
+temperature() {
+	local h nom t max=""
+	for h in /sys/class/hwmon/hwmon*; do
+		nom=$(cat "$h/name" 2>/dev/null)
+		case "$nom" in coretemp | k10temp | zenpower | cpu_thermal | acpitz) ;; *) continue ;; esac
+		for t in "$h"/temp*_input; do
+			[ -r "$t" ] || continue
+			t=$(($(cat "$t") / 1000))
+			[ -z "$max" ] || [ "$t" -gt "$max" ] && max=$t
+		done
+		[ "$nom" != acpitz ] && [ -n "$max" ] && break
+	done
+	echo "$max"
+}
+
+# Le nom d'une ligne, calé sur 12 caractères (les accents comptent pour un).
+nom() { printf '\e[90m%s%*s' "$1" $((12 - ${#1})) ''; }
+
+etat() {
+	local total allumes mem_total mem_dispo utilise taille cpu temp ip lien relais couleur
+	total=$(grep -o '"jar"' "$DOSSIER/serveurs.json" 2>/dev/null | wc -l)
+	allumes=$(pgrep -u bhost -x java 2>/dev/null | wc -l)
+	mem_total=$(awk '/^MemTotal/ { print $2 * 1024 }' /proc/meminfo)
+	mem_dispo=$(awk '/^MemAvailable/ { print $2 * 1024 }' /proc/meminfo)
+	read -r utilise taille < <(df -B1 --output=used,size "$DOSSIER" 2>/dev/null | tail -1)
+	cpu=$(processeur)
+	temp=$(temperature)
+	ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1) }')
+	lien=$(nmcli -t -f TYPE,STATE device 2>/dev/null | awk -F: '$2 == "connected" && ($1 == "ethernet" || $1 == "wifi") { print $1; exit }')
+	if ss -Htn state established '( dport = :4443 )' 2>/dev/null | grep -q .; then
+		relais=$'\e[94mEn ligne'
+	elif [ -n "$ip" ]; then
+		relais=$'\e[33mConnexion au relais…'
+	else
+		relais=$'\e[91mSans Internet'
+	fi
+
+	LIGNES=()
+	if [ "$total" -eq 0 ]; then
+		LIGNES+=("$(nom 'Serveurs')"$'\e[97mAucun pour l\'instant')
+	else
+		LIGNES+=("$(printf '%s\e[97m%s\e[90m · %s allumé%s' "$(nom 'Serveurs')" "$total" "$allumes" "$([ "$allumes" -gt 1 ] && echo s)")")
+	fi
+	LIGNES+=("$(printf '%s\e[97m%s sur %s Go' "$(nom 'Mémoire')" "$(go $((mem_total - mem_dispo)))" "$(go "$mem_total")")")
+	if [ -n "$taille" ] && [ "$taille" -gt 0 ]; then
+		local pc=$((100 * utilise / taille))
+		couleur=97
+		[ "$pc" -ge 75 ] && couleur=33
+		[ "$pc" -ge 90 ] && couleur=91
+		LIGNES+=("$(printf '%s\e[%sm%s sur %s Go' "$(nom 'Stockage')" "$couleur" "$(go "$utilise")" "$(go "$taille")")")
+	fi
+	if [ -n "$temp" ]; then
+		couleur=97
+		[ "$temp" -ge 70 ] && couleur=33
+		[ "$temp" -ge 80 ] && couleur=91
+		LIGNES+=("$(printf '%s\e[97m%s %%\e[90m · \e[%sm%s °C' "$(nom 'Processeur')" "$cpu" "$couleur" "$temp")")
+	else
+		LIGNES+=("$(printf '%s\e[97m%s %%' "$(nom 'Processeur')" "$cpu")")
+	fi
+	case "$lien" in
+		wifi) lien=" (Wi-Fi)" ;;
+		ethernet) lien=" (câble)" ;;
+	esac
+	LIGNES+=("$(printf '%s\e[97m%s%s' "$(nom 'Adresse')" "${ip:-–}" "$lien")")
+	LIGNES+=("$(printf '%s%s' "$(nom 'État')" "$relais")")
+}
+
+dessiner() {
+	local code=$1 colonnes lignes marge l i
+	read -r lignes colonnes < <(stty size 2>/dev/null || echo "25 80")
+	printf '\e[H\e[40m'
+	# Centré en hauteur (à peu près) sur les grands écrans.
+	local contenu=$((14 + ${#QR[@]} + 2))
+	[ "$(largeur_gros "${code:0:4}-${code:4:4}")" -le $((colonnes - 4)) ] || contenu=$((contenu + 8))
+	local vide=$(((lignes - contenu) / 3))
+	for ((i = 0; i < vide; i++)); do printf '\e[K\n'; done
+
+	printf '\n\e[3G\e[1;94mBHOST\e[0;97m OS\e[K\n\n'
+	if [ -z "$code" ]; then
+		printf '\e[3G\e[97mPréparation de la machine…\e[K\n\e[J'
+		return
+	fi
+
+	printf '\e[3G\e[90mCode de la machine\e[K\n\n'
+	local grand="${code:0:4}-${code:4:4}"
+	if [ "$(largeur_gros "$grand")" -le $((colonnes - 4)) ]; then
+		gros "$grand" 3
+	else
+		gros "${code:0:4}" 3
+		printf '\n'
+		gros "${code:4:4}" 3
+	fi
+	printf '\n\e[3G\e[97mDans BHOST : \e[94mMachine dédiée +\e[97m, puis tape ce code.\e[K\n'
+	printf '\e[3G\e[90mGarde-le pour toi : il donne accès à tes serveurs.\e[K\n\n'
+
+	etat
+	# L'état à gauche, le QR code à droite (s'il y a la place), sinon le QR code dessous.
+	local largeur_qr=${QRW:-0}
+	local col_qr=$((colonnes - largeur_qr - 2))
+	local haut=$((${#QR[@]} + 2))
+	[ ${#LIGNES[@]} -gt $haut ] && haut=${#LIGNES[@]}
+	for ((i = 0; i < haut; i++)); do
+		printf '\e[3G%s\e[0;40m\e[K' "${LIGNES[i]}"
+		if [ "$largeur_qr" -gt 0 ] && [ "$col_qr" -gt 52 ]; then
+			if [ "$i" -eq 0 ]; then
+				printf '\e[%sG\e[97mSur ton téléphone' "$col_qr"
+			elif [ "$i" -ge 2 ] && [ $((i - 2)) -lt ${#QR[@]} ]; then
+				printf '\e[%sG%s\e[40m' "$col_qr" "${QR[i - 2]}"
+			fi
+		fi
+		printf '\n'
+	done
+	printf '\e[J'
+}
+
+
+# Police avec les blocs (▀) ; plus grande sur un très grand écran.
+setfont /usr/share/consolefonts/FullGreek-TerminusBold16.psf.gz 2>/dev/null
+read -r _ c < <(stty size 2>/dev/null || echo "25 80")
+[ "${c:-80}" -ge 200 ] && setfont /usr/share/consolefonts/FullGreek-TerminusBold32x16.psf.gz 2>/dev/null
+palette
+printf '\e[?25l\e[40m\e[2J'
+setterm --blank 0 --powersave off 2>/dev/null
+
+CODE_QR=""
+while true; do
+	code=$(tr -cd '23456789ABCDEFGHJKLMNPQRSTUVWXYZ' <"$DOSSIER/machine-code.txt" 2>/dev/null)
+	[ ${#code} -eq 8 ] || code=""
+	if [ -n "$code" ] && [ "$code" != "$CODE_QR" ]; then
+		preparer_qr "$code"
+		CODE_QR=$code
+		printf '\e[2J'
+	fi
+	dessiner "$code"
+	sleep 3
+done

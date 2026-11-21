@@ -1,0 +1,4 @@
+# BHOST OS : la même image de démarrage pour la clé et pour le disque (tous les pilotes courants).
+MODULES=most
+BUSYBOX=y
+COMPRESS=zstd

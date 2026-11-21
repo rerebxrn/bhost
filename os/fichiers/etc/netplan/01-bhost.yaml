@@ -1,0 +1,4 @@
+# BHOST OS : NetworkManager gère le câble (tout seul) et le Wi-Fi.
+network:
+  version: 2
+  renderer: NetworkManager
