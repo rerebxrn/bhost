@@ -9,7 +9,7 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager};
+use crate::hote::{AppHandle, Emitter, Manager};
 
 /// Ce que l'onglet garde en mémoire.
 pub struct EtatCatalogue {
@@ -463,7 +463,7 @@ fn trouver(c: &Contexte, fichier: &str) -> Result<Fichier, String> {
     ext::lister(&c.dossier, c.genre).into_iter().find(|f| f.nom == fichier).ok_or_else(|| "Ce fichier n'existe plus.".to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn extensions_serveur(app: AppHandle, id: String, genre: Option<String>) -> Result<VueExtensions, String> {
     a_part(move || {
         let c = contexte(&app, &id, genre.as_deref())?;
@@ -482,7 +482,7 @@ pub struct Page {
 }
 
 /// Ajouter : ce que le catalogue propose pour ce logiciel et cette version, page par page (`page` 0, 1, 2…).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn chercher_extensions(app: AppHandle, id: String, texte: String, categorie: Option<String>, tri: Option<String>, page: Option<u64>, genre: Option<String>) -> Result<Page, String> {
     a_part(move || {
         let c = contexte(&app, &id, genre.as_deref())?;
@@ -605,7 +605,7 @@ pub struct MiseAJour {
 }
 
 /// Installe un projet du catalogue, avec ce qu'il lui faut (dépendances obligatoires, 3 niveaux au plus).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn installer_extension(app: AppHandle, id: String, projet: String, genre: Option<String>) -> Result<Installation, String> {
     a_part(move || {
         if !ext::id_valide(&projet) {
@@ -706,7 +706,7 @@ fn installer(app: &AppHandle, c: &Contexte, projet: &str) -> Result<Installation
 }
 
 /// Active ou coupe une extension.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn activer_extension(app: AppHandle, id: String, fichier: String, actif: bool, genre: Option<String>, forcer: Option<bool>) -> Result<VueExtensions, String> {
     a_part(move || {
         let c = contexte(&app, &id, genre.as_deref())?;
@@ -725,7 +725,7 @@ pub async fn activer_extension(app: AppHandle, id: String, fichier: String, acti
 }
 
 /// Désinstalle une extension : le fichier va à la Corbeille.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn desinstaller_extension(app: AppHandle, id: String, fichier: String, genre: Option<String>, forcer: Option<bool>) -> Result<VueExtensions, String> {
     a_part(move || {
         let c = contexte(&app, &id, genre.as_deref())?;
@@ -779,7 +779,7 @@ fn vue_bedrock(app: &AppHandle, s: &Serveur, note: Option<String>) -> VueBedrock
     }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn bedrock_serveur(app: AppHandle, id: String) -> Result<VueBedrock, String> {
     let s = serveur_de(&app.state::<Etat>(), &id)?;
     Ok(vue_bedrock(&app, &s, None))
@@ -805,7 +805,7 @@ fn telecharger_geysermc(app: &AppHandle, c: &Contexte, projet: &str) -> Result<S
 /// Autorise (ou non) les joueurs Bedrock : installe ou rallume Geyser et Floodgate (et ViaVersion pour les plugins),
 /// choisit un port, coupe la signature du chat (sinon les joueurs Bedrock ne peuvent pas parler).
 /// Couper : Geyser et Floodgate sont seulement coupés (« .disabled »), pour revenir vite.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn regler_bedrock(app: AppHandle, id: String, actif: bool) -> Result<VueBedrock, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -877,14 +877,14 @@ pub async fn regler_bedrock(app: AppHandle, id: String, actif: bool) -> Result<V
 }
 
 /// Le monde de ce serveur ne se charge plus : les datapacks qui lui manquent (pour l'Accueil).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn datapacks_manquants(app: AppHandle, id: String) -> Vec<Manquant> {
     manquants(&app, &id)
 }
 
 /// Remet un datapack que le monde attend : on le rallume s'il est coupé, sinon on le réinstalle
 /// depuis le catalogue (le projet noté quand il a été retiré, sinon une recherche par son nom).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn remettre_datapack(app: AppHandle, id: String, fichier: String) -> Result<String, String> {
     if !ext::nom_fichier_valide(&fichier) {
         return Err("Fichier inconnu.".into());
@@ -947,7 +947,7 @@ pub async fn remettre_datapack(app: AppHandle, id: String, fichier: String) -> R
 }
 
 /// Met à jour des extensions (toutes celles qui ont une mise à jour si `fichiers` est vide).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn mettre_a_jour_extensions(app: AppHandle, id: String, fichiers: Vec<String>, genre: Option<String>) -> Result<MiseAJour, String> {
     a_part(move || {
         let c = contexte(&app, &id, genre.as_deref())?;

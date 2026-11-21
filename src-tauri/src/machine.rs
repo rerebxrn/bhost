@@ -16,7 +16,7 @@ pub struct CleUsb {
 }
 
 /// Les disques amovibles branchés (clés USB), pour l'étape « Prépare la clé USB ».
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn lister_cles_usb() -> Vec<CleUsb> {
     let go = |octets: u64| (octets as f64 / 1_000_000_000.0 * 10.0).round() / 10.0;
     let Ok(disques) = sysinfo::Disks::new_with_refreshed_list() else {
@@ -50,7 +50,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, State};
+use crate::hote::{AppHandle, Emitter, State};
 
 /// Les caractères possibles d'un code : pas de 0, O, 1 ni I (on les confond en recopiant).
 pub const ALPHABET: &str = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -141,6 +141,19 @@ fn vue(m: &MachineLiee) -> MachineVue {
         temperature: None,
         ip: None,
     };
+    // Une vraie machine : en ligne si BHOST la pilote en ce moment ; ses mesures viennent d'« etat_machine ».
+    if lien_vivant(&m.id) {
+        v.etat = "en-ligne";
+        if let Some(e) = MESURES.lock().unwrap().get(&m.id) {
+            let f = |x: &Value, k: &str| x.get(k).and_then(Value::as_f64);
+            v.disque = e.get("disque").and_then(|d| Some(Jauge { utilise_go: f(d, "utiliseGo"), reservee_go: None, total_go: f(d, "totalGo")? }));
+            v.memoire = e.get("memoire").and_then(|d| Some(Jauge { utilise_go: None, reservee_go: f(d, "reserveeGo"), total_go: f(d, "totalGo")? }));
+            v.processeur = f(e, "processeur");
+            v.temperature = f(e, "temperature");
+            v.serveurs = e.get("serveurs").and_then(Value::as_u64).unwrap_or(0) as u32;
+            v.ip = e.get("ip").and_then(Value::as_str).map(str::to_string);
+        }
+    }
     if cfg!(debug_assertions) && m.id == TEST_EN_LIGNE.1 {
         // La température monte et descend toute seule (54 → 86 °C) pour voir le gris, l'orange et le rouge.
         let s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -314,14 +327,183 @@ fn prevenir(app: &AppHandle, liste: &[MachineLiee]) {
     let _ = app.emit("machines", liste.iter().map(vue).collect::<Vec<_>>());
 }
 
-/// Les machines reliées à ce PC.
-#[tauri::command]
-pub fn machines_liees(etat: State<crate::Etat>) -> Vec<MachineVue> {
-    lire(&etat.dossier).iter().map(vue).collect()
+/// Les machines reliées à ce PC. BHOST en profite pour se (re)connecter à celles qui ne le sont pas
+/// (au plus une fois toutes les 15 s chacune) et pour relire leurs mesures. Hors du fil de l'interface.
+#[cfg_attr(feature = "bureau", tauri::command)]
+pub async fn machines_liees(app: AppHandle, etat: State<'_, crate::Etat>) -> Result<Vec<MachineVue>, String> {
+    let dossier = etat.dossier.clone();
+    crate::hote::async_runtime::spawn_blocking(move || {
+        let liste = lire(&dossier);
+        for m in liste.iter().filter(|m| machine_de_test(&m.code).is_none()) {
+            if let Ok(l) = lien(&app, m) {
+                if let Ok(e) = l.appeler("etat_machine", Value::Null, Duration::from_secs(5)) {
+                    MESURES.lock().unwrap().insert(m.id.clone(), e);
+                }
+            }
+        }
+        liste.iter().map(vue).collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+// ---- Piloter une machine (par le relais) ----
+// BHOST envoie « PILOTER <code> <id> » au relais, qui le branche sur la machine. Ensuite, les commandes
+// partent en JSON (une ligne : {"n", "cmd", "args"}) et les réponses reviennent ({"n", "ok"|"err"}),
+// mêlées aux nouvelles de la machine ({"evt", "data"}) que BHOST renvoie telles quelles à l'interface
+// (« statut », « console »… : les mêmes que pour les serveurs de ce PC).
+
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, mpsc};
+use std::time::Instant;
+
+/// Une connexion ouverte vers une machine.
+struct Lien {
+    ecriture: Mutex<std::net::TcpStream>,
+    attentes: Mutex<HashMap<u64, mpsc::Sender<Result<Value, Value>>>>,
+    compteur: AtomicU64,
+    vivant: AtomicBool,
+}
+
+static LIENS: Mutex<Option<HashMap<String, Arc<Lien>>>> = Mutex::new(None);
+/// Le dernier essai de connexion à chaque machine (on ne réessaie pas plus d'une fois toutes les 15 s).
+static ESSAIS: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
+/// Les dernières mesures de chaque machine (« etat_machine »).
+static MESURES: std::sync::LazyLock<Mutex<HashMap<String, Value>>> = std::sync::LazyLock::new(Default::default);
+/// Les machines dont le code a changé (Régénérer le code) : on arrête d'essayer, il faut la relier à nouveau.
+static CODE_CHANGE: std::sync::LazyLock<Mutex<HashSet<String>>> = std::sync::LazyLock::new(Default::default);
+
+fn lien_vivant(id: &str) -> bool {
+    LIENS.lock().unwrap().as_ref().and_then(|l| l.get(id)).is_some_and(|l| l.vivant.load(Ordering::Relaxed))
+}
+
+impl Lien {
+    /// Envoie une commande et attend sa réponse (au plus `delai`).
+    fn appeler(&self, commande: &str, args: Value, delai: Duration) -> Result<Value, Value> {
+        let hors_ligne = || Value::String("La machine ne répond pas. Vérifie qu'elle est allumée.".into());
+        if !self.vivant.load(Ordering::Relaxed) {
+            return Err(hors_ligne());
+        }
+        let n = self.compteur.fetch_add(1, Ordering::Relaxed);
+        let (envoi, reception) = mpsc::channel();
+        self.attentes.lock().unwrap().insert(n, envoi);
+        let ligne = serde_json::json!({ "n": n, "cmd": commande, "args": args }).to_string() + "\n";
+        if self.ecriture.lock().unwrap().write_all(ligne.as_bytes()).is_err() {
+            self.attentes.lock().unwrap().remove(&n);
+            return Err(hors_ligne());
+        }
+        let reponse = reception.recv_timeout(delai);
+        self.attentes.lock().unwrap().remove(&n);
+        reponse.unwrap_or_else(|_| Err(hors_ligne()))
+    }
+}
+
+/// La connexion à cette machine : celle qui est ouverte, ou une nouvelle.
+fn lien(app: &AppHandle, m: &MachineLiee) -> Result<Arc<Lien>, String> {
+    if let Some(l) = LIENS.lock().unwrap().get_or_insert_with(HashMap::new).get(&m.id).filter(|l| l.vivant.load(Ordering::Relaxed)) {
+        return Ok(l.clone());
+    }
+    if CODE_CHANGE.lock().unwrap().contains(&m.id) {
+        return Err("Le code de cette machine a changé. Retire-la, puis ajoute-la avec son nouveau code.".into());
+    }
+    {
+        let mut essais = ESSAIS.lock().unwrap();
+        let essais = essais.get_or_insert_with(HashMap::new);
+        if essais.get(&m.id).is_some_and(|t| t.elapsed() < Duration::from_secs(15)) {
+            return Err("La machine ne répond pas. Vérifie qu'elle est allumée.".into());
+        }
+        essais.insert(m.id.clone(), Instant::now());
+    }
+    let l = ouvrir_lien(app, m)?;
+    LIENS.lock().unwrap().get_or_insert_with(HashMap::new).insert(m.id.clone(), l.clone());
+    Ok(l)
+}
+
+fn ouvrir_lien(app: &AppHandle, m: &MachineLiee) -> Result<Arc<Lien>, String> {
+    let injoignable = || "Le relais ne répond pas. Vérifie ta connexion à Internet.".to_string();
+    let adresse = crate::tunnel::adresse_relais().map_err(|_| injoignable())?;
+    let mut flux = crate::tunnel::connecter(adresse).map_err(|_| injoignable())?;
+    let _ = flux.set_read_timeout(Some(Duration::from_secs(15)));
+    let piloter = protocole::ecrire_de_bhost(&protocole::DeBhost::Piloter { code: m.code.clone(), id: m.id.clone() });
+    flux.write_all(format!("BHOST {}\n{piloter}", protocole::VERSION).as_bytes()).map_err(|_| injoignable())?;
+    let mut lecteur = BufReader::new(flux.try_clone().map_err(|_| injoignable())?);
+    let mut ligne = String::new();
+    std::io::Read::take(&mut lecteur, 300).read_line(&mut ligne).map_err(|_| injoignable())?;
+    match protocole::lire_du_relais(&ligne) {
+        Some(DuRelais::Ok { adresse }) if adresse == m.id => {}
+        Some(DuRelais::Non { raison }) if raison == "code" => {
+            CODE_CHANGE.lock().unwrap().insert(m.id.clone());
+            return Err("Le code de cette machine a changé. Retire-la, puis ajoute-la avec son nouveau code.".into());
+        }
+        Some(DuRelais::Non { raison }) if raison == "bloque" => return Err("Trop de codes faux. Réessaie dans 15 minutes.".into()),
+        Some(DuRelais::Non { raison }) if raison == "version" => return Err("Mets BHOST à jour pour piloter cette machine.".into()),
+        _ => return Err("La machine ne répond pas. Vérifie qu'elle est allumée.".into()),
+    }
+    // Les commandes peuvent être longues (création d'un serveur) : plus de délai de lecture.
+    let _ = flux.set_read_timeout(None);
+    let l = Arc::new(Lien { ecriture: Mutex::new(flux), attentes: Mutex::new(HashMap::new()), compteur: AtomicU64::new(1), vivant: AtomicBool::new(true) });
+    let (lu, app, id) = (l.clone(), app.clone(), m.id.clone());
+    std::thread::spawn(move || {
+        // 64 Mo au plus par ligne (une réponse avec un gros fichier).
+        loop {
+            let mut ligne = String::new();
+            match std::io::Read::take(&mut lecteur, 64 * 1024 * 1024).read_line(&mut ligne) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            let Ok(v) = serde_json::from_str::<Value>(&ligne) else { continue };
+            if let Some(n) = v.get("n").and_then(Value::as_u64) {
+                let reponse = match v.get("err") {
+                    Some(e) => Err(e.clone()),
+                    None => Ok(v.get("ok").cloned().unwrap_or(Value::Null)),
+                };
+                if let Some(attente) = lu.attentes.lock().unwrap().remove(&n) {
+                    let _ = attente.send(reponse);
+                }
+            } else if let (Some(evt), Some(data)) = (v.get("evt").and_then(Value::as_str), v.get("data")) {
+                // « notification » : la machine n'a pas d'écran, c'est ce PC qui l'affiche.
+                if evt == "notification" {
+                    let texte = |k: &str| data.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
+                    crate::hote::notifier(&app, &texte("titre"), &texte("texte"), false);
+                } else {
+                    let _ = app.emit(evt, data.clone());
+                }
+            }
+        }
+        // La connexion est tombée : les commandes en attente échouent, l'interface voit la machine hors ligne.
+        lu.vivant.store(false, Ordering::Relaxed);
+        lu.attentes.lock().unwrap().clear();
+        if let Some(etat) = crate::hote::Manager::try_state::<crate::Etat>(&app) {
+            prevenir(&app, &lire(&etat.dossier));
+        }
+        let _ = id;
+    });
+    Ok(l)
+}
+
+/// Une commande pour une machine dédiée (les mêmes que pour ce PC) : `api.ts` l'envoie ici
+/// quand le serveur est sur une machine.
+#[cfg_attr(feature = "bureau", tauri::command)]
+pub async fn machine_appel(app: AppHandle, machine: String, commande: String, args: Value) -> Result<Value, Value> {
+    crate::hote::async_runtime::spawn_blocking(move || {
+        let etat = crate::hote::Manager::state::<crate::Etat>(&app);
+        let m = lire(&etat.dossier).into_iter().find(|m| m.id == machine).ok_or_else(|| Value::String("Cette machine n'est plus reliée.".into()))?;
+        let l = lien(&app, &m).map_err(Value::String)?;
+        // Une création de serveur ou une sauvegarde peut durer : jusqu'à 30 minutes.
+        let r = l.appeler(&commande, args, Duration::from_secs(30 * 60));
+        if !l.vivant.load(Ordering::Relaxed) {
+            prevenir(&app, &lire(&etat.dossier));
+        }
+        r
+    })
+    .await
+    .map_err(|e| Value::String(e.to_string()))?
 }
 
 /// Relie une machine avec son code. Le relais est contacté hors du fil de l'interface.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn lier_machine(app: AppHandle, code: String, etat: State<'_, crate::Etat>) -> Result<MachineVue, String> {
     let code = nettoyer_code(&code).ok_or("Ce code n'est pas valide. Vérifie-le.")?;
     let dossier = etat.dossier.clone();
@@ -329,7 +511,7 @@ pub async fn lier_machine(app: AppHandle, code: String, etat: State<'_, crate::E
         Some(id) => id.to_string(),
         None => {
             let c = code.clone();
-            tauri::async_runtime::spawn_blocking(move || demander_au_relais(&c)).await.map_err(|_| "Ça n'a pas marché.".to_string())??
+            crate::hote::async_runtime::spawn_blocking(move || demander_au_relais(&c)).await.map_err(|_| "Ça n'a pas marché.".to_string())??
         }
     };
     let _une_seule = VERROU.lock().unwrap();
@@ -341,7 +523,7 @@ pub async fn lier_machine(app: AppHandle, code: String, etat: State<'_, crate::E
 }
 
 /// Retire une machine de BHOST (ses serveurs continuent de tourner dessus).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn delier_machine(app: AppHandle, id: String, etat: State<crate::Etat>) -> Result<(), String> {
     let _une_seule = VERROU.lock().unwrap();
     let mut liste = lire(&etat.dossier);
@@ -352,7 +534,7 @@ pub fn delier_machine(app: AppHandle, id: String, etat: State<crate::Etat>) -> R
 }
 
 /// Donne un autre nom à une machine (« Salon », « Grenier »…).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn renommer_machine(app: AppHandle, id: String, nom: String, etat: State<crate::Etat>) -> Result<(), String> {
     let nom = nom_valide(&nom)?;
     let _une_seule = VERROU.lock().unwrap();

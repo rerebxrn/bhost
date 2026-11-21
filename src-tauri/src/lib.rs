@@ -1,8 +1,15 @@
 // Point d'entrée de la partie Rust de BHOST.
+// L'agent de BHOST OS (sans « bureau ») n'utilise pas tout ce qui sert à la fenêtre : pas d'avertissement pour ça.
+#![cfg_attr(not(feature = "bureau"), allow(dead_code, unused_imports, unexpected_cfgs))]
 // Ici : les commandes que l'interface peut appeler (avec invoke),
 // et les nouvelles que Rust lui envoie (events « statut », « console », « joueurs », « mesure », « tps », « automatisations », « demandes »).
 
 mod acces;
+#[cfg(not(feature = "bureau"))]
+pub mod agent;
+#[cfg(not(feature = "bureau"))]
+pub mod pilotage;
+mod hote;
 mod automatique;
 mod bedrock;
 mod automatisations;
@@ -12,11 +19,13 @@ mod creation;
 mod corbeille;
 mod demandes;
 #[cfg(windows)]
+#[cfg(feature = "bureau")]
 mod extinction;
 mod extensions;
 mod fiche;
 mod fichiers;
 mod garde;
+#[cfg(feature = "bureau")]
 mod icone;
 mod icone_jeu;
 mod installeur;
@@ -24,6 +33,7 @@ mod java;
 mod machine;
 mod joueurs;
 mod listes;
+#[cfg(feature = "bureau")]
 mod mise_a_jour;
 mod mondes;
 mod nbt;
@@ -39,6 +49,7 @@ mod spigot;
 mod tetes;
 mod tps;
 mod tunnel;
+#[cfg(feature = "bureau")]
 mod zone;
 
 use processus::{Processus, Signal};
@@ -49,7 +60,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
+use hote::{AppHandle, Emitter, Manager, State};
+#[cfg(feature = "bureau")]
+use tauri::RunEvent;
 
 /// Réglages › Notifications : BHOST peut envoyer des notifications Windows.
 pub(crate) static NOTIFICATIONS: AtomicBool = AtomicBool::new(true);
@@ -74,6 +87,7 @@ struct Etat {
     /// De quoi aller sur Internet (têtes des joueurs…).
     reseau: ureq::Agent,
     /// Les icônes posées sur la fenêtre (elles suivent le thème).
+    #[cfg(feature = "bureau")]
     icones: Mutex<icone::Icones>,
     /// Le fichier où la liste est enregistrée : %APPDATA%\BHOST\serveurs.json
     fichier: PathBuf,
@@ -337,11 +351,7 @@ fn suivre_refus(app: &AppHandle, id: &str, ligne: &str) {
             let demande = etat.demandes.lock().unwrap().trouver(id, &nom).cloned();
             dire_demandes(app, id, demande);
             // BHOST est en arrière-plan : une notification Windows, pour ne pas la rater.
-            let devant = app.get_webview_window("main").and_then(|f| f.is_focused().ok()).unwrap_or(false);
-            if !devant && NOTIFICATIONS.load(Ordering::Relaxed) {
-                use tauri_plugin_notification::NotificationExt;
-                let _ = app.notification().builder().title(&serveur.nom).body(format!("{nom} veut entrer.")).show();
-            }
+            hote::notifier(app, &serveur.nom, &format!("{nom} veut entrer."), false);
         }
     }
 }
@@ -428,6 +438,7 @@ fn dire_statut(app: &AppHandle, id: &str, statut: &str) {
         }
     };
     let _ = app.emit("statut", NouvelleStatut { id, statut, depuis });
+    #[cfg(feature = "bureau")]
     zone::rafraichir();
 }
 
@@ -746,7 +757,7 @@ fn vivant(etat: &Etat, id: &str) -> Result<Arc<Processus>, String> {
 }
 
 /// La liste des serveurs connus de BHOST, avec leur état.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn lister_serveurs(etat: State<Etat>) -> Vec<ServeurVu> {
     let mut liste: Vec<ServeurVu> = etat.liste.lock().unwrap().iter().map(|s| vu(&etat, s)).collect();
     // Version de dev : les serveurs de la machine de test « TEST-TEST ».
@@ -757,7 +768,7 @@ fn lister_serveurs(etat: State<Etat>) -> Vec<ServeurVu> {
 }
 
 /// Ajoute à BHOST un serveur qui existe déjà dans un dossier.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn importer_serveur(dossier: String, etat: State<Etat>) -> Result<ServeurVu, String> {
     let trouve = serveurs::detecter(Path::new(&dossier))?;
     let mut liste = etat.liste.lock().unwrap();
@@ -775,7 +786,7 @@ enum Refus {
     Memoire(ressources::Manque),
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn demarrer_serveur(app: AppHandle, id: String) -> Result<(), Refus> {
     if machine::est_de_test(&id) {
         return machine::demarrer_test(&id).map(|depuis| dire_statut_test(&app, &id, "en-ligne", depuis)).map_err(Refus::Memoire);
@@ -790,7 +801,7 @@ fn dire_statut_test(app: &AppHandle, id: &str, statut: &str, depuis: Option<u64>
 
 /// Carte « Java introuvable » › Installer Java N : si BHOST ne sait pas quel Java il lui faut,
 /// on le note dans ses réglages (Paramètres › Java), puis on démarre (le téléchargement se fait au démarrage).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn installer_java_serveur(app: AppHandle, id: String, version: u32) -> Result<(), String> {
     if ![8, 17, 21, 25].contains(&version) {
         return Err("Version de Java inconnue.".into());
@@ -808,7 +819,7 @@ fn installer_java_serveur(app: AppHandle, id: String, version: u32) -> Result<()
 }
 
 /// Arrêt propre : on envoie « stop », le serveur sauvegarde puis se ferme.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn arreter_serveur(app: AppHandle, id: String) -> Result<(), String> {
     if machine::est_de_test(&id) {
         machine::arreter_test(&id);
@@ -828,7 +839,7 @@ pub(crate) fn arreter(app: &AppHandle, id: &str) -> Result<(), String> {
 }
 
 /// Arrêt propre, puis nouveau lancement dès que le serveur est fermé.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn redemarrer_serveur(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), String> {
     let p = vivant(&etat, &id)?;
     p.arret_demande.store(true, Ordering::SeqCst);
@@ -838,7 +849,7 @@ fn redemarrer_serveur(app: AppHandle, id: String, etat: State<Etat>) -> Result<(
 }
 
 /// Coupe le serveur tout de suite, sans sauvegarder.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn forcer_arret(id: String, etat: State<Etat>) -> Result<(), String> {
     let p = vivant(&etat, &id)?;
     p.arret_demande.store(true, Ordering::SeqCst);
@@ -848,7 +859,7 @@ fn forcer_arret(id: String, etat: State<Etat>) -> Result<(), String> {
 }
 
 /// Envoie une commande au serveur, comme tapée dans sa console.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn envoyer_commande(app: AppHandle, id: String, commande: String, etat: State<Etat>) -> Result<(), String> {
     let p = vivant(&etat, &id)?;
     // Plusieurs lignes collées d'un coup : une commande par ligne.
@@ -861,7 +872,7 @@ fn envoyer_commande(app: AppHandle, id: String, commande: String, etat: State<Et
 
 /// L'interface dit quel serveur elle affiche à l'accueil (`actif`), ou qu'elle ne l'affiche plus.
 /// BHOST ne demande les ticks par seconde qu'à ce serveur-là, pour ne pas remplir son journal pour rien.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn regarder_tps(id: String, actif: bool, etat: State<Etat>) {
     let mut regarde = etat.tps_regarde.lock().unwrap();
     if actif {
@@ -933,7 +944,7 @@ struct InfosCreation {
     premier: bool,
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn infos_creation(etat: State<Etat>) -> InfosCreation {
     use sysinfo::{Disks, System};
     let dossier = dossier_serveurs(&etat);
@@ -962,7 +973,7 @@ fn infos_creation(etat: State<Etat>) -> InfosCreation {
 }
 
 /// Change le dossier où BHOST crée les nouveaux serveurs.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn changer_dossier_serveurs(dossier: String, etat: State<Etat>) -> Result<(), String> {
     if !Path::new(&dossier).is_dir() {
         return Err("Ce dossier n'existe pas.".into());
@@ -1011,14 +1022,34 @@ fn taille_dossier(dossier: &Path) -> u64 {
     mondes::taille(dossier)
 }
 
-fn vue_reglages(app: &AppHandle) -> VueReglages {
+/// Réglages › Lancer avec Windows (sur BHOST OS, l'agent démarre toujours avec la machine).
+#[cfg(feature = "bureau")]
+fn lance_au_demarrage(app: &AppHandle) -> bool {
     use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+#[cfg(not(feature = "bureau"))]
+fn lance_au_demarrage(_app: &AppHandle) -> bool {
+    true
+}
+
+/// La version de BHOST (celle de tauri.conf.json pour l'appli, celle de Cargo.toml pour l'agent).
+#[cfg(feature = "bureau")]
+fn version_bhost(app: &AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+#[cfg(not(feature = "bureau"))]
+fn version_bhost(_app: &AppHandle) -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+fn vue_reglages(app: &AppHandle) -> VueReglages {
     let etat = app.state::<Etat>();
     let reglages = lire_reglages(&etat);
     let dossier = dossier_serveurs(&etat);
     let serveurs = etat.liste.lock().unwrap().iter().filter(|s| Path::new(&s.dossier).starts_with(&dossier)).count();
     VueReglages {
-        lancer_windows: app.autolaunch().is_enabled().unwrap_or(false),
+        lancer_windows: lance_au_demarrage(app),
         garder: reglages.garder,
         proprement: reglages.proprement,
         veille: reglages.veille,
@@ -1027,20 +1058,21 @@ fn vue_reglages(app: &AppHandle) -> VueReglages {
         octets: taille_dossier(&dossier),
         dossier: dossier.to_string_lossy().into_owned(),
         serveurs,
-        version: app.package_info().version.to_string(),
+        version: version_bhost(app),
     }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn reglages_bhost(app: AppHandle) -> Result<VueReglages, String> {
     // Mesurer le dossier des serveurs peut prendre un moment (gros mondes) : on le fait à part.
     a_part(move || Ok(vue_reglages(&app))).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn regler_bhost(app: AppHandle, changement: ChangementReglages) -> Result<VueReglages, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
+        #[cfg(feature = "bureau")]
         if let Some(oui) = changement.lancer_windows {
             use tauri_plugin_autostart::ManagerExt;
             let lanceur = app.autolaunch();
@@ -1078,7 +1110,8 @@ async fn regler_bhost(app: AppHandle, changement: ChangementReglages) -> Result<
 }
 
 /// Réglages › Dossier des serveurs › Ouvrir.
-#[tauri::command]
+#[cfg(feature = "bureau")] // ouvre une fenêtre ou lit ce PC : pas sur BHOST OS
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn ouvrir_dossier_serveurs(app: AppHandle, etat: State<Etat>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let dossier = dossier_serveurs(&etat);
@@ -1112,9 +1145,9 @@ fn pseudo_op(app: &AppHandle, dossier: &Path, version: &str) {
 }
 
 /// Les versions de Minecraft qu'on peut installer pour un logiciel.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn versions_minecraft(app: AppHandle, logiciel: String, snapshots: bool) -> Result<Vec<creation::VersionMc>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    crate::hote::async_runtime::spawn_blocking(move || {
         if logiciel == "Spigot" {
             return versions_spigot(&app);
         }
@@ -1176,9 +1209,9 @@ struct NouvelleCreation {
 }
 
 /// Crée un serveur neuf : Java si besoin, téléchargement du serveur, fichiers du monde, ajout à la liste.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn creer_serveur(app: AppHandle, demande: DemandeCreation) -> Result<ServeurVu, String> {
-    tauri::async_runtime::spawn_blocking(move || creer(&app, demande)).await.map_err(|e| e.to_string())?
+    crate::hote::async_runtime::spawn_blocking(move || creer(&app, demande)).await.map_err(|e| e.to_string())?
 }
 
 fn creer(app: &AppHandle, demande: DemandeCreation) -> Result<ServeurVu, String> {
@@ -1359,7 +1392,7 @@ fn fabriquer_spigot(app: &AppHandle, version: &str, dossier: &Path, avance: &mut
 }
 
 /// Change le nom d'un serveur dans BHOST (le dossier, lui, ne change pas).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn renommer_serveur(id: String, nom: String, etat: State<Etat>) -> Result<ServeurVu, String> {
     let nom = nom.trim();
     if nom.is_empty() {
@@ -1408,7 +1441,7 @@ fn parametres(serveur: &Serveur) -> Parametres {
     }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn parametres_serveur(id: String, etat: State<Etat>) -> Result<Parametres, String> {
     let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n'existe plus.")?;
     Ok(parametres(&serveur))
@@ -1429,7 +1462,7 @@ struct ReglagesServeur {
 }
 
 /// Enregistre les réglages d'un serveur. Ils comptent au prochain démarrage.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn regler_serveur(id: String, reglages: ReglagesServeur, etat: State<Etat>) -> Result<(ServeurVu, Parametres), String> {
     if let Some(choix) = &reglages.java_choix {
         let numero_ok = choix.parse::<u32>().is_ok_and(|n| [8, 17, 21, 25].contains(&n));
@@ -1460,7 +1493,7 @@ fn regler_serveur(id: String, reglages: ReglagesServeur, etat: State<Etat>) -> R
 
 /// Change le mode, la difficulté et le nombre de joueurs dans server.properties.
 /// Si le serveur tourne, la difficulté change tout de suite ; le reste au prochain démarrage.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn regler_partie(app: AppHandle, id: String, partie: creation::Monde, etat: State<Etat>) -> Result<ServeurVu, String> {
     let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n'existe plus.")?;
     let avant = creation::lire_partie(&serveurs::lire_proprietes(Path::new(&serveur.dossier)));
@@ -1489,9 +1522,9 @@ struct NouvelleCopie<'a> {
 }
 
 /// Copie un serveur arrêté dans un nouveau dossier (dossier des serveurs de BHOST), avec un autre port.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn dupliquer_serveur(app: AppHandle, id: String) -> Result<ServeurVu, String> {
-    tauri::async_runtime::spawn_blocking(move || dupliquer(&app, &id)).await.map_err(|_| "Ça n'a pas marché.".to_string())?
+    crate::hote::async_runtime::spawn_blocking(move || dupliquer(&app, &id)).await.map_err(|_| "Ça n'a pas marché.".to_string())?
 }
 
 fn dupliquer(app: &AppHandle, id: &str) -> Result<ServeurVu, String> {
@@ -1535,7 +1568,7 @@ fn dupliquer(app: &AppHandle, id: &str) -> Result<ServeurVu, String> {
 }
 
 /// Change l'icône d'un serveur (clic droit › Icône…).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn couleur_serveur(id: String, couleur: String, etat: State<Etat>) -> Result<ServeurVu, String> {
     if !serveurs::icone_valide(&couleur) {
         return Err("Icône inconnue.".into());
@@ -1552,10 +1585,10 @@ fn couleur_serveur(id: String, couleur: String, etat: State<Etat>) -> Result<Ser
 }
 
 /// Supprime un serveur : son dossier va à la Corbeille, et BHOST l'oublie.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn supprimer_serveur(app: AppHandle, id: String) -> Result<(), String> {
     // Mettre un gros monde à la Corbeille prend du temps : on le fait à part, pour ne pas figer BHOST.
-    tauri::async_runtime::spawn_blocking(move || {
+    crate::hote::async_runtime::spawn_blocking(move || {
         supprimer(&app.state::<Etat>(), &id, true)?;
         automatique::oublier(&app, &id);
         oublier_demandes(&app, &id);
@@ -1567,7 +1600,7 @@ async fn supprimer_serveur(app: AppHandle, id: String) -> Result<(), String> {
 }
 
 /// Retire un serveur de BHOST sans toucher à son dossier (on peut le réimporter plus tard).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn retirer_serveur(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), String> {
     supprimer(&etat, &id, false)?;
     automatique::oublier(&app, &id);
@@ -1612,7 +1645,8 @@ fn supprimer(etat: &Etat, id: &str, jeter: bool) -> Result<(), String> {
 }
 
 /// Ouvre le dossier d'un serveur dans l'Explorateur de fichiers.
-#[tauri::command]
+#[cfg(feature = "bureau")] // ouvre une fenêtre ou lit ce PC : pas sur BHOST OS
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn ouvrir_dossier(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let dossier = etat.liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| s.dossier.clone()).ok_or("Ce serveur n'existe plus.")?;
@@ -1624,10 +1658,10 @@ fn ouvrir_dossier(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), S
 
 /// La tête d'un joueur (son visage, 8 × 8 pixels), prête à afficher. Rien si Mojang ne le connaît pas.
 /// BHOST la demande à Mojang puis la garde un jour dans %APPDATA%\BHOST\tetes.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn tete_joueur(app: AppHandle, nom: String) -> Option<String> {
     // Aller sur Internet prend du temps : on le fait à part, pour ne pas figer BHOST.
-    let travail = tauri::async_runtime::spawn_blocking(move || {
+    let travail = crate::hote::async_runtime::spawn_blocking(move || {
         let etat = app.state::<Etat>();
         let agent = etat.reseau.clone();
         let telecharger = move |adresse: &str| reseau::telecharger(&agent, adresse);
@@ -1648,14 +1682,15 @@ async fn tete_joueur(app: AppHandle, nom: String) -> Option<String> {
 }
 
 /// L'icône de BHOST dans Windows (barre des tâches, Alt+Tab, zone de notification) suit le thème.
-#[tauri::command]
+#[cfg(feature = "bureau")] // ouvre une fenêtre ou lit ce PC : pas sur BHOST OS
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn changer_icone(app: AppHandle, fenetre: tauri::WebviewWindow, theme: String, etat: State<Etat>) -> Result<(), String> {
     zone::changer_icone(&app, &theme);
     icone::appliquer(&fenetre, &theme, &mut etat.icones.lock().unwrap())
 }
 
 /// Les lignes de console gardées en mémoire (pour l'ouverture de la page).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn lire_console(id: String, etat: State<Etat>) -> ConsoleVue {
     match etat.journaux.lock().unwrap().get(&id) {
         Some(journal) => ConsoleVue { dernier: journal.total, lignes: journal.lignes.clone() },
@@ -1693,7 +1728,7 @@ fn sauvegardes_vues(etat: &Etat, serveur: &Serveur) -> SauvegardesVue {
     SauvegardesVue { reglages: serveur.sauvegarde.clone(), liste, prochaine, libre_go: (libre as f64 / 1_073_741_824.0 * 10.0).round() / 10.0 }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn sauvegardes_serveur(app: AppHandle, id: String) -> Result<SauvegardesVue, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -1703,7 +1738,7 @@ async fn sauvegardes_serveur(app: AppHandle, id: String) -> Result<SauvegardesVu
 }
 
 /// Change les réglages de la sauvegarde automatique.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn regler_sauvegardes(id: String, reglages: serveurs::ReglagesSauvegarde, etat: State<Etat>) -> Result<SauvegardesVue, String> {
     if !["1h", "6h", "24h"].contains(&reglages.frequence.as_str()) {
         return Err("Fréquence inconnue.".into());
@@ -1718,7 +1753,7 @@ fn regler_sauvegardes(id: String, reglages: serveurs::ReglagesSauvegarde, etat: 
 }
 
 /// « Sauvegarder maintenant » : tout le serveur, même s'il tourne.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn sauvegarder_maintenant(app: AppHandle, id: String) -> Result<SauvegardesVue, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -1737,7 +1772,7 @@ fn sauvegarde_existante(etat: &Etat, serveur: &Serveur, fichier: &str) -> Result
 }
 
 /// Épingle une sauvegarde (jamais effacée par le nettoyage automatique), ou la désépingle.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn epingler_sauvegarde(app: AppHandle, id: String, fichier: String, epinglee: bool) -> Result<SauvegardesVue, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -1757,7 +1792,7 @@ async fn epingler_sauvegarde(app: AppHandle, id: String, fichier: String, epingl
 }
 
 /// Copie une sauvegarde où l'on veut (« Exporter en .zip »).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn exporter_sauvegarde(app: AppHandle, id: String, fichier: String, cible: String) -> Result<(), String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -1768,7 +1803,7 @@ async fn exporter_sauvegarde(app: AppHandle, id: String, fichier: String, cible:
 }
 
 /// Met une sauvegarde à la Corbeille.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn supprimer_sauvegarde(app: AppHandle, id: String, fichier: String) -> Result<SauvegardesVue, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -1789,7 +1824,7 @@ async fn supprimer_sauvegarde(app: AppHandle, id: String, fichier: String) -> Re
 
 /// Revient à une sauvegarde (serveur arrêté). `tout` : tout le serveur ; sinon seulement le monde.
 /// L'état actuel est sauvegardé juste avant.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn restaurer_sauvegarde(app: AppHandle, id: String, fichier: String, tout: bool) -> Result<ServeurVu, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -1844,7 +1879,8 @@ async fn restaurer_sauvegarde(app: AppHandle, id: String, fichier: String, tout:
 }
 
 /// Ouvre le dossier des sauvegardes dans l'Explorateur.
-#[tauri::command]
+#[cfg(feature = "bureau")] // ouvre une fenêtre ou lit ce PC : pas sur BHOST OS
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn ouvrir_sauvegardes(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let dossier = dossier_sauvegardes(&etat, &serveur_de(&etat, &id)?);
@@ -1879,18 +1915,18 @@ fn sauvegarder_en_continu(app: AppHandle) {
 // Onglet Fichiers
 // ---------------------------------------------------------------------------------------------
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn fichiers_serveur(app: AppHandle, id: String, dossier: String) -> Result<Vec<fichiers::Element>, String> {
     a_part(move || fichiers::lister(Path::new(&serveur_de(&app.state::<Etat>(), &id)?.dossier), &dossier)).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn lire_fichier(app: AppHandle, id: String, chemin: String) -> Result<fichiers::Fichier, String> {
     a_part(move || fichiers::lire(Path::new(&serveur_de(&app.state::<Etat>(), &id)?.dossier), &chemin)).await
 }
 
 /// Enregistre un fichier texte. Les listes de joueurs se gèrent dans l'onglet Joueurs.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn ecrire_fichier(id: String, chemin: String, texte: String, etat: State<Etat>) -> Result<(), String> {
     let nom = chemin.rsplit(['/', '\\']).next().unwrap_or("").to_ascii_lowercase();
     if [listes::OPS, listes::BLANCHE, listes::BANNIS, "banned-ips.json", "usercache.json"].contains(&nom.as_str()) || nom.ends_with(".log") {
@@ -1903,7 +1939,7 @@ fn ecrire_fichier(id: String, chemin: String, texte: String, etat: State<Etat>) 
 }
 
 /// Copie des fichiers du PC (choisis, ou glissés dans la fenêtre) dans un dossier du serveur.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn importer_fichiers(app: AppHandle, id: String, dossier: String, sources: Vec<String>) -> Result<usize, String> {
     a_part(move || {
         let serveur = serveur_de(&app.state::<Etat>(), &id)?;
@@ -1915,7 +1951,7 @@ async fn importer_fichiers(app: AppHandle, id: String, dossier: String, sources:
 
 /// L'icône du serveur dans Minecraft : pose celle de BHOST (si l'utilisateur n'a pas mis la sienne,
 /// ou s'il veut la `remettre`), et dit si c'est une image à lui.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn icone_du_jeu(app: AppHandle, id: String, remettre: bool) -> Result<bool, String> {
     a_part(move || {
         let serveur = serveur_de(&app.state::<Etat>(), &id)?;
@@ -1928,13 +1964,14 @@ async fn icone_du_jeu(app: AppHandle, id: String, remettre: bool) -> Result<bool
 }
 
 /// L'icône du serveur (dans la liste des serveurs du jeu), à partir d'une image PNG.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn icone_serveur(app: AppHandle, id: String, source: String) -> Result<(), String> {
     a_part(move || fichiers::icone(Path::new(&source), Path::new(&serveur_de(&app.state::<Etat>(), &id)?.dossier))).await
 }
 
 /// Montre un fichier ou un dossier du serveur dans l'Explorateur.
-#[tauri::command]
+#[cfg(feature = "bureau")] // ouvre une fenêtre ou lit ce PC : pas sur BHOST OS
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn montrer_fichier(app: AppHandle, id: String, chemin: String, etat: State<Etat>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let complet = fichiers::chemin_sur(Path::new(&serveur_de(&etat, &id)?.dossier), &chemin)?;
@@ -1943,7 +1980,7 @@ fn montrer_fichier(app: AppHandle, id: String, chemin: String, etat: State<Etat>
 }
 
 /// Les réglages de server.properties (vue « Réglages faciles »).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn proprietes_serveur(id: String, etat: State<Etat>) -> Result<BTreeMap<String, String>, String> {
     Ok(serveurs::lire_proprietes(Path::new(&serveur_de(&etat, &id)?.dossier)).into_iter().collect())
 }
@@ -1967,7 +2004,7 @@ fn propriete_valide(cle: &str, valeur: &str) -> Result<String, String> {
 }
 
 /// Change des réglages de server.properties (au prochain démarrage du serveur).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn regler_proprietes(id: String, valeurs: BTreeMap<String, String>, etat: State<Etat>) -> Result<BTreeMap<String, String>, String> {
     let serveur = serveur_de(&etat, &id)?;
     let mut propres = Vec::new();
@@ -2030,7 +2067,7 @@ fn joueurs_vus(etat: &Etat, serveur: &Serveur) -> JoueursVue {
     }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn joueurs_serveur(id: String, etat: State<Etat>) -> Result<JoueursVue, String> {
     Ok(joueurs_vus(&etat, &serveur_de(&etat, &id)?))
 }
@@ -2074,7 +2111,7 @@ fn uuid_joueur(app: &AppHandle, serveur: &Serveur, nom: &str, demander: bool) ->
 }
 
 /// OP, liste blanche, expulsion, bannissement. Serveur en ligne : par commande. Arrêté : dans ses fichiers.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn action_joueur(app: AppHandle, id: String, action: String, nom: String, motif: Option<String>) -> Result<JoueursVue, String> {
     a_part(move || agir_joueur(&app, &id, &action, &nom, motif)).await
 }
@@ -2121,7 +2158,7 @@ fn agir_joueur(app: &AppHandle, id: &str, action: &str, nom: &str, motif: Option
 }
 
 /// Joueurs › Demandes : Accepter (ajout à la liste blanche) ou Refuser (ses prochains essais sont ignorés).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn repondre_demande(app: AppHandle, id: String, nom: String, accepter: bool) -> Result<JoueursVue, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -2141,7 +2178,7 @@ async fn repondre_demande(app: AppHandle, id: String, nom: String, accepter: boo
 }
 
 /// Active ou coupe la liste blanche (server.properties, et tout de suite si le serveur est en ligne).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn liste_blanche(app: AppHandle, id: String, active: bool, etat: State<Etat>) -> Result<JoueursVue, String> {
     let serveur = serveur_de(&etat, &id)?;
     serveurs::modifier_proprietes(Path::new(&serveur.dossier), &[("white-list", active.to_string())])?;
@@ -2152,7 +2189,7 @@ fn liste_blanche(app: AppHandle, id: String, active: bool, etat: State<Etat>) ->
 }
 
 /// La fiche d'un joueur, lue dans le monde joué. `None` si BHOST ne la trouve pas.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn fiche_joueur(app: AppHandle, id: String, nom: String) -> Result<Option<fiche::Fiche>, String> {
     a_part(move || {
         if !listes::pseudo_valide(&nom) {
@@ -2173,7 +2210,7 @@ fn avant_1_13(version: &str) -> bool {
 }
 
 /// Les commandes de la fiche d'un joueur connecté : mode de jeu, retour au point d'apparition.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn commande_joueur(app: AppHandle, id: String, nom: String, action: String, etat: State<Etat>) -> Result<(), String> {
     if !listes::pseudo_valide(&nom) {
         return Err("Pseudo invalide.".into());
@@ -2253,7 +2290,7 @@ fn dire_travail(app: &AppHandle, id: &str, etape: &str, pourcent: u8) {
 
 /// Lance un travail lourd à part, pour ne pas figer BHOST.
 async fn a_part<T: Send + 'static>(travail: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
-    tauri::async_runtime::spawn_blocking(travail).await.map_err(|_| "Ça n'a pas marché.".to_string())?
+    crate::hote::async_runtime::spawn_blocking(travail).await.map_err(|_| "Ça n'a pas marché.".to_string())?
 }
 
 /// Les règles du jeu du monde joué, avec les changements pas encore écrits dans le monde.
@@ -2269,13 +2306,13 @@ fn regles_vues(etat: &Etat, serveur: &Serveur) -> Vec<regles::RegleVue> {
     liste
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn regles_serveur(id: String, etat: State<Etat>) -> Result<Vec<regles::RegleVue>, String> {
     Ok(regles_vues(&etat, &serveur_de(&etat, &id)?))
 }
 
 /// Change une règle du jeu : tout de suite si le serveur est en ligne, sinon à son prochain démarrage.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn regler_regle(app: AppHandle, id: String, cle: String, valeur: i64, etat: State<Etat>) -> Result<Vec<regles::RegleVue>, String> {
     if !regles::valide(&cle, valeur) {
         return Err("Valeur refusée.".into());
@@ -2325,7 +2362,7 @@ fn appliquer_regles(app: &AppHandle, id: &str) {
 }
 
 /// Les mondes d'un serveur.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn mondes_serveur(app: AppHandle, id: String) -> Result<Vec<mondes::Monde>, String> {
     a_part(move || Ok(mondes::lister(Path::new(&serveur_de(&app.state::<Etat>(), &id)?.dossier)))).await
 }
@@ -2342,7 +2379,7 @@ fn choisir_monde(serveur: &Serveur, nom: &str) -> Result<(), String> {
 }
 
 /// « Utiliser » : ce monde devient celui du serveur (au prochain démarrage).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn utiliser_monde(app: AppHandle, id: String, dossier: String) -> Result<Vec<mondes::Monde>, String> {
     a_part(move || {
         let serveur = serveur_de(&app.state::<Etat>(), &id)?;
@@ -2354,7 +2391,7 @@ async fn utiliser_monde(app: AppHandle, id: String, dossier: String) -> Result<V
 }
 
 /// « Nouveau monde » : un monde vide, que le serveur créera quand on l'utilisera.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn nouveau_monde(app: AppHandle, id: String) -> Result<Vec<mondes::Monde>, String> {
     a_part(move || {
         let serveur = serveur_de(&app.state::<Etat>(), &id)?;
@@ -2368,7 +2405,7 @@ async fn nouveau_monde(app: AppHandle, id: String) -> Result<Vec<mondes::Monde>,
 }
 
 /// Met un monde (pas celui joué) à la Corbeille, avec son Nether et son End.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn supprimer_monde(app: AppHandle, id: String, dossier: String) -> Result<Vec<mondes::Monde>, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -2434,7 +2471,7 @@ fn faire_sauvegarde(app: &AppHandle, serveur: &Serveur, genre: &str, quoi: &str,
 }
 
 /// Réinitialise un monde : sauvegarde, puis effacé. Le serveur le recrée (même graine, ou une nouvelle).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn reinitialiser_monde(app: AppHandle, id: String, dossier: String, meme_graine: bool) -> Result<Vec<mondes::Monde>, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -2465,7 +2502,7 @@ async fn reinitialiser_monde(app: AppHandle, id: String, dossier: String, meme_g
 }
 
 /// « Télécharger en .zip » : le monde (avec son Nether et son End) dans le fichier choisi.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn exporter_monde(app: AppHandle, id: String, dossier: String, fichier: String) -> Result<(), String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -2492,7 +2529,8 @@ struct MondeSolo {
 }
 
 /// Les mondes du jeu solo (%APPDATA%\.minecraft\saves).
-#[tauri::command]
+#[cfg(feature = "bureau")] // ouvre une fenêtre ou lit ce PC : pas sur BHOST OS
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn mondes_solo(app: AppHandle, id: String) -> Result<Vec<MondeSolo>, String> {
     a_part(move || {
         let serveur = serveur_de(&app.state::<Etat>(), &id)?;
@@ -2510,7 +2548,7 @@ async fn mondes_solo(app: AppHandle, id: String) -> Result<Vec<MondeSolo>, Strin
 }
 
 /// Copie un monde (dossier, ou archive .zip) dans le serveur. `actuel` : il devient le monde joué.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn importer_monde(app: AppHandle, id: String, source: String, actuel: bool) -> Result<Vec<mondes::Monde>, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -2562,7 +2600,7 @@ fn familles(logiciel: &str) -> &'static [&'static str] {
 }
 
 /// Change le logiciel ou la version d'un serveur arrêté. Le monde est sauvegardé juste avant.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 async fn changer_version(app: AppHandle, id: String, logiciel: String, version: String) -> Result<ServeurVu, String> {
     a_part(move || {
         let etat = app.state::<Etat>();
@@ -2635,13 +2673,13 @@ fn ouvrir_en_continu(app: AppHandle) {
 }
 
 /// Ce que montrent l'accueil et les paramètres : adresse pour les amis, ou erreur.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn etats_acces(etat: State<Etat>) -> Vec<acces::Acces> {
     etat.acces.vues()
 }
 
 /// Paramètres › Général › Ouvert à tes amis.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 fn ouvrir_aux_amis(app: AppHandle, id: String, ouvert: bool, etat: State<Etat>) -> Result<ServeurVu, String> {
     let mut liste = etat.liste.lock().unwrap();
     let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
@@ -2676,6 +2714,67 @@ pub(crate) fn tout_arreter(app: &AppHandle) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// L'état partagé du cœur, avec les données de BHOST dans `dossier` (%APPDATA%\BHOST, ou /var/lib/bhost sur BHOST OS).
+fn nouvel_etat(dossier: PathBuf) -> Etat {
+    let fichier = dossier.join("serveurs.json");
+    let liste = serveurs::charger(&fichier);
+    let auto = automatique::EtatAuto::nouveau(&dossier);
+    let dossier_donnees = dossier.clone();
+    Etat {
+        dossier,
+        reseau: reseau::agent(),
+        #[cfg(feature = "bureau")]
+        icones: Mutex::new(icone::Icones::default()),
+        fichier,
+        liste: Mutex::new(liste),
+        vivants: Mutex::new(HashMap::new()),
+        preparation: Mutex::new(HashSet::new()),
+        copies: Mutex::new(HashSet::new()),
+        travaux: Mutex::new(HashSet::new()),
+        regles_envoyees: Mutex::new(HashMap::new()),
+        installation_java: Mutex::new(()),
+        buildtools: Mutex::new(()),
+        statuts: Mutex::new(HashMap::new()),
+        journaux: Mutex::new(HashMap::new()),
+        depuis: Mutex::new(HashMap::new()),
+        joueurs: Mutex::new(HashMap::new()),
+        arrivees: Mutex::new(HashMap::new()),
+        identifiants: Mutex::new(HashMap::new()),
+        tps_regarde: Mutex::new(None),
+        tps: Mutex::new(HashMap::new()),
+        auto,
+        acces: Arc::new(acces::EtatAcces::default()),
+        demandes: Mutex::new(demandes::Registre::charger(&dossier_donnees.join(FICHIER_DEMANDES))),
+        catalogue: catalogue::EtatCatalogue::nouveau(&dossier_donnees),
+    }
+}
+
+/// Les réglages Notifications, Empêcher la veille… lus une fois au lancement.
+fn lire_les_reglages(etat: &Etat) {
+    let reglages = lire_reglages(etat);
+    NOTIFICATIONS.store(reglages.notifications, Ordering::Relaxed);
+    VEILLE.store(reglages.veille, Ordering::Relaxed);
+    GARDER.store(reglages.garder, Ordering::Relaxed);
+    PROPREMENT.store(reglages.proprement, Ordering::Relaxed);
+}
+
+/// Les fils qui tournent tout le temps (mesures, sauvegardes, automatisations, réveil…),
+/// puis les serveurs « Démarrer avec BHOST ». Le même départ pour l'appli et pour l'agent.
+fn lancer_le_coeur(handle: AppHandle) {
+    mesurer_en_continu(handle.clone());
+    sauvegarder_en_continu(handle.clone());
+    automatique::demarrer(handle.clone());
+    ouvrir_en_continu(handle.clone());
+    problemes::surveiller_internet(handle.clone());
+    let a_demarrer: Vec<String> = handle.state::<Etat>().liste.lock().unwrap().iter().filter(|s| s.demarrer_auto).map(|s| s.id.clone()).collect();
+    for id in a_demarrer {
+        if let Err(erreur) = lancer_serveur(&handle, &id) {
+            eprintln!("[BHOST] Démarrage de {id} : {erreur}");
+        }
+    }
+}
+
+#[cfg(feature = "bureau")]
 pub fn run() {
     tauri::Builder::default()
         // Toujours en premier : BHOST relancé alors qu'il tourne déjà (même rangé) → on réaffiche la fenêtre.
@@ -2704,44 +2803,8 @@ pub fn run() {
             let appdata = app.path().data_dir()?;
             let dossier = serveurs::demenager(&appdata.join("Cubo"), &appdata.join("BHOST"));
             std::fs::create_dir_all(&dossier)?;
-            let fichier = dossier.join("serveurs.json");
-            let liste = serveurs::charger(&fichier);
-            let auto = automatique::EtatAuto::nouveau(&dossier);
-            let dossier_donnees = dossier.clone();
-            app.manage(Etat {
-                dossier,
-                reseau: reseau::agent(),
-                icones: Mutex::new(icone::Icones::default()),
-                fichier,
-                liste: Mutex::new(liste),
-                vivants: Mutex::new(HashMap::new()),
-                preparation: Mutex::new(HashSet::new()),
-                copies: Mutex::new(HashSet::new()),
-                travaux: Mutex::new(HashSet::new()),
-                regles_envoyees: Mutex::new(HashMap::new()),
-                installation_java: Mutex::new(()),
-                buildtools: Mutex::new(()),
-                statuts: Mutex::new(HashMap::new()),
-                journaux: Mutex::new(HashMap::new()),
-                depuis: Mutex::new(HashMap::new()),
-                joueurs: Mutex::new(HashMap::new()),
-                arrivees: Mutex::new(HashMap::new()),
-                identifiants: Mutex::new(HashMap::new()),
-                tps_regarde: Mutex::new(None),
-                tps: Mutex::new(HashMap::new()),
-                auto,
-                acces: Arc::new(acces::EtatAcces::default()),
-                demandes: Mutex::new(demandes::Registre::charger(&dossier_donnees.join(FICHIER_DEMANDES))),
-                catalogue: catalogue::EtatCatalogue::nouveau(&dossier_donnees),
-            });
-            // Les réglages Notifications et Empêcher la veille, lus une fois au lancement.
-            {
-                let reglages = lire_reglages(&app.state::<Etat>());
-                NOTIFICATIONS.store(reglages.notifications, Ordering::Relaxed);
-                VEILLE.store(reglages.veille, Ordering::Relaxed);
-                GARDER.store(reglages.garder, Ordering::Relaxed);
-                PROPREMENT.store(reglages.proprement, Ordering::Relaxed);
-            }
+            app.manage(nouvel_etat(dossier));
+            lire_les_reglages(&app.state::<Etat>());
             // La zone de notification (en bas à droite) et l'extinction de Windows.
             if let Err(erreur) = zone::installer(app.handle()) {
                 eprintln!("[BHOST] Zone de notification : {erreur}");
@@ -2763,19 +2826,7 @@ pub fn run() {
             } else {
                 DEJA_RANGE.store(true, Ordering::Relaxed);
             }
-            mesurer_en_continu(app.handle().clone());
-            sauvegarder_en_continu(app.handle().clone());
-            automatique::demarrer(app.handle().clone());
-            ouvrir_en_continu(app.handle().clone());
-            problemes::surveiller_internet(app.handle().clone());
-            // Paramètres › Démarrer avec BHOST : on allume ces serveurs tout de suite.
-            let handle = app.handle().clone();
-            let a_demarrer: Vec<String> = handle.state::<Etat>().liste.lock().unwrap().iter().filter(|s| s.demarrer_auto).map(|s| s.id.clone()).collect();
-            for id in a_demarrer {
-                if let Err(erreur) = lancer_serveur(&handle, &id) {
-                    eprintln!("[BHOST] Démarrage de {id} : {erreur}");
-                }
-            }
+            lancer_le_coeur(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -2785,6 +2836,7 @@ pub fn run() {
             machine::lier_machine,
             machine::delier_machine,
             machine::renommer_machine,
+            machine::machine_appel,
             importer_serveur,
             demarrer_serveur,
             installer_java_serveur,

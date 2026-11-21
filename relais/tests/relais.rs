@@ -251,3 +251,54 @@ async fn machine_partie_plus_joignable() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert_eq!(lier(agents, "ABCD2345").await, DuRelais::Non { raison: "code".into() });
 }
+
+#[tokio::test]
+async fn un_pc_pilote_la_machine_par_son_code() {
+    let (_, agents) = relais().await;
+    let (_, mut m) = machine(agents, "PQRS2345", 12).await;
+    let id = protocole::id_machine(&protocole::hexa(SigningKey::from_bytes(&[12; 32]).verifying_key().as_bytes()));
+    // La machine : à chaque PILOTE, elle ouvre DONNEES et renvoie chaque ligne en majuscules.
+    tokio::spawn(async move {
+        let mut ligne = String::new();
+        while m.read_line(&mut ligne).await.unwrap_or(0) > 0 {
+            if let Some(DuRelais::Pilote { id, jeton }) = protocole::lire_du_relais(&ligne) {
+                tokio::spawn(async move {
+                    let mut d = BufReader::new(TcpStream::connect(agents).await.unwrap());
+                    let donnees = protocole::ecrire_de_bhost(&DeBhost::Donnees { id, jeton });
+                    d.get_mut().write_all(format!("BHOST 1\n{donnees}").as_bytes()).await.unwrap();
+                    let mut l = String::new();
+                    while d.read_line(&mut l).await.unwrap_or(0) > 0 {
+                        d.get_mut().write_all(l.to_uppercase().as_bytes()).await.unwrap();
+                        l.clear();
+                    }
+                });
+            }
+            ligne.clear();
+        }
+    });
+    // Le PC : PILOTER, puis il parle à la machine à travers le relais.
+    let mut pc = BufReader::new(TcpStream::connect(agents).await.unwrap());
+    pc.get_mut().write_all(format!("BHOST 1\nPILOTER PQRS2345 {id}\n").as_bytes()).await.unwrap();
+    let mut ligne = String::new();
+    timeout(Duration::from_secs(5), pc.read_line(&mut ligne)).await.unwrap().unwrap();
+    assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Ok { adresse: id.clone() }));
+    pc.get_mut().write_all(b"{\"cmd\":\"lister\"}\n").await.unwrap();
+    ligne.clear();
+    timeout(Duration::from_secs(5), pc.read_line(&mut ligne)).await.unwrap().unwrap();
+    assert_eq!(ligne, "{\"CMD\":\"LISTER\"}\n");
+    // Un mauvais code ne pilote rien.
+    let mut autre = BufReader::new(TcpStream::connect(agents).await.unwrap());
+    autre.get_mut().write_all(format!("BHOST 1\nPILOTER ZZZZ2345 {id}\n").as_bytes()).await.unwrap();
+    ligne.clear();
+    timeout(Duration::from_secs(5), autre.read_line(&mut ligne)).await.unwrap().unwrap();
+    assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Non { raison: "code".into() }));
+    // Une machine éteinte (id inconnu du relais) : « absente », sans compter d'essai.
+    for _ in 0..6 {
+        let mut x = BufReader::new(TcpStream::connect(agents).await.unwrap());
+        x.get_mut().write_all(b"BHOST 1\nPILOTER ZZZZ2345 00000000000000ff\n").await.unwrap();
+        ligne.clear();
+        timeout(Duration::from_secs(5), x.read_line(&mut ligne)).await.unwrap().unwrap();
+        assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Non { raison: "absente".into() }));
+    }
+    assert_eq!(lier(agents, "PQRS2345").await, DuRelais::Liee { id }, "pas bloqué par les essais d'une machine éteinte");
+}

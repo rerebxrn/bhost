@@ -80,6 +80,8 @@ struct Agent {
 struct MachineEnLigne {
     id: String,
     session: u64,
+    /// Pour lui dire « PILOTE » (sa tâche écrit les lignes).
+    envoi: mpsc::Sender<DuRelais>,
     /// Remplacée par une connexion plus récente : ce bout tombe, et la session le voit.
     _fin: oneshot::Sender<()>,
 }
@@ -466,9 +468,13 @@ async fn agent(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()> 
         Some(DeBhost::Bonjour { nom, cle }) => controle(rel, flux, ip, nom, cle).await,
         Some(DeBhost::Machine { cle, code }) => machine(rel, flux, ip, cle, code).await,
         Some(DeBhost::Lier { code }) => {
-            let reponse = rel.lier(&code, ip);
+            let reponse = match rel.machine_du_code(&code, ip) {
+                Ok((id, _)) => DuRelais::Liee { id },
+                Err(non) => non,
+            };
             ecrire(&mut flux, &reponse).await
         }
+        Some(DeBhost::Piloter { code, id }) => piloter(rel, flux, ip, code, id).await,
         _ => Ok(()),
     }
 }
@@ -537,22 +543,40 @@ async fn controle(rel: &Relais, mut flux: TcpStream, ip: IpAddr, nom: String, cl
 impl Relais {
     /// Un PC tape le code d'une machine. Après 5 codes faux, l'adresse IP attend 15 minutes
     /// (même avec le bon code) : deviner un code de 8 caractères devient impossible.
-    fn lier(&self, code: &str, ip: IpAddr) -> DuRelais {
+    /// PILOTER : la machine `id` avec ce code. Éteinte : « absente », sans compter d'essai
+    /// (seul un PC qui l'a déjà reliée connaît son id) ; en ligne avec un autre code : un essai faux.
+    fn machine_a_piloter(&self, code: &str, id: &str, ip: IpAddr) -> Result<mpsc::Sender<DuRelais>, DuRelais> {
+        let connue = {
+            let machines = self.machines.lock().unwrap();
+            machines.values().any(|m| m.id == id)
+        };
+        if !connue {
+            return Err(DuRelais::Non { raison: "absente".into() });
+        }
+        match self.machine_du_code(code, ip) {
+            Ok((m, envoi)) if m == id => Ok(envoi),
+            Ok(_) => Err(DuRelais::Non { raison: "code".into() }),
+            Err(non) => Err(non),
+        }
+    }
+
+    /// Utilisé par LIER et PILOTER : rend l'id de la machine et de quoi lui parler.
+    fn machine_du_code(&self, code: &str, ip: IpAddr) -> Result<(String, mpsc::Sender<DuRelais>), DuRelais> {
         let ip = bloc(ip);
         let mut essais = self.essais.lock().unwrap();
         essais.retain(|_, (depuis, _)| depuis.elapsed() < ATTENTE_ESSAIS);
         if essais.get(&ip).is_some_and(|(_, n)| *n >= ESSAIS_MAX) {
-            return DuRelais::Non { raison: "bloque".into() };
+            return Err(DuRelais::Non { raison: "bloque".into() });
         }
         if let Some(m) = self.machines.lock().unwrap().get(code) {
-            return DuRelais::Liee { id: m.id.clone() };
+            return Ok((m.id.clone(), m.envoi.clone()));
         }
         let (depuis, n) = essais.entry(ip).or_insert((Instant::now(), 0));
         *n += 1;
         if *n >= ESSAIS_MAX {
             *depuis = Instant::now(); // l'attente part du dernier essai
         }
-        DuRelais::Non { raison: "code".into() }
+        Err(DuRelais::Non { raison: "code".into() })
     }
 }
 
@@ -571,12 +595,13 @@ async fn machine(rel: &Relais, mut flux: TcpStream, ip: IpAddr, cle: String, cod
     let id = protocole::id_machine(&cle);
     let session = rel.compteur.fetch_add(1, Ordering::Relaxed);
     let (fin, mut remplace) = oneshot::channel::<()>();
+    let (envoi, mut reception) = mpsc::channel::<DuRelais>(16);
     // Deux machines avec le même code (très rare) : la 2ᵉ doit en tirer un autre.
     let pris = {
         let mut machines = rel.machines.lock().unwrap();
         let pris = machines.get(&code).is_some_and(|m| m.id != id);
         if !pris {
-            machines.insert(code.clone(), MachineEnLigne { id: id.clone(), session, _fin: fin });
+            machines.insert(code.clone(), MachineEnLigne { id: id.clone(), session, envoi, _fin: fin });
         }
         pris
     };
@@ -593,6 +618,11 @@ async fn machine(rel: &Relais, mut flux: TcpStream, ip: IpAddr, cle: String, cod
                     Some(l) if protocole::lire_de_bhost(&l) == Some(DeBhost::Ping) => ecrire(&mut ecriture, &DuRelais::Pong).await?,
                     _ => return Ok(()),
                 },
+                // « PILOTE » : un PC veut la piloter. Une machine qui ne lit plus ne bloque pas le relais.
+                m = reception.recv() => match m {
+                    Some(m) => timeout(DELAI_DONNEES, ecrire(&mut ecriture, &m)).await.map_err(|_| io::Error::from(io::ErrorKind::TimedOut))??,
+                    None => return Ok(()),
+                },
                 _ = &mut remplace => return Ok(()),
             }
         }
@@ -603,6 +633,30 @@ async fn machine(rel: &Relais, mut flux: TcpStream, ip: IpAddr, cle: String, cod
         machines.remove(&code);
     }
     resultat
+}
+
+/// Un PC pilote une machine : la machine ouvre une connexion « DONNEES », le relais recolle les deux bouts.
+async fn piloter(rel: &Relais, mut flux: TcpStream, ip: IpAddr, code: String, machine: String) -> io::Result<()> {
+    let envoi = match rel.machine_a_piloter(&code, &machine, ip) {
+        Ok(x) => x,
+        Err(non) => return ecrire(&mut flux, &non).await,
+    };
+    let id = rel.compteur.fetch_add(1, Ordering::Relaxed);
+    let jeton = protocole::hexa(&hasard::<16>());
+    let (remise, reception) = oneshot::channel();
+    rel.attentes.lock().unwrap().insert(id, Attente { jeton: jeton.clone(), nom: format!("machine:{code}"), remise });
+    let donnees = if matches!(timeout(DELAI_DONNEES, envoi.send(DuRelais::Pilote { id, jeton })).await, Ok(Ok(()))) {
+        timeout(DELAI_DONNEES, reception).await.ok().and_then(Result::ok)
+    } else {
+        None
+    };
+    rel.attentes.lock().unwrap().remove(&id);
+    let Some(mut donnees) = donnees else {
+        return ecrire(&mut flux, &DuRelais::Non { raison: "muette".into() }).await;
+    };
+    ecrire(&mut flux, &DuRelais::Ok { adresse: machine }).await?;
+    tokio::io::copy_bidirectional(&mut flux, &mut donnees).await?;
+    Ok(())
 }
 
 /// Compare deux jetons sans que le temps de réponse dise où ils diffèrent.

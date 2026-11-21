@@ -153,6 +153,20 @@ export default function App() {
     const minuterie = window.setInterval(() => machinesLiees().then(setMachines, () => {}), 5000);
     return () => window.clearInterval(minuterie);
   }, [avecMachines]);
+  // Une machine vient de s'allumer (ou de s'éteindre) : on relit la liste, ses serveurs arrivent (ou partent).
+  const enLigne = machines
+    .filter((m) => m.etat === "en-ligne")
+    .map((m) => m.id)
+    .sort()
+    .join(",");
+  const premierPassage = useRef(true);
+  useEffect(() => {
+    if (premierPassage.current) {
+      premierPassage.current = false;
+      return;
+    }
+    listerServeurs().then(setServeurs, () => {});
+  }, [enLigne]);
   // Une machine vient d'être reliée : ses serveurs arrivent dans la liste.
   const machineAjoutee = (m: Machine) => {
     setMachines((l) => [...l.filter((x) => x.id !== m.id), m]);

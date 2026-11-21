@@ -67,7 +67,7 @@ pub type Actif = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 /// La clé de ce PC (créée au premier besoin) : elle prouve au relais que les noms sont à nous.
 /// Elle n'est créée que si le fichier n'existe pas : une clé illisible n'est jamais remplacée
 /// (sinon toutes les adresses des serveurs changeraient).
-fn cle(dossier: &Path) -> io::Result<SigningKey> {
+pub(crate) fn cle(dossier: &Path) -> io::Result<SigningKey> {
     use std::io::Write;
     let fichier = dossier.join("relais-cle.txt");
     match std::fs::read_to_string(&fichier) {

@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use crate::hote::{AppHandle, Emitter, Manager};
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "genre", rename_all = "camelCase")]
@@ -123,12 +123,8 @@ fn poser(app: &AppHandle, id: &str, probleme: Probleme) {
     PROBLEMES.lock().unwrap().insert(id.to_string(), probleme.clone());
     prevenir(app, id, Some(&probleme));
     // BHOST est en arrière-plan : une notification Windows, pour ne pas le rater.
-    let devant = app.get_webview_window("main").and_then(|f| f.is_focused().ok()).unwrap_or(false);
-    if !devant && crate::NOTIFICATIONS.load(Ordering::Relaxed) {
-        use tauri_plugin_notification::NotificationExt;
-        let nom = app.state::<Etat>().liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| s.nom.clone()).unwrap_or_default();
-        let _ = app.notification().builder().title(&nom).body(phrase(&probleme)).show();
-    }
+    let nom = app.state::<Etat>().liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| s.nom.clone()).unwrap_or_default();
+    crate::hote::notifier(app, &nom, &phrase(&probleme), false);
 }
 
 /// Java est introuvable : on propose la version qu'il lui faut.
@@ -182,7 +178,7 @@ pub fn oublier(id: &str) {
 }
 
 /// Tous les problèmes en cours (au lancement de l'interface).
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn problemes_serveurs() -> HashMap<String, Probleme> {
     PROBLEMES.lock().unwrap().clone()
 }
@@ -213,15 +209,15 @@ pub fn surveiller_internet(app: AppHandle) {
     });
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn etat_internet() -> bool {
     INTERNET.load(Ordering::SeqCst)
 }
 
 /// Bouton « Réessayer maintenant ».
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn verifier_internet(app: AppHandle) -> bool {
-    let ok = tauri::async_runtime::spawn_blocking(sonder).await.unwrap_or(false);
+    let ok = crate::hote::async_runtime::spawn_blocking(sonder).await.unwrap_or(false);
     noter_internet(&app, ok);
     ok
 }

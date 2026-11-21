@@ -5,5 +5,8 @@ fn main() {
     println!("cargo:rerun-if-changed=icons/azur-sombre.ico");
     println!("cargo:rerun-if-changed=icons/ambre-clair.ico");
     println!("cargo:rerun-if-changed=icons/ambre-sombre.ico");
-    tauri_build::build()
+    // L'agent de BHOST OS (sans « bureau ») n'a ni fenêtre ni icône : rien à préparer pour Tauri.
+    if std::env::var_os("CARGO_FEATURE_BUREAU").is_some() {
+        tauri_build::build()
+    }
 }

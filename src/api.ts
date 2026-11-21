@@ -1,12 +1,37 @@
 // Le pont entre l'interface et la partie Rust de BHOST.
 // Chaque fonction appelle une commande de src-tauri/src/lib.rs.
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Acces, Machine, Priorite, Serveur, Statut } from "./types";
 
-export function listerServeurs() {
-  return invoke<Serveur[]>("lister_serveurs");
+// ---- Machines dédiées ----
+// Un serveur sur une machine dédiée reçoit les mêmes commandes qu'un serveur de ce PC :
+// elles passent par « machine_appel » (Rust → relais → machine). On reconnaît ces serveurs par leur id.
+const machineDe = new Map<string, string>(); // id du serveur → id de sa machine
+
+function noter(serveurs: Serveur[]) {
+  for (const s of serveurs) if (s.machine) machineDe.set(s.id, s.machine);
+  return serveurs;
+}
+
+// Comme invoke de Tauri, mais vers la bonne machine : celle du serveur (`args.id`), ou `machine` si on la donne.
+function invoke<T>(commande: string, args?: Record<string, unknown>, machine?: string): Promise<T> {
+  const cible = machine ?? (typeof args?.id === "string" ? machineDe.get(args.id) : undefined);
+  // Les machines de test (version de dev) sont jouées par ce PC lui-même.
+  if (!cible || cible.startsWith("7e57")) return invokeTauri<T>(commande, args);
+  return invokeTauri<T>("machine_appel", { machine: cible, commande, args: args ?? {} });
+}
+
+// Les serveurs de ce PC, puis ceux de chaque machine dédiée en ligne.
+export async function listerServeurs() {
+  const [ici, machines] = await Promise.all([invokeTauri<Serveur[]>("lister_serveurs"), machinesLiees().catch(() => [] as Machine[])]);
+  const autres = await Promise.all(
+    machines
+      .filter((m) => m.etat === "en-ligne" && !m.id.startsWith("7e57"))
+      .map((m) => invoke<Serveur[]>("lister_serveurs", {}, m.id).catch(() => [] as Serveur[])),
+  );
+  return noter([...ici, ...autres.flat()]);
 }
 
 // Ajoute à BHOST un serveur qui existe déjà dans un dossier.
@@ -48,7 +73,10 @@ export type DemandeCreation = {
   stockageGo?: number; // machine dédiée : stockage max
 };
 // Crée le serveur. L'avancement arrive par la nouvelle « creation ».
-export const creerServeur = (demande: DemandeCreation) => invoke<Serveur>("creer_serveur", { demande });
+export const creerServeur = ({ machine, ...demande }: DemandeCreation) =>
+  machine && !machine.startsWith("7e57")
+    ? invoke<Serveur>("creer_serveur", { demande }, machine).then((s) => noter([s])[0])
+    : invokeTauri<Serveur>("creer_serveur", { demande: { ...demande, machine } });
 
 // S'abonne à l'avancement de la création (tâche 0 = Java, 1 = serveur, 2 = monde).
 export function ecouterCreation(recu: (tache: number, pourcent: number) => void) {
@@ -208,7 +236,7 @@ export async function choisirJava() {
 }
 
 // Copie un serveur arrêté (clic droit › Dupliquer). L'avancement arrive par la nouvelle « copie ».
-export const dupliquerServeur = (id: string) => invoke<Serveur>("dupliquer_serveur", { id });
+export const dupliquerServeur = (id: string) => invoke<Serveur>("dupliquer_serveur", { id }).then((s) => noter([s])[0]);
 
 export function ecouterCopie(recu: (id: string, pourcent: number) => void) {
   const abonnement = listen<{ id: string; pourcent: number }>("copie", (e) => recu(e.payload.id, e.payload.pourcent));
@@ -562,7 +590,7 @@ export const listerClesUsb = () => invoke<CleUsb[]>("lister_cles_usb");
 // ---- Machines dédiées (BHOST OS) ----
 
 // Les machines reliées à ce PC. Leurs serveurs arriveront avec lister_serveurs (champ `machine`).
-export const machinesLiees = () => invoke<Machine[]>("machines_liees");
+export const machinesLiees = () => invokeTauri<Machine[]>("machines_liees");
 // Relie une machine avec son code (8 caractères, sans tiret). Rejetée avec une phrase si le code est faux.
 export const lierMachine = (code: string) => invoke<Machine>("lier_machine", { code });
 export const delierMachine = (id: string) => invoke<void>("delier_machine", { id });

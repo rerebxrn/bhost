@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Manager, State};
+use crate::hote::{AppHandle, Emitter, Manager, State};
 
 /// Ce que le moteur garde en mémoire.
 pub struct EtatAuto {
@@ -99,12 +99,7 @@ fn allume(etat: &Etat, id: &str) -> bool {
 
 /// Une notification Windows.
 fn notifier(app: &AppHandle, titre: &str, texte: &str) {
-    use tauri_plugin_notification::NotificationExt;
-    // Réglages › Notifications coupées : rien.
-    if !crate::NOTIFICATIONS.load(std::sync::atomic::Ordering::Relaxed) {
-        return;
-    }
-    let _ = app.notification().builder().title(titre).body(texte).show();
+    crate::hote::notifier(app, titre, texte, true);
 }
 
 /// Note une action faite dans « Dernières actions » et prévient l'interface.
@@ -654,13 +649,13 @@ fn changer(app: &AppHandle, id: &str, change: impl FnOnce(&mut Vec<Automatisatio
     vue(&etat, id)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn automatisations_serveur(id: String, etat: State<Etat>) -> Result<VueAuto, String> {
     vue(&etat, &id)
 }
 
 /// Ajoute (id vide) ou remplace une automatisation.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn enregistrer_automatisation(app: AppHandle, id: String, automatisation: Automatisation) -> Result<VueAuto, String> {
     let mut a = automatisation;
     let vue = changer(&app, &id, |liste, serveur| {
@@ -703,7 +698,7 @@ pub fn enregistrer_automatisation(app: AppHandle, id: String, automatisation: Au
     Ok(vue)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn supprimer_automatisation(app: AppHandle, id: String, aid: String) -> Result<VueAuto, String> {
     changer(&app, &id, |liste, _| {
         liste.retain(|a| a.id != aid);
@@ -712,7 +707,7 @@ pub fn supprimer_automatisation(app: AppHandle, id: String, aid: String) -> Resu
 }
 
 /// Active ou met en pause.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub fn activer_automatisation(app: AppHandle, id: String, aid: String, on: bool) -> Result<VueAuto, String> {
     changer(&app, &id, |liste, _| {
         liste.iter_mut().find(|a| a.id == aid).ok_or("Cette automatisation n'existe plus.")?.on = on;

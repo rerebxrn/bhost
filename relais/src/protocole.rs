@@ -12,6 +12,11 @@
 //   4. Machines dédiées (BHOST OS) : la machine se présente avec « MACHINE <clé> <code> » et signe un défi.
 //      Un PC qui tape ce code envoie « LIER <code> » : le relais répond « LIEE <id> » (l'id de la machine)
 //      ou « NON code ». Après 5 codes faux, l'adresse IP attend 15 minutes (« NON bloque »).
+//   5. Piloter une machine : le PC envoie « PILOTER <code> <id> » sur une nouvelle connexion. Le relais dit à la
+//      machine « PILOTE 18 <jeton> » ; elle ouvre « DONNEES 18 <jeton> » ; le relais répond « OK <id> » au PC
+//      et recolle les deux bouts. Ensuite, le PC et la machine se parlent en JSON, une ligne à la fois
+//      (src-tauri/src/agent.rs). Mêmes limites que LIER (5 codes faux → 15 minutes) ; une machine éteinte
+//      répond « NON absente » sans compter d'essai (le PC la réessaie souvent ; il connaît déjà son id).
 
 /// La version du dialogue entre BHOST et le relais.
 pub const VERSION: u32 = 1;
@@ -280,6 +285,7 @@ pub enum DeBhost {
     Machine { cle: String, code: String },
     /// Un PC veut relier la machine qui a ce code.
     Lier { code: String },
+    Piloter { code: String, id: String },
 }
 
 /// Ce que le relais répond.
@@ -295,6 +301,7 @@ pub enum DuRelais {
     Joueur { id: u64, jeton: String },
     /// Le code est bon : l'id de la machine.
     Liee { id: String },
+    Pilote { id: u64, jeton: String },
 }
 
 fn hexa_valide(texte: &str, longueur: usize) -> bool {
@@ -309,6 +316,7 @@ pub fn ecrire_de_bhost(m: &DeBhost) -> String {
         DeBhost::Donnees { id, jeton } => format!("DONNEES {id} {jeton}\n"),
         DeBhost::Machine { cle, code } => format!("MACHINE {cle} {code}\n"),
         DeBhost::Lier { code } => format!("LIER {code}\n"),
+        DeBhost::Piloter { code, id } => format!("PILOTER {code} {id}\n"),
     }
 }
 
@@ -321,6 +329,7 @@ pub fn lire_de_bhost(ligne: &str) -> Option<DeBhost> {
         ["DONNEES", id, jeton] if hexa_valide(jeton, 32) => Some(DeBhost::Donnees { id: id.parse().ok()?, jeton: jeton.to_ascii_lowercase() }),
         ["MACHINE", cle, code] if hexa_valide(cle, 64) && code_valide(code) => Some(DeBhost::Machine { cle: cle.to_ascii_lowercase(), code: code.to_string() }),
         ["LIER", code] if code_valide(code) => Some(DeBhost::Lier { code: code.to_string() }),
+        ["PILOTER", code, id] if code_valide(code) && hexa_valide(id, 16) => Some(DeBhost::Piloter { code: code.to_string(), id: id.to_ascii_lowercase() }),
         _ => None,
     }
 }
@@ -333,6 +342,7 @@ pub fn ecrire_du_relais(m: &DuRelais) -> String {
         DuRelais::Pong => "PONG\n".into(),
         DuRelais::Joueur { id, jeton } => format!("JOUEUR {id} {jeton}\n"),
         DuRelais::Liee { id } => format!("LIEE {id}\n"),
+        DuRelais::Pilote { id, jeton } => format!("PILOTE {id} {jeton}\n"),
     }
 }
 
@@ -345,6 +355,7 @@ pub fn lire_du_relais(ligne: &str) -> Option<DuRelais> {
         ["PONG"] => Some(DuRelais::Pong),
         ["JOUEUR", id, jeton] if hexa_valide(jeton, 32) => Some(DuRelais::Joueur { id: id.parse().ok()?, jeton: jeton.to_ascii_lowercase() }),
         ["LIEE", id] if hexa_valide(id, 16) => Some(DuRelais::Liee { id: id.to_ascii_lowercase() }),
+        ["PILOTE", id, jeton] if hexa_valide(jeton, 32) => Some(DuRelais::Pilote { id: id.parse().ok()?, jeton: jeton.to_ascii_lowercase() }),
         _ => None,
     }
 }

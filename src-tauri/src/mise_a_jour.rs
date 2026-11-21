@@ -48,7 +48,7 @@ fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
         .map_err(|_| "La recherche n'a pas pu démarrer.".to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn chercher_mise_a_jour(app: AppHandle) -> Result<VueMaj, String> {
     let trouvee = updater(&app)?.check().await.map_err(|e| match e {
         // Aucune version publiée pour l'instant : on est donc à jour.
@@ -67,7 +67,7 @@ pub async fn chercher_mise_a_jour(app: AppHandle) -> Result<VueMaj, String> {
 
 /// Télécharge la version trouvée (event « mise-a-jour » : pourcentage), arrête les serveurs proprement,
 /// puis lance l'installeur. BHOST se ferme et l'installeur le rouvre.
-#[tauri::command]
+#[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn installer_mise_a_jour(app: AppHandle) -> Result<(), String> {
     let Some(maj) = app.state::<EtatMaj>().trouvee.lock().unwrap().clone() else {
         return Err("Recherche d'abord la mise à jour.".into());
@@ -92,7 +92,7 @@ pub async fn installer_mise_a_jour(app: AppHandle) -> Result<(), String> {
     // Les serveurs s'arrêtent proprement (le monde est enregistré) avant que l'installeur ferme BHOST.
     let _ = app.emit("mise-a-jour", 100u8);
     let arret = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    crate::hote::async_runtime::spawn_blocking(move || {
         crate::automatique::FERMETURE.store(true, std::sync::atomic::Ordering::Relaxed);
         crate::tout_arreter(&arret);
         arret.state::<crate::Etat>().acces.tout_fermer();
