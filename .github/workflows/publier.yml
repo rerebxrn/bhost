@@ -47,6 +47,7 @@ jobs:
         run: node -e "const f='src-tauri/tauri.conf.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.bundle.createUpdaterArtifacts=true;require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
 
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -58,3 +59,14 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
+
+      # BHOST Setup (l'installeur aux couleurs de BHOST) : il emporte l'installeur Windows qu'on vient de fabriquer.
+      - run: npm run setup
+
+      - name: Joindre BHOST-Setup.exe à la version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tauri.outputs.appVersion }}
+        run: |
+          Copy-Item setup/target/release/bhost-setup.exe BHOST-Setup.exe
+          gh release upload "v$env:VERSION" BHOST-Setup.exe --clobber --repo "$env:GITHUB_REPOSITORY"

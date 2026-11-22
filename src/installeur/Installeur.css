@@ -1,0 +1,123 @@
+/* BHOST Setup : la fenêtre (sans cadre, transparente) n'est que la plaque de verre.
+   La fenêtre fait 30 px de plus de chaque côté : la place de l'ombre.
+   Le verre est fait du fond du thème, flouté, sous le voile du verre : le même rendu que sur l'écran Bienvenue. */
+html,
+body {
+  background: transparent;
+}
+
+.ins-fenetre {
+  position: relative;
+  isolation: isolate;
+  height: calc(100% - 60px);
+  margin: 30px;
+  padding: 0;
+  border-radius: 30px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 0 0 0.5px var(--sep),
+    0 0 0 0.5px var(--sep),
+    0 12px 30px rgba(16, 40, 92, 0.22);
+}
+
+[data-theme="dark"] .ins-fenetre {
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.12),
+    inset 0 0 0 0.5px var(--sep),
+    0 0 0 0.5px rgba(0, 0, 0, 0.5),
+    0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.ins-fenetre::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  /* Le centre du fond, à la taille de la fenêtre de BHOST : ce que montre la plaque sur l'écran Bienvenue. */
+  background: var(--fond-couleur) var(--fond) center / 1280px auto no-repeat;
+  /* Flou de la fenêtre de BHOST (.fenetre), puis celui du verre (.g) */
+  filter: blur(var(--blur-material)) saturate(1.6);
+  transform: scale(1.2);
+}
+
+/* Les mêmes couches que sur l'écran Bienvenue : la teinte de la fenêtre, puis le voile du verre (.g). */
+.ins-fenetre::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(var(--glass), var(--glass)),
+    linear-gradient(var(--window-tint), var(--window-tint));
+}
+
+/* Réduire et Fermer, dans le coin (Fermer est arrondi comme la fenêtre). */
+.ins-wc {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: var(--h-titlebar);
+}
+
+.ins-wc .wc.close {
+  border-top-right-radius: 30px;
+}
+
+.ins-wc .wc[disabled] {
+  opacity: 0.35;
+}
+
+.ins-panneau {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 30px 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-22);
+}
+
+/* Prêt : la coche verte posée sur le coin de la tuile. */
+.ins-ok {
+  position: relative;
+  display: block;
+}
+
+.ins-ok svg:last-child {
+  position: absolute;
+  right: -7px;
+  bottom: -3px;
+  color: var(--st-online);
+  background: var(--pl-tuile);
+  border-radius: 50%;
+}
+
+.ins-dossier {
+  width: 100%;
+}
+
+.ins-dossier .lbl {
+  gap: var(--space-2);
+}
+
+.ins-retour {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ins-progres {
+  width: 100%;
+  max-width: 300px;
+  margin-top: 0;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.ins-progres .md-barre {
+  margin-top: 0;
+}

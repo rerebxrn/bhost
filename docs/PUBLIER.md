@@ -21,7 +21,18 @@ L'installeur est signé : BHOST refuse une mise à jour qui n'est pas signée av
 1. Change le numéro (ex. `0.2.0`) dans `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` et `package.json`.
 2. Commit, puis `git push`.
 3. GitHub › Actions › « Publier BHOST » › Run workflow (≈ 15 min).
-4. La version apparaît dans Releases. Les BHOST installés la trouvent.
+4. La version apparaît dans Releases, avec **BHOST-Setup.exe** : c'est le fichier à télécharger depuis le site
+   (`https://github.com/rerebxrn/bhost/releases/latest/download/BHOST-Setup.exe`). Les BHOST installés trouvent la mise à jour.
+
+## BHOST Setup sur ton PC
+
+Pour essayer l'installeur sans publier (PowerShell, dans le dossier du projet) :
+```
+npm run tauri build
+npm run setup
+```
+Résultat : `setup\target\release\bhost-setup.exe`. Il emporte l'installeur Windows de BHOST (`src-tauri\target\release\bundle\nsis\`)
+et le lance sans fenêtre : mêmes raccourcis, même désinstallation, mêmes mises à jour. Sans WebView2, il ouvre l'installeur Windows classique.
 
 ## Machines dédiées (BHOST OS et VPS)
 

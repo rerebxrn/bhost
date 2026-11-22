@@ -1,0 +1,31 @@
+[package]
+name = "bhost-setup"
+version = "0.1.0"
+description = "BHOST Setup : l'installeur de BHOST"
+authors = ["Thomas"]
+edition = "2024"
+
+# BHOST Setup emporte l'installeur Windows de BHOST (fabriqué par « npm run tauri build »)
+# et le lance sans fenêtre. Marche à suivre : docs/PUBLIER.md (« npm run setup »).
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+# L'espace libre du disque choisi.
+sysinfo = { version = "0.40", default-features = false, features = ["disk"] }
+
+[features]
+# Les pages sont rangées dans le programme (sans serveur de développement), comme avec « tauri build ».
+default = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

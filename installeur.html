@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Installer BHOST</title>
+    <script>
+      // Applique le bon thème et le bon mode avant l'affichage, pour éviter un flash.
+      // Même logique que lire() dans src/theme/ThemeProvider.tsx : changer les deux ensemble.
+      try {
+        var r = JSON.parse(localStorage.getItem("bhost.theme") || "{}") || {};
+        var mode = r.mode, fond = r.fond === "vague" ? "azur" : r.fond;
+        if (mode === "lagon" || mode === "nuit") { fond = "azur"; mode = mode === "nuit" ? "sombre" : "clair"; }
+        var sombre = mode === "sombre" || (mode !== "clair" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = sombre ? "dark" : "light";
+        document.documentElement.dataset.fond = fond === "ambre" ? "ambre" : "azur";
+      } catch (e) {
+        document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.fond = "azur";
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/installeur/main.tsx"></script>
+  </body>
+</html>

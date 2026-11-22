@@ -33,13 +33,33 @@
     "targets": [
       "nsis"
     ],
+    "publisher": "BHOST",
+    "homepage": "https://bhost.app",
+    "copyright": "© 2026 BHOST · GPL-3.0",
+    "shortDescription": "Héberge des serveurs Minecraft Java sur ton PC",
+    "category": "Utility",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "languages": [
+          "French"
+        ],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "startMenuFolder": "BHOST"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    }
   },
   "plugins": {
     "updater": {
