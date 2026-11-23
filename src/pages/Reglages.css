@@ -178,3 +178,10 @@
   letter-spacing: 0.06em;
   text-align: left;
 }
+
+/* Mention obligatoire de Mojang, sous le dernier groupe. */
+.rg-mention {
+  margin: var(--space-22) 0 0 var(--space-2);
+  font: var(--f-sous-titre);
+  color: var(--text2);
+}

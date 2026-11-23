@@ -396,6 +396,9 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
             </button>
           </div>
         </section>
+
+        {/* Obligatoire (règles d’utilisation de Minecraft) : en anglais, comme le texte officiel. */}
+        <p className="rg-mention">NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</p>
       </div>
     </div>
   );

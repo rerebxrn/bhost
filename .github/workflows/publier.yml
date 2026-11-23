@@ -21,6 +21,8 @@ jobs:
     environment: publication
     permissions:
       contents: write # créer la Release
+    outputs:
+      version: ${{ steps.tauri.outputs.appVersion }}
     steps:
       # Actions épinglées sur un commit précis : une action piratée ne peut pas voler la clé.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,10 +43,17 @@ jobs:
       # Échoue si Cargo.lock n'est pas à jour : on compile exactement les versions vérifiées.
       - run: cargo fetch --locked --manifest-path src-tauri/Cargo.toml
 
-      # Seulement ici : fabriquer aussi le fichier signé pour les mises à jour
-      # (sur ton PC, « npm run tauri build » marche sans la clé secrète).
+      # D'abord tout compiler SANS la clé de signature : le code des paquets npm (Vite…) et des build.rs de Cargo
+      # tourne ici, et ne peut donc pas la voler.
+      - name: Compiler (sans la clé)
+        run: |
+          npm run build
+          npx --no-install tauri build --no-bundle
+
+      # Ensuite seulement : l'installeur et le fichier signé pour les mises à jour, avec la clé.
+      # Plus rien à compiler (l'interface et le programme sont prêts) : seul l'emballage tourne avec elle.
       - name: Fichiers de mise à jour
-        run: node -e "const f='src-tauri/tauri.conf.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.bundle.createUpdaterArtifacts=true;require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
+        run: node -e "const f='src-tauri/tauri.conf.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.bundle.createUpdaterArtifacts=true;c.build.beforeBuildCommand='';require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
 
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         id: tauri
@@ -55,7 +64,10 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: BHOST __VERSION__
-          releaseBody: Nouvelle version de BHOST.
+          releaseBody: |
+            Nouvelle version de BHOST.
+
+            NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
@@ -70,3 +82,54 @@ jobs:
         run: |
           Copy-Item setup/target/release/bhost-setup.exe BHOST-Setup.exe
           gh release upload "v$env:VERSION" BHOST-Setup.exe --clobber --repo "$env:GITHUB_REPOSITORY"
+
+  # Les machines dédiées : l'agent Linux (pour BHOST OS et les VPS) et la commande d'installation des VPS.
+  # Compilé pour une glibc ancienne (2.31) : il marche aussi sur Ubuntu 22.04 et Debian 12.
+  # Signé comme l'installeur Windows : l'agent refuse de se mettre à jour avec un fichier mal signé.
+  machines:
+    needs: windows
+    runs-on: ubuntu-24.04
+    environment: publication
+    permissions:
+      contents: write # joindre les fichiers à la Release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+
+      - run: npm ci --ignore-scripts
+      - run: cargo fetch --locked --manifest-path src-tauri/Cargo.toml
+
+      # Sans la clé : rien de ce qui tourne ici ne peut la voler.
+      - name: Compiler l'agent (sans la clé)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libssl-dev pkg-config
+          pip install ziglang==0.13.0
+          cargo install cargo-zigbuild --locked --version 0.19.8
+          cd src-tauri
+          cargo zigbuild --locked --release --no-default-features --features agent --bin bhost-agent --target x86_64-unknown-linux-gnu.2.31
+          cp target/x86_64-unknown-linux-gnu/release/bhost-agent ../bhost-agent-linux-x86_64
+          cd ..
+          sha256sum bhost-agent-linux-x86_64 > bhost-agent-linux-x86_64.sha256
+          cp os/installer-vps.sh installer-vps.sh
+
+      # Avec la clé : seulement la signature (bhost-agent-linux-x86_64.sig).
+      - name: Signer l'agent
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx --no-install tauri signer sign bhost-agent-linux-x86_64
+
+      - name: Joindre l'agent à la version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.windows.outputs.version }}
+        run: gh release upload "v$VERSION" bhost-agent-linux-x86_64 bhost-agent-linux-x86_64.sha256 bhost-agent-linux-x86_64.sig installer-vps.sh --clobber --repo "$GITHUB_REPOSITORY"
