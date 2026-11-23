@@ -1,4 +1,4 @@
-// Le pont entre l'interface et la partie Rust de BHOST.
+// Le pont entre l’interface et la partie Rust de BHOST.
 // Chaque fonction appelle une commande de src-tauri/src/lib.rs.
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -6,7 +6,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Acces, Machine, Priorite, Serveur, Statut } from "./types";
 
 // ---- Machines dédiées ----
-// Un serveur sur une machine dédiée reçoit les mêmes commandes qu'un serveur de ce PC :
+// Un serveur sur une machine dédiée reçoit les mêmes commandes qu’un serveur de ce PC :
 // elles passent par « machine_appel » (Rust → relais → machine). On reconnaît ces serveurs par leur id.
 const machineDe = new Map<string, string>(); // id du serveur → id de sa machine
 
@@ -23,7 +23,7 @@ function invoke<T>(commande: string, args?: Record<string, unknown>, machine?: s
   return invokeTauri<T>("machine_appel", { machine: cible, commande, args: args ?? {} });
 }
 
-// La machine dédiée d'un serveur (pas les machines de test, jouées par ce PC) ; absente : ce PC.
+// La machine dédiée d’un serveur (pas les machines de test, jouées par ce PC) ; absente : ce PC.
 function surMachine(id: string) {
   const m = machineDe.get(id);
   return m && !m.startsWith("7e57") ? m : undefined;
@@ -35,7 +35,7 @@ async function machinesEnLigne() {
   return machines.filter((m) => m.etat === "en-ligne" && !m.id.startsWith("7e57")).map((m) => m.id);
 }
 
-// Des fichiers de ce PC vers un serveur d'une machine dédiée : envoyés, puis rangés là-bas (machine.rs).
+// Des fichiers de ce PC vers un serveur d’une machine dédiée : envoyés, puis rangés là-bas (machine.rs).
 function envoyer<T>(machine: string, id: string, sources: string[], quoi: "fichiers" | "monde" | "icone", dossier: string | null, actuel: boolean | null) {
   return invokeTauri<T>("envoyer_a_machine", { machine, id, sources, quoi, dossier, actuel });
 }
@@ -52,7 +52,7 @@ export async function listerServeurs() {
 }
 
 // Ajoute à BHOST un serveur qui existe déjà dans un dossier.
-// En cas de refus, l'erreur est une phrase en français à afficher telle quelle.
+// En cas de refus, l’erreur est une phrase en français à afficher telle quelle.
 export function importerServeur(dossier: string) {
   return invoke<Serveur>("importer_serveur", { dossier });
 }
@@ -65,13 +65,13 @@ export type InfosCreation = {
   libreGo: number;
   totalGo: number;
   memoireGo: number; // mémoire du PC
-  premier: boolean; // aucun serveur encore : l'assistant commence par le dossier
+  premier: boolean; // aucun serveur encore : l’assistant commence par le dossier
 };
 export const infosCreation = () => invoke<InfosCreation>("infos_creation");
 export const changerDossierServeurs = (dossier: string) => invoke<void>("changer_dossier_serveurs", { dossier });
 
 export type VersionMc = { id: string; java: number | null; instable: boolean };
-// Les versions qu'on peut installer (demandées à Mojang, PaperMC ou Purpur).
+// Les versions qu’on peut installer (demandées à Mojang, PaperMC ou Purpur).
 export const versionsMinecraft = (logiciel: string, snapshots: boolean) =>
   invoke<VersionMc[]>("versions_minecraft", { logiciel, snapshots });
 
@@ -84,13 +84,14 @@ export type DemandeCreation = {
   mode: string; // survie, creatif, aventure, hardcore
   difficulte: string; // paisible, facile, normale, difficile
   joueursMax: number;
-  couleur: string; // l'icône du serveur (clé de theme/icones.ts)
+  couleur: string; // l’icône du serveur (clé de theme/icones.ts)
   ouvertAmis: boolean; // Ouvert à tes amis dès le départ
-  machine?: string; // id d'une machine dédiée ; absent = ce PC
+  machine?: string; // id d’une machine dédiée ; absent = ce PC
   stockageGo?: number; // machine dédiée : stockage max
+  modpack?: string; // logiciel « Modpack » : le projet Modrinth du pack
 };
-// Crée le serveur. L'avancement arrive par la nouvelle « creation ».
-// Machine dédiée : elle n'a pas les Réglages de ce PC. Le pseudo d'ici devient OP sur le nouveau serveur.
+// Crée le serveur. L’avancement arrive par la nouvelle « creation ».
+// Machine dédiée : elle n’a pas les Réglages de ce PC. Le pseudo d’ici devient OP sur le nouveau serveur.
 export async function creerServeur({ machine, ...demande }: DemandeCreation) {
   if (!machine || machine.startsWith("7e57")) return invokeTauri<Serveur>("creer_serveur", { demande: { ...demande, machine } });
   const s = noter([await invoke<Serveur>("creer_serveur", { demande }, machine)])[0];
@@ -99,7 +100,7 @@ export async function creerServeur({ machine, ...demande }: DemandeCreation) {
   return s;
 }
 
-// S'abonne à l'avancement de la création (tâche 0 = Java, 1 = serveur, 2 = monde).
+// S’abonne à l’avancement de la création (tâche 0 = Java, 1 = serveur, 2 = monde).
 export function ecouterCreation(recu: (tache: number, pourcent: number) => void) {
   const abonnement = listen<{ tache: number; pourcent: number }>("creation", (e) => recu(e.payload.tache, e.payload.pourcent));
   return () => {
@@ -107,10 +108,10 @@ export function ecouterCreation(recu: (tache: number, pourcent: number) => void)
   };
 }
 
-// Change le nom d'un serveur. En cas de refus, l'erreur est une phrase à afficher.
+// Change le nom d’un serveur. En cas de refus, l’erreur est une phrase à afficher.
 export const renommerServeur = (id: string, nom: string) => invoke<Serveur>("renommer_serveur", { id, nom });
 
-// Change la couleur du cube d'un serveur.
+// Change la couleur du cube d’un serveur.
 export const couleurServeur = (id: string, couleur: string) => invoke<Serveur>("couleur_serveur", { id, couleur });
 
 // Supprime un serveur : son dossier va à la Corbeille.
@@ -119,7 +120,7 @@ export const supprimerServeur = (id: string) => invoke<void>("supprimer_serveur"
 // Retire un serveur de BHOST : son dossier reste sur le PC.
 export const retirerServeur = (id: string) => invoke<void>("retirer_serveur", { id });
 
-// Ouvre le dossier d'un serveur dans l'Explorateur de fichiers.
+// Ouvre le dossier d’un serveur dans l’Explorateur de fichiers.
 export const ouvrirDossier = (id: string) => invoke<void>("ouvrir_dossier", { id });
 
 // Ouvre la fenêtre de Windows pour choisir un dossier. Renvoie null si on annule.
@@ -141,11 +142,11 @@ export const forcerArret = (id: string) => invoke<void>("forcer_arret", { id });
 // Envoie une commande au serveur, comme tapée dans sa console.
 export const envoyerCommande = (id: string, commande: string) => invoke<void>("envoyer_commande", { id, commande });
 
-// Les lignes de console déjà reçues (pour l'ouverture de la page).
+// Les lignes de console déjà reçues (pour l’ouverture de la page).
 // « dernier » est le numéro de la dernière ligne de la liste.
 export const lireConsole = (id: string) => invoke<{ dernier: number; lignes: string[] }>("lire_console", { id });
 
-// S'abonne aux changements d'état des serveurs. Renvoie de quoi se désabonner.
+// S’abonne aux changements d’état des serveurs. Renvoie de quoi se désabonner.
 export function ecouterStatuts(recu: (id: string, statut: Statut, depuis: number | null) => void) {
   const abonnement = listen<{ id: string; statut: Statut; depuis: number | null }>("statut", (e) =>
     recu(e.payload.id, e.payload.statut, e.payload.depuis),
@@ -155,7 +156,7 @@ export function ecouterStatuts(recu: (id: string, statut: Statut, depuis: number
   };
 }
 
-// S'abonne à la liste des joueurs connectés. Renvoie de quoi se désabonner.
+// S’abonne à la liste des joueurs connectés. Renvoie de quoi se désabonner.
 export function ecouterJoueurs(recu: (id: string, joueurs: string[]) => void) {
   const abonnement = listen<{ id: string; joueurs: string[] }>("joueurs", (e) => recu(e.payload.id, e.payload.joueurs));
   return () => {
@@ -163,9 +164,9 @@ export function ecouterJoueurs(recu: (id: string, joueurs: string[]) => void) {
   };
 }
 
-// Ouvert à tes amis : l'état des ports ouverts sur la box, et ses changements.
+// Ouvert à tes amis : l’état des ports ouverts sur la box, et ses changements.
 // Ceux de ce PC et ceux de chaque machine dédiée, gardés à part (chacun envoie sa liste entière).
-const accesDe = new Map<string, Acces[]>(); // « ici » ou l'id de la machine → sa liste
+const accesDe = new Map<string, Acces[]>(); // « ici » ou l’id de la machine → sa liste
 const tousLesAcces = () => [...accesDe.values()].flat();
 export async function etatsAcces() {
   const [ici, machines] = await Promise.all([invokeTauri<Acces[]>("etats_acces"), machinesEnLigne()]);
@@ -174,10 +175,10 @@ export async function etatsAcces() {
   return tousLesAcces();
 }
 export const ouvrirAuxAmis = (id: string, ouvert: boolean) => invoke<Serveur>("ouvrir_aux_amis", { id, ouvert });
-// L'adresse par le relais (« survie.bhost.app ») : le mot est-il libre ? pris (proposition : « survie2 ») ?
+// L’adresse par le relais (« survie.bhost.app ») : le mot est-il libre ? pris (proposition : « survie2 ») ?
 export type EtatAdresse = { etat: "actuelle" | "libre" | "pris" | "invalide" | "trop" | "injoignable" | "ancienne"; proposition?: string };
 export const adresseLibre = (id: string, mot: string) => invoke<EtatAdresse>("adresse_libre", { id, mot });
-// Change l'adresse ; la nouvelle arrive par la nouvelle « acces ».
+// Change l’adresse ; la nouvelle arrive par la nouvelle « acces ».
 export const changerAdresse = (id: string, mot: string) => invoke<void>("changer_adresse", { id, mot });
 // Ce que la personne tape : minuscules, chiffres et tirets (comme le relais, protocole.rs › mot_adresse).
 export function motAdresse(texte: string) {
@@ -198,7 +199,7 @@ export type VueBedrock = {
   actif: boolean;
   port: number; // 19132, ou un suivant
   redemarrer: boolean; // le serveur tourne : compte au prochain démarrage
-  note?: string; // « ViaVersion n'a pas pu être installé… »
+  note?: string; // « ViaVersion n’a pas pu être installé… »
 };
 export const bedrockServeur = (id: string) => invoke<VueBedrock>("bedrock_serveur", { id });
 export const reglerBedrock = (id: string, actif: boolean) => invoke<VueBedrock>("regler_bedrock", { id, actif });
@@ -217,7 +218,7 @@ export function ecouterAcces(recu: (liste: Acces[]) => void) {
   };
 }
 
-// S'abonne aux mesures (mémoire, processeur), envoyées toutes les deux secondes pour chaque serveur allumé.
+// S’abonne aux mesures (mémoire, processeur), envoyées toutes les deux secondes pour chaque serveur allumé.
 export function ecouterMesures(recu: (id: string, processeur: number, memoireMo: number) => void) {
   const abonnement = listen<{ id: string; processeur: number; memoireMo: number }>("mesure", (e) =>
     recu(e.payload.id, e.payload.processeur, e.payload.memoireMo),
@@ -227,7 +228,7 @@ export function ecouterMesures(recu: (id: string, processeur: number, memoireMo:
   };
 }
 
-// S'abonne au téléchargement de Java (pourcent : null quand c'est fini).
+// S’abonne au téléchargement de Java (pourcent : null quand c’est fini).
 export function ecouterJava(recu: (id: string, version: number, pourcent: number | null) => void) {
   const abonnement = listen<{ id: string; version: number; pourcent: number | null }>("java", (e) =>
     recu(e.payload.id, e.payload.version, e.payload.pourcent),
@@ -237,7 +238,7 @@ export function ecouterJava(recu: (id: string, version: number, pourcent: number
   };
 }
 
-// S'abonne aux ticks par seconde (20 = tout va bien), relevés toutes les dix secondes.
+// S’abonne aux ticks par seconde (20 = tout va bien), relevés toutes les dix secondes.
 export function ecouterTps(recu: (id: string, tps: number) => void) {
   const abonnement = listen<{ id: string; tps: number }>("tps", (e) => recu(e.payload.id, e.payload.tps));
   return () => {
@@ -245,17 +246,17 @@ export function ecouterTps(recu: (id: string, tps: number) => void) {
   };
 }
 
-// Dit à Rust quel serveur est affiché à l'accueil : il ne demande les ticks par seconde qu'à celui-là.
+// Dit à Rust quel serveur est affiché à l’accueil : il ne demande les ticks par seconde qu’à celui-là.
 export const regarderTps = (id: string, actif: boolean) => invoke<void>("regarder_tps", { id, actif });
 
-// La tête d'un joueur (une image prête à afficher), demandée à Mojang par Rust. null s'il n'en a pas.
+// La tête d’un joueur (une image prête à afficher), demandée à Mojang par Rust. null s’il n’en a pas.
 export const teteJoueur = (nom: string) => invoke<string | null>("tete_joueur", { nom });
 
-// L'icône de BHOST dans Windows (barre des tâches, Alt+Tab, zone de notification) suit le thème : « azur-clair »…
+// L’icône de BHOST dans Windows (barre des tâches, Alt+Tab, zone de notification) suit le thème : « azur-clair »…
 export const changerIcone = (theme: string) => invoke<void>("changer_icone", { theme });
 
-// S'abonne aux nouvelles lignes de console (n : numéro de la ligne).
-// La promesse est tenue quand l'abonnement est en place ; elle donne de quoi se désabonner.
+// S’abonne aux nouvelles lignes de console (n : numéro de la ligne).
+// La promesse est tenue quand l’abonnement est en place ; elle donne de quoi se désabonner.
 export function ecouterConsole(recu: (id: string, n: number, ligne: string) => void) {
   return listen<{ id: string; n: number; ligne: string }>("console", (e) =>
     recu(e.payload.id, e.payload.n, e.payload.ligne),
@@ -276,12 +277,12 @@ export type ReglagesServeur = {
   disqueMaxMo?: number; // machine dédiée : le stockage max
 };
 
-// Le code de conduite (1.21.9 et plus) : vide s'il n'y en a pas. Vide en écrivant : coupé.
+// Le code de conduite (1.21.9 et plus) : vide s’il n’y en a pas. Vide en écrivant : coupé.
 export const codeConduite = (id: string) => invoke<string>("code_conduite", { id });
 export const reglerCodeConduite = (id: string, texte: string) => invoke<string>("regler_code_conduite", { id, texte });
 
 export const parametresServeur = (id: string) => invoke<Parametres>("parametres_serveur", { id });
-// Enregistre les réglages gardés par BHOST. Renvoie le serveur et l'aperçu à jour.
+// Enregistre les réglages gardés par BHOST. Renvoie le serveur et l’aperçu à jour.
 export const reglerServeur = (id: string, reglages: ReglagesServeur) =>
   invoke<[Serveur, Parametres]>("regler_serveur", { id, reglages });
 // Mode, difficulté, joueurs : écrits dans server.properties.
@@ -293,7 +294,7 @@ export async function choisirJava() {
   return typeof choix === "string" ? choix : null;
 }
 
-// Copie un serveur arrêté (clic droit › Dupliquer). L'avancement arrive par la nouvelle « copie ».
+// Copie un serveur arrêté (clic droit › Dupliquer). L’avancement arrive par la nouvelle « copie ».
 export const dupliquerServeur = (id: string) => invoke<Serveur>("dupliquer_serveur", { id }).then((s) => noter([s])[0]);
 
 export function ecouterCopie(recu: (id: string, pourcent: number) => void) {
@@ -314,7 +315,7 @@ export const reglerRegle = (id: string, cle: string, valeur: number) => invoke<R
 // ---- Paramètres › Mondes ----
 
 export type Monde = {
-  dossier: string; // nom du dossier : c'est lui qui désigne le monde
+  dossier: string; // nom du dossier : c’est lui qui désigne le monde
   nom: string;
   version: string | null;
   taille: number; // octets
@@ -343,8 +344,8 @@ export function importerMonde(id: string, source: string, actuel: boolean) {
 }
 
 // Choisir où enregistrer une archive .zip. Renvoie null si on annule.
-export async function choisirEnregistrement(nom: string) {
-  const choix = await save({ title: "Enregistrer le monde", defaultPath: nom, filters: [{ name: "Archive", extensions: ["zip"] }] });
+export async function choisirEnregistrement(nom: string, titre = "Enregistrer le monde") {
+  const choix = await save({ title: titre, defaultPath: nom, filters: [{ name: "Archive", extensions: ["zip"] }] });
   return typeof choix === "string" ? choix : null;
 }
 
@@ -359,7 +360,7 @@ export async function choisirZip() {
 // Le serveur doit être arrêté. Le monde est sauvegardé juste avant.
 export const changerVersion = (id: string, logiciel: string, version: string) => invoke<Serveur>("changer_version", { id, logiciel, version });
 
-// S'abonne à l'avancement d'un long travail (sauvegarde, copie, installation…).
+// S’abonne à l’avancement d’un long travail (sauvegarde, copie, installation…).
 export function ecouterTravail(recu: (id: string, etape: string, pourcent: number) => void) {
   const abonnement = listen<{ id: string; etape: string; pourcent: number }>("travail", (e) => recu(e.payload.id, e.payload.etape, e.payload.pourcent));
   return () => {
@@ -389,7 +390,7 @@ export const actionJoueur = (id: string, action: ActionJoueur, nom: string, moti
 export const changerListeBlanche = (id: string, active: boolean) => invoke<Joueurs>("liste_blanche", { id, active });
 // Joueurs › Demandes : Accepter (liste blanche) ou Refuser (ses prochains essais sont ignorés).
 export const repondreDemande = (id: string, nom: string, accepter: boolean) => invoke<Joueurs>("repondre_demande", { id, nom, accepter });
-// Les demandes d'un serveur ont changé. `nouvelle` : quelqu'un vient d'essayer d'entrer.
+// Les demandes d’un serveur ont changé. `nouvelle` : quelqu’un vient d’essayer d’entrer.
 export function ecouterDemandes(recu: (id: string, demandes: Demande[], nouvelle: Demande | null) => void) {
   const abonnement = listen<{ id: string; demandes: Demande[]; nouvelle: Demande | null }>("demandes", (e) =>
     recu(e.payload.id, e.payload.demandes, e.payload.nouvelle),
@@ -417,7 +418,7 @@ export const commandeJoueur = (id: string, nom: string, action: string) => invok
 
 export type ReglagesSauvegarde = { auto: boolean; frequence: "1h" | "6h" | "24h"; garder: number; avantMaj: boolean };
 export type Sauvegarde = {
-  fichier: string; // c'est lui qui la désigne
+  fichier: string; // c’est lui qui la désigne
   quand: number; // ms
   taille: number; // octets
   genre: string; // auto, manuelle, maj, restauration, reinit
@@ -434,13 +435,13 @@ export const epinglerSauvegarde = (id: string, fichier: string, epinglee: boolea
   invoke<Sauvegardes>("epingler_sauvegarde", { id, fichier, epinglee });
 export const exporterSauvegarde = (id: string, fichier: string, cible: string) => invoke<void>("exporter_sauvegarde", { id, fichier, cible });
 export const supprimerSauvegarde = (id: string, fichier: string) => invoke<Sauvegardes>("supprimer_sauvegarde", { id, fichier });
-// Serveur arrêté. tout : tout le serveur ; sinon seulement le monde. L'état actuel est sauvegardé avant.
+// Serveur arrêté. tout : tout le serveur ; sinon seulement le monde. L’état actuel est sauvegardé avant.
 export const restaurerSauvegarde = (id: string, fichier: string, tout: boolean) => invoke<Serveur>("restaurer_sauvegarde", { id, fichier, tout });
 export const ouvrirSauvegardes = (id: string) => invoke<void>("ouvrir_sauvegardes", { id });
 
 // ---- Onglet Fichiers ----
 
-export type Element = { nom: string; dossier: boolean; taille: number; modifie: number | null }; // taille : octets, ou éléments d'un dossier
+export type Element = { nom: string; dossier: boolean; taille: number; modifie: number | null }; // taille : octets, ou éléments d’un dossier
 export type ContenuFichier =
   | { genre: "texte"; texte: string; latin1: boolean }
   | { genre: "image"; adresse: string }
@@ -461,7 +462,7 @@ export function iconeServeur(id: string, source: string) {
   const m = surMachine(id);
   return m ? envoyer<void>(m, id, [source], "icone", null, null) : invoke<void>("icone_serveur", { id, source });
 }
-/** Pose l'icône BHOST comme icône dans Minecraft (sauf image à soi, ou `remettre`) ; vrai si c'est une image à soi. */
+/** Pose l’icône BHOST comme icône dans Minecraft (sauf image à soi, ou `remettre`) ; vrai si c’est une image à soi. */
 export const iconeDuJeu = (id: string, remettre = false) => invoke<boolean>("icone_du_jeu", { id, remettre });
 export const montrerFichier = (id: string, chemin: string) => invoke<void>("montrer_fichier", { id, chemin });
 export const proprietesServeur = (id: string) => invoke<Record<string, string>>("proprietes_serveur", { id });
@@ -510,7 +511,7 @@ export const supprimerAutomatisation = (id: string, aid: string) => invoke<VueAu
 export const activerAutomatisation = (id: string, aid: string, on: boolean) =>
   invoke<VueAutomatisations>("activer_automatisation", { id, aid, on });
 
-// Une automatisation vient d'agir sur ce serveur (« Dernières actions » a changé).
+// Une automatisation vient d’agir sur ce serveur (« Dernières actions » a changé).
 export function ecouterAutomatisations(recu: (id: string) => void) {
   const abonnement = listen<string>("automatisations", (e) => recu(e.payload));
   return () => {
@@ -523,8 +524,8 @@ export function ecouterAutomatisations(recu: (id: string) => void) {
 export type VueReglages = {
   lancerWindows: boolean;
   garder: boolean; // fermer la fenêtre range BHOST en bas à droite, les serveurs continuent
-  proprement: boolean; // quand Windows s'éteint, BHOST arrête d'abord les serveurs
-  veille: boolean; // empêcher la veille tant qu'un serveur tourne
+  proprement: boolean; // quand Windows s’éteint, BHOST arrête d’abord les serveurs
+  veille: boolean; // empêcher la veille tant qu’un serveur tourne
   notifications: boolean;
   pseudo: string; // vide : aucun
   dossier: string; // le dossier des serveurs
@@ -540,9 +541,9 @@ export const ouvrirDossierServeurs = () => invoke<void>("ouvrir_dossier_serveurs
 // Réglages › Rechercher les mises à jour.
 export type VueMaj = { etat: "a-jour" | "dispo"; version: string | null };
 export const chercherMiseAJour = () => invoke<VueMaj>("chercher_mise_a_jour");
-// Télécharge, arrête les serveurs proprement, puis lance l'installeur (BHOST se ferme).
+// Télécharge, arrête les serveurs proprement, puis lance l’installeur (BHOST se ferme).
 export const installerMiseAJour = () => invoke<void>("installer_mise_a_jour");
-// L'avancement du téléchargement (0 à 100).
+// L’avancement du téléchargement (0 à 100).
 export function suivreMiseAJour(recu: (pourcent: number) => void): () => void {
   const abonnement = listen<number>("mise-a-jour", (e) => recu(e.payload));
   return () => {
@@ -553,7 +554,7 @@ export function suivreMiseAJour(recu: (pourcent: number) => void): () => void {
 // ---- Onglet Plugins / Mods / Datapacks ----
 
 export type Extension = {
-  fichier: string; // nom sur le disque (« WorldEdit.jar », ou « ….jar.disabled » s'il est coupé)
+  fichier: string; // nom sur le disque (« WorldEdit.jar », ou « ….jar.disabled » s’il est coupé)
   nom: string;
   version: string | null;
   description: string | null;
@@ -570,7 +571,7 @@ export type Extension = {
   conflit: string | null; // « En double avec X.jar. » ou « Ne va pas avec Y. »
   monde: boolean; // datapack qui a créé le terrain du monde : le retirer peut le casser
 };
-// Un datapack que le monde attend et qui n'est plus là.
+// Un datapack que le monde attend et qui n’est plus là.
 export type Manquant = { fichier: string; nom: string };
 export type GenreExtensions = "plugins" | "mods" | "datapacks";
 export type VueExtensions = {
@@ -580,7 +581,7 @@ export type VueExtensions = {
   monde: string | null; // datapacks : le monde où ils vont (« world »)
   liste: Extension[];
   redemarrer: boolean; // le serveur tourne et ses extensions ont changé
-  horsLigne: boolean; // le catalogue n'a pas répondu
+  horsLigne: boolean; // le catalogue n’a pas répondu
   manquants: Manquant[]; // le monde ne se charge plus : il lui manque ces datapacks
 };
 export type Projet = {
@@ -594,13 +595,15 @@ export type Projet = {
 };
 export type Tri = "pertinence" | "telecharges" | "moins" | "suivis" | "recents" | "maj";
 export type PageCatalogue = { projets: Projet[]; total: number; suite: boolean };
+// Créer un serveur › Modpack : les packs Modrinth qui tournent sur un serveur (page 0, 1, 2…). Cherchés depuis ce PC.
+export const chercherModpacks = (texte: string, page: number) => invokeTauri<{ projets: Projet[]; suite: boolean }>("chercher_modpacks", { texte, page });
 
 // genre : null = le genre principal du serveur.
 type G = GenreExtensions | null;
 export const extensionsServeur = (id: string, genre: G = null) => invoke<VueExtensions>("extensions_serveur", { id, genre });
 export const chercherExtensions = (id: string, texte: string, categorie: string | null, tri: Tri, page: number, genre: G = null) =>
   invoke<PageCatalogue>("chercher_extensions", { id, texte, categorie, tri, page, genre });
-// Un plugin n'a pas démarré (vu dans la console) : la liste a changé.
+// Un plugin n’a pas démarré (vu dans la console) : la liste a changé.
 export function ecouterExtensions(recu: (id: string) => void) {
   const abonnement = listen<string>("extensions", (e) => recu(e.payload));
   return () => {
@@ -625,11 +628,11 @@ export const mettreAJourExtensions = (id: string, fichiers: string[], genre: G =
 
 // ---- Accueil › Pourquoi ça lag ? (spark) ----
 
-// Lance l'analyse (30 s) ; secondes = 0 : spark vient d'être installé, il marchera au prochain démarrage.
+// Lance l’analyse (30 s) ; secondes = 0 : spark vient d’être installé, il marchera au prochain démarrage.
 export const pourquoiLag = (id: string) => invoke<{ secondes: number }>("pourquoi_lag", { id });
 // Les analyses en cours : id du serveur → heure de fin (ms). Gardées ici pour changer de page sans les perdre.
 export const analysesLag = new Map<string, number>();
-// La fin d'une analyse : l'adresse du rapport (à ouvrir), ou la phrase d'erreur.
+// La fin d’une analyse : l’adresse du rapport (à ouvrir), ou la phrase d’erreur.
 export function ecouterLag(recu: (id: string, lien: string | null, erreur: string | null) => void) {
   const abonnement = listen<{ id: string; lien?: string; erreur?: string }>("lag", (e) => {
     analysesLag.delete(e.payload.id);
@@ -640,15 +643,15 @@ export function ecouterLag(recu: (id: string, lien: string | null, erreur: strin
   };
 }
 
-// ---- Problèmes (cartes d'erreur de l'Accueil) ----
+// ---- Problèmes (cartes d’erreur de l’Accueil) ----
 
 // Ce qui empêche un serveur de tourner (problemes.rs). Disparaît au démarrage suivant.
 export type Probleme =
   | { genre: "java"; version: number }
   | { genre: "port"; port: number; libre: number | null; serveur: string | null } // serveur : un autre de BHOST qui a ce port
   | { genre: "crash" }
-  | { genre: "memoire"; go: number; libreGo: number; demarrage: boolean } // demarrage : le PC n'avait pas assez de mémoire libre
-  | { genre: "stockage"; go: number }; // machine dédiée : stockage max atteint, BHOST l'a arrêté
+  | { genre: "memoire"; go: number; libreGo: number; demarrage: boolean } // demarrage : le PC n’avait pas assez de mémoire libre
+  | { genre: "stockage"; go: number }; // machine dédiée : stockage max atteint, BHOST l’a arrêté
 
 // Ceux des serveurs de ce PC, et ceux des serveurs de chaque machine dédiée en ligne.
 export async function problemesServeurs() {
@@ -699,19 +702,25 @@ export async function choisirIso() {
 // Les machines reliées à ce PC. Leurs serveurs arriveront avec lister_serveurs (champ `machine`).
 export const machinesLiees = () => invokeTauri<Machine[]>("machines_liees");
 
-// Le système d'une machine dédiée (BHOST OS) : version, mises à jour, redémarrer, éteindre, code.
+// Le système d’une machine dédiée (BHOST OS) : version, mises à jour, redémarrer, éteindre, code.
 export type EtatSysteme = {
   version: string;
   attente?: number; // mises à jour en attente
   enCours?: "verification" | "installation" | null;
   redemarrage?: boolean; // un nouveau noyau attend un redémarrage
   verifie?: number; // dernière recherche (secondes depuis 1970)
+  agent?: string; // version de l’agent BHOST de la machine
+  agentNouveau?: string; // version plus récente publiée (comptée dans « attente »)
 };
-export const etatSysteme = (machine: string) => invoke<EtatSysteme>("etat_systeme", {}, machine);
+// Les machines de test (version de dev) n’ont pas de système à elles : rien à demander à ce PC.
+const deTest = (machine: string) => machine.startsWith("7e57");
+export const etatSysteme = (machine: string) =>
+  deTest(machine) ? Promise.resolve<EtatSysteme>({ version: "Test" }) : invoke<EtatSysteme>("etat_systeme", {}, machine);
 export const systemeMachine = (machine: string, action: "redemarrer" | "eteindre" | "verifier" | "mettre-a-jour") =>
-  invoke<null>("systeme_machine", { action }, machine);
-// Renvoie le nouveau code ; ce PC le garde, les autres appareils devront l'entrer.
-export const changerCodeMachine = (machine: string) => invoke<string>("changer_code", {}, machine);
+  deTest(machine) ? Promise.reject("Pas sur une machine de test.") : invoke<null>("systeme_machine", { action }, machine);
+// Renvoie le nouveau code ; ce PC le garde, les autres appareils devront l’entrer.
+export const changerCodeMachine = (machine: string) =>
+  deTest(machine) ? Promise.reject("Pas sur une machine de test.") : invoke<string>("changer_code", {}, machine);
 // VPS (Ubuntu ou Debian) : la commande qui en fait une machine BHOST, avec un code tiré ici.
 // À coller dans le terminal du VPS, ou dans son script « au démarrage » (cloud-init). Le script passe root tout seul.
 export const INSTALLEUR_VPS = "https://github.com/rerebxrn/bhost/releases/latest/download/installer-vps.sh";
@@ -721,7 +730,7 @@ export const commandeVps = (code: string) => `curl -fsSL ${INSTALLEUR_VPS} | BHO
 export const lierMachine = (code: string) => invoke<Machine>("lier_machine", { code });
 export const delierMachine = (id: string) => invoke<void>("delier_machine", { id });
 export const renommerMachine = (id: string, nom: string) => invoke<void>("renommer_machine", { id, nom });
-// S'abonne aux changements (une machine s'allume, s'éteint, est reliée). Renvoie de quoi se désabonner.
+// S’abonne aux changements (une machine s’allume, s’éteint, est reliée). Renvoie de quoi se désabonner.
 export function ecouterMachines(recu: (machines: Machine[]) => void) {
   const abonnement = listen<Machine[]>("machines", (e) => recu(e.payload));
   return () => {

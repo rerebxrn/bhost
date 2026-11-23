@@ -36,15 +36,11 @@ et le lance sans fenêtre : mêmes raccourcis, même désinstallation, mêmes mi
 
 ## Machines dédiées (BHOST OS et VPS)
 
-À joindre à la même Release (Edit › glisser les fichiers), à côté de l'installeur Windows :
+GitHub Actions joint tout seul à la Release (tâche « machines ») :
+- `bhost-agent-linux-x86_64`, `.sha256` et `.sig` : l'agent, compilé pour une glibc ancienne (2.31, marche sur
+  Ubuntu 22.04 et Debian 12) et **signé** avec la même clé que l'installeur. Les machines le trouvent dans
+  BHOST › Machine › Rechercher, et l'installent avec « Mettre à jour… » (l'agent refuse un fichier mal signé).
+- `installer-vps.sh` : la commande donnée par BHOST (Ajouter une machine › « Un VPS ? »).
 
-- `bhost-os.iso` et `bhost-os.iso.sha256` : l'ISO (voir `os/LISEZMOI.md`). BHOST les télécharge à l'étape « Clé USB ».
-- `installer-vps.sh` : le fichier `os/installer-vps.sh` tel quel. C'est lui que lance la commande donnée par BHOST
-  (Ajouter une machine › « Un VPS ? »).
-- `bhost-agent-linux-x86_64` et `bhost-agent-linux-x86_64.sha256` : l'agent pour les VPS. Compilé pour une glibc
-  ancienne (2.31) pour marcher sur Ubuntu 22.04 et Debian 12 aussi :
-  ```
-  pip install ziglang && cargo install cargo-zigbuild
-  cargo zigbuild --release --no-default-features --features agent --bin bhost-agent --target x86_64-unknown-linux-gnu.2.31
-  sha256sum bhost-agent-linux-x86_64 > bhost-agent-linux-x86_64.sha256
-  ```
+À joindre à la main (Edit › glisser les fichiers) : `bhost-os.iso` et `bhost-os.iso.sha256` (voir `os/LISEZMOI.md`).
+BHOST les télécharge à l'étape « Clé USB ».

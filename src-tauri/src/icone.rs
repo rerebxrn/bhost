@@ -82,7 +82,7 @@ pub fn appliquer(fenetre: &tauri::WebviewWindow, theme: &str, icones: &mut Icone
         // SAFETY : `donnees` est une image PNG complète tirée de notre propre fichier .ico ;
         // le pointeur et la longueur viennent de la même tranche.
         let icone = unsafe { CreateIconFromResourceEx(donnees.as_ptr(), donnees.len() as u32, 1, 0x0003_0000, taille, taille, LR_DEFAULTCOLOR) };
-        if icone.is_null() { Err("Windows a refusé l'icône.".to_string()) } else { Ok(icone as isize) }
+        if icone.is_null() { Err("Windows a refusé l’icône.".to_string()) } else { Ok(icone as isize) }
     };
     let petite = creer(SM_CXSMICON)?;
     let grande = match creer(SM_CXICON) {
@@ -148,7 +148,7 @@ mod tests {
         assert_eq!(fichier("azur-sombre"), AZUR_SOMBRE);
         assert_eq!(fichier("ambre-clair"), AMBRE_CLAIR);
         assert_eq!(fichier("ambre-sombre"), AMBRE_SOMBRE);
-        assert_eq!(fichier("n'importe quoi"), AZUR_CLAIR);
+        assert_eq!(fichier("n’importe quoi"), AZUR_CLAIR);
         // Quatre dessins différents.
         assert_ne!(AZUR_CLAIR, AZUR_SOMBRE);
         assert_ne!(AMBRE_CLAIR, AMBRE_SOMBRE);

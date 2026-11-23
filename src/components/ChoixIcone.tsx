@@ -6,13 +6,13 @@ import "./Menus.css";
 type Props = {
   valeur: string;
   onChoisir: (cle: string) => void;
-  // Assistant : on ne montre d'abord que les couleurs, avec « Plus d'icônes ».
+  // Assistant : on ne montre d’abord que les couleurs, avec « Plus d’icônes ».
   repliable?: boolean;
 };
 
 // Toutes les icônes de serveur, une ligne par groupe (fenêtre « Icône… » et assistant de création).
 export default function ChoixIcone({ valeur, onChoisir, repliable }: Props) {
-  // Replié, sauf si l'icône choisie n'est pas une couleur (sinon on ne la verrait pas).
+  // Replié, sauf si l’icône choisie n’est pas une couleur (sinon on ne la verrait pas).
   const [ouvert, setOuvert] = useState(!repliable || !GROUPES[0].icones.some((i) => i.cle === valeur));
   const groupes = ouvert ? GROUPES : GROUPES.slice(0, 1);
   return (
@@ -40,7 +40,7 @@ export default function ChoixIcone({ valeur, onChoisir, repliable }: Props) {
       ))}
       {repliable && (
         <button type="button" className="look-plus" aria-expanded={ouvert} onClick={() => setOuvert(!ouvert)}>
-          {ouvert ? "Moins d'icônes" : `Plus d'icônes (${TOUTES.length})`}
+          {ouvert ? "Moins d’icônes" : `Plus d’icônes (${TOUTES.length})`}
           <IconChevronDown size={14} stroke={2} aria-hidden className={ouvert ? "tourne" : ""} />
         </button>
       )}

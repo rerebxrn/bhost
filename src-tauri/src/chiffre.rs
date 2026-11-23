@@ -4,8 +4,8 @@
 //!   (les 16 premiers caractères de la clé publique). Le relais ne voit passer que du chiffré.
 //! - BHOST (le PC) vérifie que la clé du certificat donne bien l'id de la machine reliée, puis la retient :
 //!   ensuite, seule cette clé est acceptée (une autre machine qui se ferait passer pour elle est refusée).
-//! - Dans le tunnel chiffré, BHOST donne d'abord le code de la machine (« CODE <code> ») ; la machine répond
-//!   « OK <id> » ou « NON code ». Puis les lignes JSON habituelles (voir agent.rs).
+//! - Dans le tunnel chiffré, BHOST et la machine se prouvent qu'ils connaissent le même code, sans jamais l'envoyer
+//!   (SPAKE2, voir appairage.rs) ; la machine répond « OK <id> » ou « NON code ». Puis les lignes JSON habituelles (agent.rs).
 //!
 //! Tout est bloquant (des fils, comme le reste du pilotage) : un fil lit, un autre écrit sur la prise ;
 //! la connexion TLS est partagée derrière un verrou, et ce qui part sur la prise garde l'ordre des écritures.
@@ -169,6 +169,13 @@ impl Canal {
         self.ecrire(&tout)
     }
 
+    /// 32 octets propres à cette session TLS (RFC 5705) : la preuve du code y est attachée,
+    /// elle ne vaut pour aucune autre connexion.
+    pub fn empreinte_session(&self) -> io::Result<[u8; 32]> {
+        let tls = self.0.tls.lock().unwrap();
+        tls.export_keying_material([0u8; 32], b"bhost-appairage", None).map_err(io::Error::other)
+    }
+
     /// Coupe la connexion (les deux sens).
     pub fn fermer(&self) {
         let _ = self.0.prise.shutdown(std::net::Shutdown::Both);
@@ -242,6 +249,12 @@ fn finir(mut prise: TcpStream, mut tls: rustls::Connection) -> io::Result<Chiffr
     // Ce que la poignée de main a laissé à envoyer.
     vider(&mut interne.tls.lock().unwrap(), &interne.sortie)?;
     Ok(Chiffree { canal: Canal(interne.clone()), lecteur: Lecteur { interne, prise: lecture, tampon: Vec::new(), lu: 0 } })
+}
+
+/// TCP garde la connexion vivante : un PC ou une machine partis (veille, Wi-Fi coupé) sont vus en moins de 2 minutes.
+pub fn garder_vivante(prise: &TcpStream) {
+    let regle = socket2::TcpKeepalive::new().with_time(std::time::Duration::from_secs(60)).with_interval(std::time::Duration::from_secs(15));
+    let _ = socket2::SockRef::from(prise).set_tcp_keepalive(&regle);
 }
 
 /// Côté machine : accepte un PC sur cette prise.

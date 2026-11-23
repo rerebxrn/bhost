@@ -62,6 +62,7 @@ png = "0.18"
 base64 = "0.23"
 # Vérifier les téléchargements (empreinte SHA-256) et ouvrir les archives .zip (Java).
 sha2 = "0.10"
+minisign-verify = "0.2"
 sha1 = "0.10"
 md-5 = "0.10"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
@@ -70,6 +71,13 @@ tar = { version = "0.4", default-features = false }
 # Le relais BHOST (tunnel.rs) : la clé qui prouve que nos noms sont à nous, et le hasard pour la créer.
 ed25519-dalek = "2"
 getrandom = "0.3"
+# Relier et piloter une machine sans jamais faire voyager son code : SPAKE2 (le code ne sort pas du PC ni de la machine),
+# HMAC pour se prouver qu'on a la même clé, scrypt pour l'empreinte du code que voit le relais (lente à deviner).
+spake2 = "0.4"
+hmac = "0.12"
+scrypt = { version = "0.11", default-features = false }
+# Le port direct des machines : garder la connexion vivante (et voir une connexion morte).
+socket2 = "0.6"
 # Lire les fichiers des mondes (level.dat…), compressés en gzip.
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 # Retrouver la fenêtre de BHOST pour changer son icône.
@@ -80,6 +88,10 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
 # Ouvrir le port du serveur sur la box (UPnP), pour « Ouvert à tes amis ».
 igd-next = "0.18"
+
+# BHOST OS : chaque serveur est enfermé dans son dossier (Landlock), loin des clés de la machine.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 # Les fonctions de Windows : changer l'icône de la fenêtre, empêcher la mise en veille,
 # couper un serveur et tout ce qu'il a lancé (Job Object), attendre la fin des serveurs quand Windows s'éteint.

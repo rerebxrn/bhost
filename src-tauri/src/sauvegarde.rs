@@ -83,7 +83,7 @@ pub fn zipper_avec(elements: &[(PathBuf, String)], meta: Option<&Meta>, archive:
     }
     let total = fichiers.iter().map(|f| f.2).sum::<u64>().max(1);
     let partiel = archive.with_extension("zip.part");
-    let ecrire_err = |e: std::io::Error| format!("Impossible d'écrire l'archive ({e}).");
+    let ecrire_err = |e: std::io::Error| format!("Impossible d’écrire l’archive ({e}).");
     let resultat = (|| {
         if let Some(parent) = archive.parent() {
             fs::create_dir_all(parent).map_err(ecrire_err)?;
@@ -259,7 +259,7 @@ pub fn restaurer(archive: &Path, dossier: &Path, seulement: Option<&[String]>, a
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
             crate::garde::pas_un_lien(&chemin)?;
-            let mut sortie = fs::File::create(&chemin).map_err(|e| format!("Impossible d'écrire {} ({e}).", relatif.display()))?;
+            let mut sortie = fs::File::create(&chemin).map_err(|e| format!("Impossible d’écrire {} ({e}).", relatif.display()))?;
             crate::garde::copier_limite(&mut entree, &mut sortie, &mut budget)?;
         }
         avance((i * 100 / total) as u8);

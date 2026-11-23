@@ -13,14 +13,14 @@ import "./Joueurs.css";
 
 type Props = {
   serveur: Serveur;
-  acces?: Acces; // pour l'adresse à partager (fenêtre « Inviter »)
+  acces?: Acces; // pour l’adresse à partager (fenêtre « Inviter »)
   onErreur: (texte: string) => void;
   onInfo: (texte: string) => void;
 };
 
 type Liste = "connectes" | "blanche" | "demandes" | "bannis";
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 
 // « 2026-11-17 18:27:00 +0100 » (format de Minecraft) → « 17 nov. ».
 function jour(quand?: string): string {
@@ -42,7 +42,7 @@ function ilYa(quand: number, maintenant: number): string {
   return `${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${heure}`;
 }
 
-// L'onglet Joueurs : connectés (avec fiche et actions), liste blanche, demandes, bannis.
+// L’onglet Joueurs : connectés (avec fiche et actions), liste blanche, demandes, bannis.
 // Serveur allumé : tout passe par des commandes. Arrêté : BHOST modifie les fichiers du serveur.
 export default function Joueurs({ serveur, acces, onErreur, onInfo }: Props) {
   const [listes, setListes] = useState<Listes | null>(null);
@@ -54,11 +54,21 @@ export default function Joueurs({ serveur, acces, onErreur, onInfo }: Props) {
   const [inviter, setInviter] = useState<DOMRect | null>(null);
   const [, setTic] = useState(0);
   const allume = serveur.statut === "en-ligne";
+  const [illisible, setIllisible] = useState(false);
 
-  // On relit les listes à l'ouverture, et à chaque arrivée ou départ.
+  // On relit les listes à l’ouverture, et à chaque arrivée ou départ.
   const connectes = serveur.joueurs.join(",");
   useEffect(() => {
-    joueursServeur(serveur.id).then(setListes, (e) => onErreur(phrase(e)));
+    joueursServeur(serveur.id).then(
+      (l) => {
+        setListes(l);
+        setIllisible(false);
+      },
+      (e) => {
+        setIllisible(true);
+        onErreur(phrase(e));
+      },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serveur.id, connectes, serveur.statut]);
 
@@ -95,7 +105,7 @@ export default function Joueurs({ serveur, acces, onErreur, onInfo }: Props) {
 
   const estOp = (nom: string) => !!listes?.ops.some((o) => o.toLowerCase() === nom.toLowerCase());
   const basculerOp = (nom: string) =>
-    estOp(nom) ? essayer("deop", nom, `${nom} n'est plus OP`) : essayer("op", nom, `${nom} est OP`);
+    estOp(nom) ? essayer("deop", nom, `${nom} n’est plus OP`) : essayer("op", nom, `${nom} est OP`);
 
   const ajouter = (e: FormEvent) => {
     e.preventDefault();
@@ -127,7 +137,7 @@ export default function Joueurs({ serveur, acces, onErreur, onInfo }: Props) {
 
       {listes === null ? (
         <section className="surf">
-          <div className="empty">Lecture…</div>
+          <div className="empty">{illisible ? "Impossible de lire les joueurs pour l’instant." : "Lecture…"}</div>
         </section>
       ) : onglet === "connectes" ? (
         <section className="surf">
@@ -250,7 +260,7 @@ export default function Joueurs({ serveur, acces, onErreur, onInfo }: Props) {
       ) : (
         <section className="surf">
           {listes.bannis.length === 0 ? (
-            <div className="empty">Personne n'est banni.</div>
+            <div className="empty">Personne n’est banni.</div>
           ) : (
             listes.bannis.map((b) => (
               <div className="li" key={b.nom}>
@@ -337,7 +347,7 @@ type Menu = {
   onBannir: () => void;
 };
 
-// Le menu « … » d'un joueur connecté : un panneau de verre qui s'ouvre sous le bouton.
+// Le menu « … » d’un joueur connecté : un panneau de verre qui s’ouvre sous le bouton.
 function MenuJoueur({ nom, x, y, op, onFermer, onOp, onExpulser, onBannir }: Menu) {
   const menu = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState({ x, y });

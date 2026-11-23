@@ -1,5 +1,5 @@
 // Les petits mouvements du verre :
-//  - gel : un bouton marqué data-gel s'étire vers le pointeur quand on appuie, puis revient en ressort ;
+//  - gel : un bouton marqué data-gel s’étire vers le pointeur quand on appuie, puis revient en ressort ;
 //  - reflet : sur tout élément en verre (.g), un reflet doux suit la souris.
 
 const calme = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -13,7 +13,7 @@ export function demarrerGel(racine: HTMLElement) {
     if (!el || (el as HTMLButtonElement).disabled) return;
     const r = el.getBoundingClientRect();
     gel = { el, x0: e.clientX, y0: e.clientY, l: r.width, h: r.height };
-    // Le bouton grossit à partir de l'endroit où on a appuyé.
+    // Le bouton grossit à partir de l’endroit où on a appuyé.
     el.style.transformOrigin = `${(((e.clientX - r.left) / r.width) * 100).toFixed(0)}% ${(((e.clientY - r.top) / r.height) * 100).toFixed(0)}%`;
     el.classList.add("gel-on");
     el.style.transform = "scale(1.07)";
@@ -28,7 +28,7 @@ export function demarrerGel(racine: HTMLElement) {
       verre.style.setProperty("--my", `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
     }
     if (!gel) return;
-    // Le bouton suit un peu le pointeur et s'étire dans sa direction, comme de la gelée.
+    // Le bouton suit un peu le pointeur et s’étire dans sa direction, comme de la gelée.
     const dx = e.clientX - gel.x0;
     const dy = e.clientY - gel.y0;
     const frein = (d: number, max: number) => max * Math.tanh(d / (max * 4));

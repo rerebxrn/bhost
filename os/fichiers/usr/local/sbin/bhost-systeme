@@ -50,8 +50,18 @@ case "$action" in
 	mettre-a-jour)
 		etat installation
 		apt-get update -qq && mkdir -p /var/lib/apt/periodic && touch /var/lib/apt/periodic/update-success-stamp
-		apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
+		apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold --with-new-pkgs upgrade
 		apt-get -y -q autoremove --purge
+		# Le nouvel agent, déjà téléchargé et vérifié (signature) par l'agent : un vrai fichier, pas un lien.
+		nouveau=/var/lib/bhost/systeme/agent
+		if [ -f "$nouveau" ] && [ ! -L "$nouveau" ] && head -c 4 "$nouveau" | grep -q 'ELF'; then
+			install -m 755 -o root -g root "$nouveau" /usr/local/bin/bhost-agent.nouveau &&
+				mv -f /usr/local/bin/bhost-agent.nouveau /usr/local/bin/bhost-agent
+			rm -f "$nouveau"
+			etat ""
+			# L'agent arrête proprement les serveurs, puis repart avec la nouvelle version.
+			systemctl restart bhost-agent
+		fi
 		etat ""
 		;;
 esac

@@ -4,13 +4,15 @@ import "./Menus.css";
 type Props = {
   nom: string;
   garder?: boolean; // vrai : « Retirer de BHOST » (le dossier reste sur le PC)
+  machine?: boolean; // serveur d’une machine dédiée : pas de Corbeille là-bas
   onSupprimer: () => Promise<void>; // rejetée avec une phrase si Rust refuse
   onFermer: () => void;
 };
 
 // La petite fenêtre « Supprimer » ou « Retirer de BHOST ».
-// Supprimer : le dossier va à la Corbeille. Retirer : BHOST l'oublie, le dossier ne bouge pas.
-export default function Supprimer({ nom, garder = false, onSupprimer, onFermer }: Props) {
+// Supprimer : le dossier va à la Corbeille. Retirer : BHOST l’oublie, le dossier ne bouge pas.
+export default function Supprimer({ nom, garder = false, machine = false, onSupprimer, onFermer }: Props) {
+  const ou = machine ? "la machine" : "ton PC";
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
   const [ouvert, setOuvert] = useState(false);
@@ -25,7 +27,7 @@ export default function Supprimer({ nom, garder = false, onSupprimer, onFermer }
     onSupprimer()
       .then(onFermer)
       .catch((raison) => {
-        setErreur(typeof raison === "string" ? raison : "Ça n'a pas marché.");
+        setErreur(typeof raison === "string" ? raison : "Ça n’a pas marché.");
         setEnvoi(false);
       });
   };
@@ -43,7 +45,7 @@ export default function Supprimer({ nom, garder = false, onSupprimer, onFermer }
       <div className="g dialog" data-lens="panel" role="alertdialog" aria-modal="true" aria-labelledby="sup-titre" aria-describedby="sup-texte">
         <h4 id="sup-titre">{garder ? `Retirer « ${nom} » de BHOST ?` : `Supprimer « ${nom} » ?`}</h4>
         <p className="dlg-txt" id="sup-texte">
-          {garder ? "Son dossier reste sur ton PC." : "Son dossier ira dans la Corbeille."}
+          {garder ? `Son dossier reste sur ${ou}.` : machine ? "Son dossier sera effacé de la machine." : "Son dossier ira dans la Corbeille."}
         </p>
         {erreur && (
           <p className="dlg-err" role="alert">

@@ -7,7 +7,7 @@
 }
 
 .wz-head {
-  margin: 4px 0 18px;
+  margin: var(--space-4) 0 18px;
 }
 
 .wz-kick {
@@ -16,7 +16,7 @@
 }
 
 .wz-head h1 {
-  margin: 2px 0 4px;
+  margin: var(--space-2) 0 var(--space-4);
   font: var(--f-titre-1);
   letter-spacing: -0.01em;
 }
@@ -28,16 +28,16 @@
 }
 
 .wz-sec {
-  margin: 20px 0 8px 2px;
+  margin: 20px 0 var(--space-8) var(--space-2);
   font: var(--f-titre-section);
   color: var(--text2);
 }
 
 .wz-note {
   display: flex;
-  gap: 8px;
+  gap: var(--space-8);
   align-items: flex-start;
-  margin: 10px 2px 0;
+  margin: var(--space-10) var(--space-2) 0;
   font: var(--f-legende);
   color: var(--text2);
 }
@@ -86,7 +86,7 @@
   align-items: center;
   gap: var(--space-10);
   min-height: 66px;
-  padding: 10px 12px;
+  padding: var(--space-10) 12px;
   border: 0;
   border-radius: var(--r-surf);
   background: var(--surf);
@@ -190,7 +190,7 @@
 .opt-txt b {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   font: var(--f-corps-fort);
 }
 
@@ -223,7 +223,7 @@
 .bientot,
 .instable {
   height: 17px;
-  padding: 0 6px;
+  padding: 0 var(--space-6);
   border-radius: 4px;
   font: var(--f-badge);
   display: inline-flex;
@@ -313,9 +313,9 @@
 .bigname {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 14px;
+  column-gap: var(--space-14);
   align-items: center;
-  padding: 14px 18px;
+  padding: var(--space-14) 18px;
   border-radius: var(--r-surf);
   background: var(--surf);
   box-shadow: 0 0 0 1px var(--surf-edge);
@@ -335,7 +335,7 @@
 .bigname input {
   grid-column: 2;
   width: 100%;
-  margin-top: 2px;
+  margin-top: var(--space-2);
   padding: 0;
   border: 0;
   outline: 0;
@@ -363,7 +363,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--space-4);
   padding: 12px;
   border: 0;
   border-radius: var(--r-surf);
@@ -382,7 +382,7 @@
 }
 
 .mode-c svg {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-4);
   color: var(--text2);
 }
 
@@ -526,7 +526,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 .dir-main b {
@@ -542,7 +542,7 @@
 
 .disk {
   height: 6px;
-  margin: 4px 0 2px;
+  margin: var(--space-4) 0 var(--space-2);
   border-radius: var(--r-pill);
   background: var(--track);
   overflow: hidden;
@@ -558,7 +558,7 @@
 
 .disk.big {
   height: 8px;
-  margin: 10px 0 14px;
+  margin: var(--space-10) 0 var(--space-14);
 }
 
 /* Résumé */
@@ -569,8 +569,8 @@
 .sum-top {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-bottom: 16px;
+  gap: var(--space-14);
+  padding-bottom: var(--space-16);
   border-bottom: 1px solid var(--sep);
 }
 
@@ -587,8 +587,8 @@
 .facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px 16px;
-  padding-top: 16px;
+  gap: var(--space-14) var(--space-16);
+  padding-top: var(--space-16);
 }
 
 .fact {
@@ -645,7 +645,7 @@
 
 /* Installation */
 .inst {
-  padding: 18px 20px 6px;
+  padding: 18px 20px var(--space-6);
 }
 
 .inst-top {
@@ -668,7 +668,7 @@
   align-items: center;
   gap: 12px;
   min-height: 46px;
-  padding: 0 2px;
+  padding: 0 var(--space-2);
   border-bottom: 1px solid var(--sep);
   font: var(--f-corps);
 }
@@ -711,9 +711,9 @@
 .inst-err {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 4px 0 14px;
-  padding: 10px 12px;
+  gap: var(--space-8);
+  margin: var(--space-4) 0 var(--space-14);
+  padding: var(--space-10) 12px;
   border-radius: var(--r-ctl);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
   color: var(--danger);
@@ -729,9 +729,9 @@
 .g.wz-nav {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
   height: var(--h-dock);
-  padding: 0 4px;
+  padding: 0 var(--space-4);
 }
 
 .wz-nav > * {
@@ -740,7 +740,7 @@
 }
 
 .wz-nav .ab.go {
-  padding: 0 22px;
+  padding: 0 var(--space-22);
 }
 
 .wz-nav .ab:disabled {
@@ -826,7 +826,45 @@
   right: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   font: var(--f-corps);
   color: var(--text2);
+}
+
+/* Modpack : une ligne par pack (icône, nom, description courte, téléchargements). */
+.vrow.pack {
+  min-height: 60px;
+  padding-top: var(--space-10);
+  padding-bottom: var(--space-10);
+  text-align: left;
+}
+
+.pack-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pack-tx b,
+.pack-tx span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pack-tx span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.vrow.pack .j {
+  flex: none;
+}
+
+.pack-plus {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-14);
 }

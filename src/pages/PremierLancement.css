@@ -32,7 +32,7 @@
   min-height: 0;
   overflow-y: auto;
   display: flex;
-  padding: 18px 32px 22px;
+  padding: 18px 32px var(--space-22);
 }
 
 [data-theme="light"]:not([data-fond="azur"]) .pl,
@@ -110,7 +110,7 @@
   max-width: 1000px;
   margin: auto;
   box-sizing: border-box;
-  padding: 22px 28px 22px;
+  padding: var(--space-22) 28px var(--space-22);
   border-radius: 30px;
   display: flex;
   flex-direction: column;
@@ -122,14 +122,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   text-align: center;
 }
 
 .pl-tuile {
   width: 58px;
   height: 58px;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-4);
 }
 
 .pl-tete h1 {
@@ -159,8 +159,8 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 10px 10px 20px;
+  gap: var(--space-14);
+  padding: var(--space-10) var(--space-10) 20px;
   border-radius: 26px;
   text-align: left;
   cursor: pointer;
@@ -219,13 +219,13 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 2px 8px 0;
+  padding: var(--space-2) var(--space-8) 0;
 }
 
 .pl-titre {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-10);
 }
 
 .pl-titre h2 {
@@ -273,7 +273,7 @@
 .pl-puces {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .pl-puces span {
@@ -296,7 +296,7 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-8);
   font: 400 13.5px/19px var(--font);
 }
 
@@ -326,7 +326,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-10);
 }
 
 /* Le bouton principal, en verre teinté */
@@ -336,7 +336,7 @@
   height: 50px;
   padding: 0 30px;
   border-radius: var(--r-pill);
-  gap: 10px;
+  gap: var(--space-10);
   font: 600 15px/20px var(--font);
   background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 80%, #ffffff), var(--acc));
   box-shadow:
@@ -482,5 +482,25 @@
   }
   .pl-jour-seul {
     opacity: 1 !important;
+  }
+}
+
+/* Petite fenêtre (960 × 640) : tout tient sans défiler, la scène rapetisse et la tuile s'efface. */
+@media (max-height: 720px) {
+  .pl:not(.ins-fenetre) .pl-tete .pl-tuile {
+    display: none;
+  }
+
+  .pl:not(.ins-fenetre) .pl-tete h1 {
+    font-size: 26px;
+    line-height: 32px;
+  }
+
+  .pl:not(.ins-fenetre) .pl-scene {
+    height: 112px;
+  }
+
+  .pl:not(.ins-fenetre) .pl-liste {
+    display: none;
   }
 }

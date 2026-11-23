@@ -4,12 +4,14 @@ import {
   activerExtension,
   choisirJava,
   demarrerServeur,
+  estManqueMemoire,
   extensionsServeur,
   installerJava,
   reglerProprietes,
   reglerServeur,
   sauvegardesServeur,
   verifierInternet,
+  type ManqueMemoire,
   type Probleme,
 } from "../api";
 import { nombre, nomLogiciel, type Onglet, type Serveur } from "../types";
@@ -23,18 +25,19 @@ type Props = {
   onOnglet: (o: Onglet) => void;
   onInfo: (texte: string) => void;
   onErreur: (texte: string) => void;
+  onManque?: (m: ManqueMemoire) => void; // machine dédiée pleine : proposer d’arrêter un autre serveur
 };
 
 // « il y a 3 min », « il y a 2 h », « il y a 4 j ».
 function ilYa(quand: number) {
   const minutes = Math.floor((Date.now() - quand) / 60000);
-  if (minutes < 1) return "à l'instant";
+  if (minutes < 1) return "à l’instant";
   if (minutes < 60) return `il y a ${minutes} min`;
   if (minutes < 48 * 60) return `il y a ${Math.floor(minutes / 60)} h`;
   return `il y a ${Math.floor(minutes / 1440)} j`;
 }
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 
 // Une carte : icône, titre, texte, et les boutons pour régler le problème.
 function Carte(props: {
@@ -86,8 +89,8 @@ function Carte(props: {
   );
 }
 
-// Les problèmes d'un serveur, en haut de son Accueil (maquette : « États d'erreur »).
-export default function Problemes({ serveur, probleme, internet, onChange, onOnglet, onInfo, onErreur }: Props) {
+// Les problèmes d’un serveur, en haut de son Accueil (maquette : « États d’erreur »).
+export default function Problemes({ serveur, probleme, internet, onChange, onOnglet, onInfo, onErreur, onManque }: Props) {
   const [occupe, setOccupe] = useState(false);
   const [masque, setMasque] = useState<Probleme | null>(null);
   // Plantage : la cause probable (une extension en panne) et la dernière sauvegarde.
@@ -106,7 +109,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
     extensionsServeur(id)
       .then((vue) => {
         const liste = vue.liste.filter((e) => e.actif && e.panne);
-        // Une extension qui plante en jeu passe avant une qui n'a pas démarré.
+        // Une extension qui plante en jeu passe avant une qui n’a pas démarré.
         const e = liste.find((x) => x.panneEnJeu) ?? liste[0];
         if (vivant && e?.panne) setCause({ nom: e.nom, fichier: e.fichier, panne: e.panne });
       })
@@ -119,7 +122,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
     };
   }, [id, probleme]);
 
-  // Fait l'action, puis démarre le serveur.
+  // Fait l’action, puis démarre le serveur.
   const faire = async (avant?: () => Promise<unknown>) => {
     onErreur("");
     setOccupe(true);
@@ -127,7 +130,8 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
       if (avant) await avant();
       await demarrerServeur(id);
     } catch (e) {
-      onErreur(phrase(e));
+      if (estManqueMemoire(e) && onManque) onManque(e);
+      else onErreur(phrase(e));
     } finally {
       setOccupe(false);
     }
@@ -138,7 +142,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
       ramMo: changement.ramMo ?? serveur.ramMo,
       demarrerAuto: !!serveur.demarrerAuto,
       javaChoix: changement.javaChoix ?? serveur.javaChoix ?? null,
-      optimise: serveur.optimise ?? true,
+      optimise: !!serveur.optimise,
       arguments: serveur.arguments ?? "",
       priorite: serveur.priorite ?? "normale",
     }).then(([s]) => onChange(s));
@@ -178,7 +182,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
               if (chemin) faire(() => reglages({ javaChoix: chemin }));
             }}
           >
-            J'ai déjà Java…
+            J’ai déjà Java…
           </button>
         )}
       </Carte>,
@@ -193,7 +197,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
         ton="warn"
         icone={<IconPlugX size={18} stroke={2} />}
         titre={`Le port ${port} est déjà pris`}
-        texte={montre.serveur ? `Ton serveur « ${montre.serveur} » l'utilise déjà.` : `Un autre programme l'utilise déjà sur ${ici}.`}
+        texte={montre.serveur ? `Ton serveur « ${montre.serveur} » l’utilise déjà.` : `Un autre programme l’utilise déjà sur ${ici}.`}
         onFermer={() => setMasque(montre)}
       >
         {libre !== null && (
@@ -227,7 +231,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
         ton="bad"
         icone={<IconAlertOctagon size={18} stroke={2} />}
         titre="Le serveur a planté"
-        texte={`Il s'est arrêté tout seul.${quand}`}
+        texte={`Il s’est arrêté tout seul.${quand}`}
         cause={cause ? `Cause probable : ${cause.nom}. ${cause.panne}` : undefined}
         lien={{ texte: "Voir la console", action: () => onOnglet("console") }}
         onFermer={() => setMasque(montre)}
@@ -255,7 +259,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
           ton="bad"
           icone={<IconCpu size={18} stroke={2} />}
           titre="Pas assez de mémoire pour démarrer"
-          texte={`Il demande ${nombre(go)} Go, et ${ton} n'en a que ${nombre(libreGo)} de libres.`}
+          texte={`Il demande ${nombre(go)} Go, et ${ton} n’en a que ${nombre(libreGo)} de libres.`}
           cause="Ferme des programmes, ou baisse sa mémoire."
           lien={regler}
           onFermer={() => setMasque(montre)}
@@ -295,7 +299,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
         ton="bad"
         icone={<IconDatabase size={18} stroke={2} />}
         titre="Stockage max atteint"
-        texte={`Il a rempli ses ${nombre(montre.go)} Go : BHOST l'a arrêté proprement.`}
+        texte={`Il a rempli ses ${nombre(montre.go)} Go : BHOST l’a arrêté proprement.`}
         cause="Libère de la place, ou monte son stockage max."
         lien={{ texte: "Monter le stockage", action: () => onOnglet("parametres") }}
         onFermer={() => setMasque(montre)}
@@ -309,7 +313,7 @@ export default function Problemes({ serveur, probleme, internet, onChange, onOng
 
   // Plus de connexion : seulement pour un serveur ouvert aux amis et allumé.
   const allume = serveur.statut === "en-ligne" || serveur.statut === "demarrage";
-  // (Machine dédiée : c'est Internet de la machine qui compte ; sans lui, elle serait hors ligne.)
+  // (Machine dédiée : c’est Internet de la machine qui compte ; sans lui, elle serait hors ligne.)
   if (!internet && serveur.ouvertAmis && allume && !serveur.machine) {
     cartes.push(
       <Carte

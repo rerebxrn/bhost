@@ -84,11 +84,30 @@ pub fn ecrire_atomique(chemin: &Path, octets: &[u8]) -> Result<(), String> {
     let mut nom = chemin.file_name().unwrap_or_default().to_os_string();
     nom.push(".bhost-tmp");
     let provisoire = chemin.with_file_name(nom);
-    fs::write(&provisoire, octets).map_err(|e| format!("Impossible d'enregistrer ({e})."))?;
+    // Écrit puis force l'écriture sur le disque avant de renommer : une coupure de courant laisse l'ancien
+    // fichier ou le nouveau, jamais un fichier à moitié écrit.
+    let ecrire = || -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = fs::File::create(&provisoire)?;
+        f.write_all(octets)?;
+        f.sync_all()
+    };
+    ecrire().map_err(|e| format!("Impossible d’enregistrer ({e})."))?;
     fs::rename(&provisoire, chemin).map_err(|e| {
         let _ = fs::remove_file(&provisoire);
-        format!("Impossible d'enregistrer ({e}).")
+        format!("Impossible d’enregistrer ({e}).")
     })
+}
+
+/// Un fichier secret (clé, code de la machine) : lisible seulement par son propriétaire.
+pub fn proteger(chemin: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(chemin, fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = chemin;
 }
 
 /// Lit au plus `max` octets d'un fichier (le début), pour ne pas charger un fichier énorme en mémoire.

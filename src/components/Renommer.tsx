@@ -18,7 +18,7 @@ export default function Renommer({ nom, titre = "Renommer le serveur", onEnregis
 
   useEffect(() => {
     champ.current?.select();
-    // Une image plus tard, pour que l'apparition soit animée.
+    // Une image plus tard, pour que l’apparition soit animée.
     const image = requestAnimationFrame(() => setOuvert(true));
     return () => cancelAnimationFrame(image);
   }, []);
@@ -33,7 +33,7 @@ export default function Renommer({ nom, titre = "Renommer le serveur", onEnregis
     onEnregistrer(propre)
       .then(onFermer)
       .catch((raison) => {
-        setErreur(typeof raison === "string" ? raison : "Ça n'a pas marché.");
+        setErreur(typeof raison === "string" ? raison : "Ça n’a pas marché.");
         setEnvoi(false);
       });
   };

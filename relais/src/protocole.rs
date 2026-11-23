@@ -9,17 +9,20 @@
 //      Minecraft envoie d'abord une « poignée de main » qui contient l'adresse tapée : le relais y lit le nom.
 //   3. Le relais dit à l'agent : « JOUEUR 17 <jeton> ». BHOST ouvre une 2ᵉ connexion « DONNEES 17 <jeton> »,
 //      se branche sur le serveur Minecraft du PC, et le relais recolle les deux bouts.
-//   4. Machines dédiées (BHOST OS) : la machine se présente avec « MACHINE <clé> <code> » et signe un défi.
-//      Un PC qui tape ce code envoie « LIER <code> » : le relais répond « LIEE <id> » (l'id de la machine)
-//      ou « NON code ». Après 5 codes faux, l'adresse IP attend 15 minutes (« NON bloque »).
-//   5. Piloter une machine : le PC envoie « PILOTER <code> <id> » sur une nouvelle connexion. Le relais dit à la
+//   4. Machines dédiées (BHOST OS) : la machine se présente avec « MACHINE <clé> <empreinte> » et signe un défi.
+//      L'empreinte est calculée à partir du code (scrypt, src-tauri/src/appairage.rs) : le code lui-même ne passe
+//      jamais par le relais. Un PC qui tape ce code envoie « LIER <empreinte> » : le relais répond « LIEE <id> »
+//      (l'id de la machine) ou « NON code ». Après 5 codes faux, l'adresse IP attend 15 minutes (« NON bloque »).
+//   5. Piloter une machine : le PC envoie « PILOTER <empreinte> <id> » sur une nouvelle connexion. Le relais dit à la
 //      machine « PILOTE 18 <jeton> » ; elle ouvre « DONNEES 18 <jeton> » ; le relais répond « OK <id> » au PC
 //      et recolle les deux bouts. Ensuite, le PC et la machine se parlent en JSON, une ligne à la fois
 //      (src-tauri/src/agent.rs). Mêmes limites que LIER (5 codes faux → 15 minutes) ; une machine éteinte
 //      répond « NON absente » sans compter d'essai (le PC la réessaie souvent ; il connaît déjà son id).
 
 /// La version du dialogue entre BHOST et le relais.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
+/// Les BHOST de la version 1 (code en clair) peuvent encore ouvrir leurs serveurs, mais pas les machines.
+pub const VERSION_SERVEURS_MIN: u32 = 1;
 
 /// Les noms qu'on ne peut pas prendre : le site et les services de bhost.app (aujourd'hui et plus tard),
 /// et des noms qui trompent.
@@ -107,18 +110,18 @@ pub fn id_machine(cle: &str) -> String {
 }
 
 /// Le texte qu'une machine signe pour prouver que la clé est à elle.
-pub fn a_signer_machine(code: &str, defi: &str) -> String {
-    format!("bhost-machine-v{VERSION}|{code}|{defi}")
+pub fn a_signer_machine(empreinte: &str, defi: &str) -> String {
+    format!("bhost-machine-v{VERSION}|{empreinte}|{defi}")
 }
 
 /// Le texte que BHOST signe pour prouver que le nom est à lui.
 pub fn a_signer(nom: &str, defi: &str) -> String {
-    format!("bhost-relais-v{VERSION}|{nom}|{defi}")
+    format!("bhost-relais-v1|{nom}|{defi}")
 }
 
 /// Le texte que BHOST signe pour rendre un nom (il a changé d'adresse).
 pub fn a_signer_lacher(nom: &str, defi: &str) -> String {
-    format!("bhost-lacher-v{VERSION}|{nom}|{defi}")
+    format!("bhost-lacher-v1|{nom}|{defi}")
 }
 
 /// Le nom d'un serveur, puis « 2 », « 3 »… quand il est déjà pris : survie, survie2, survie3.
@@ -331,11 +334,11 @@ pub enum DeBhost {
     Ping,
     /// Connexion données : le joueur `id` attendu par le relais.
     Donnees { id: u64, jeton: String },
-    /// Une machine dédiée se présente : sa clé publique et son code (puis elle signe un défi).
-    Machine { cle: String, code: String },
-    /// Un PC veut relier la machine qui a ce code.
-    Lier { code: String },
-    Piloter { code: String, id: String },
+    /// Une machine dédiée se présente : sa clé publique et l'empreinte de son code (puis elle signe un défi).
+    Machine { cle: String, empreinte: String },
+    /// Un PC veut relier la machine qui a ce code (son empreinte).
+    Lier { empreinte: String },
+    Piloter { empreinte: String, id: String },
     /// « Ce nom est-il libre (pour cette clé) ? » Réponse : OK <nom>, ou NON pris / nom / trop.
     Libre { nom: String, cle: String },
     /// Rendre un nom (BHOST a pris une autre adresse) : puis un défi à signer.
@@ -368,9 +371,9 @@ pub fn ecrire_de_bhost(m: &DeBhost) -> String {
         DeBhost::Signe { signature } => format!("SIGNE {signature}\n"),
         DeBhost::Ping => "PING\n".into(),
         DeBhost::Donnees { id, jeton } => format!("DONNEES {id} {jeton}\n"),
-        DeBhost::Machine { cle, code } => format!("MACHINE {cle} {code}\n"),
-        DeBhost::Lier { code } => format!("LIER {code}\n"),
-        DeBhost::Piloter { code, id } => format!("PILOTER {code} {id}\n"),
+        DeBhost::Machine { cle, empreinte } => format!("MACHINE {cle} {empreinte}\n"),
+        DeBhost::Lier { empreinte } => format!("LIER {empreinte}\n"),
+        DeBhost::Piloter { empreinte, id } => format!("PILOTER {empreinte} {id}\n"),
         DeBhost::Libre { nom, cle } => format!("LIBRE {nom} {cle}\n"),
         DeBhost::Lacher { nom, cle } => format!("LACHER {nom} {cle}\n"),
     }
@@ -383,9 +386,9 @@ pub fn lire_de_bhost(ligne: &str) -> Option<DeBhost> {
         ["SIGNE", s] if hexa_valide(s, 128) => Some(DeBhost::Signe { signature: s.to_ascii_lowercase() }),
         ["PING"] => Some(DeBhost::Ping),
         ["DONNEES", id, jeton] if hexa_valide(jeton, 32) => Some(DeBhost::Donnees { id: id.parse().ok()?, jeton: jeton.to_ascii_lowercase() }),
-        ["MACHINE", cle, code] if hexa_valide(cle, 64) && code_valide(code) => Some(DeBhost::Machine { cle: cle.to_ascii_lowercase(), code: code.to_string() }),
-        ["LIER", code] if code_valide(code) => Some(DeBhost::Lier { code: code.to_string() }),
-        ["PILOTER", code, id] if code_valide(code) && hexa_valide(id, 16) => Some(DeBhost::Piloter { code: code.to_string(), id: id.to_ascii_lowercase() }),
+        ["MACHINE", cle, e] if hexa_valide(cle, 64) && hexa_valide(e, 64) => Some(DeBhost::Machine { cle: cle.to_ascii_lowercase(), empreinte: e.to_ascii_lowercase() }),
+        ["LIER", e] if hexa_valide(e, 64) => Some(DeBhost::Lier { empreinte: e.to_ascii_lowercase() }),
+        ["PILOTER", e, id] if hexa_valide(e, 64) && hexa_valide(id, 16) => Some(DeBhost::Piloter { empreinte: e.to_ascii_lowercase(), id: id.to_ascii_lowercase() }),
         // Un nom refusé arrive quand même au relais : il répond « NON nom » (BHOST le dit à l'utilisateur).
         ["LIBRE", nom, cle] if (1..=64).contains(&nom.len()) && nom.bytes().all(|c| c.is_ascii_graphic()) && hexa_valide(cle, 64) => {
             Some(DeBhost::Libre { nom: nom.to_string(), cle: cle.to_ascii_lowercase() })
@@ -552,8 +555,8 @@ mod tests {
             DeBhost::Signe { signature: "cd".repeat(64) },
             DeBhost::Ping,
             DeBhost::Donnees { id: 17, jeton: "0f".repeat(16) },
-            DeBhost::Machine { cle: cle.clone(), code: "K7M2Q9XR".into() },
-            DeBhost::Lier { code: "K7M2Q9XR".into() },
+            DeBhost::Machine { cle: cle.clone(), empreinte: cle.clone() },
+            DeBhost::Lier { empreinte: cle.clone() },
             DeBhost::Libre { nom: "survie".into(), cle: cle.clone() },
             DeBhost::Lacher { nom: "survie".into(), cle: cle.clone() },
         ] {
@@ -575,7 +578,8 @@ mod tests {
         assert_eq!(depuis_hexa(&hexa(&[0, 1, 255])), Some(vec![0, 1, 255]));
         assert_eq!(depuis_hexa("zz"), None);
         assert_eq!(a_signer("survie", "ab"), "bhost-relais-v1|survie|ab");
-        // Codes de machine : 8 caractères, ni 0, O, 1, I, ni minuscules.
+        // Machines : seulement l'empreinte du code (64 caractères hexa), jamais le code lui-même.
+        assert_eq!(lire_de_bhost("LIER K7M2Q9XR"), None);
         assert_eq!(lire_de_bhost("LIER K0M2Q9XR"), None);
         assert_eq!(lire_de_bhost("LIER k7m2q9xr"), None);
         assert_eq!(lire_de_bhost("LIER K7M2Q9X"), None);

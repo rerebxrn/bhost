@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { afficherCode, codeAuHasard, codeComplet, LONGUEUR, nettoyerCode } from "../code";
-import { commandeVps, lierMachine } from "../api";
+import { changerCodeMachine, commandeVps, lierMachine } from "../api";
 import type { Machine } from "../types";
 import "./Menus.css";
 import "./CodeMachine.css";
 
-// Le champ du code d'une machine dédiée : « K7M2-Q9XR », le tiret se met tout seul.
+// Le champ du code d’une machine dédiée : « K7M2-Q9XR », le tiret se met tout seul.
 export function ChampCode({
   code,
   onChange,
@@ -47,7 +47,7 @@ export default function AjouterMachine({ onAjoutee, onPreparer, onFermer }: Prop
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
   const [ouvert, setOuvert] = useState(false);
-  const [vps, setVps] = useState(false); // la commande d'installation pour un VPS a été copiée
+  const [vps, setVps] = useState(false); // la commande d’installation pour un VPS a été copiée
   const forme = useRef<HTMLFormElement>(null);
 
   // Un VPS : BHOST tire le code, le met dans la commande (copiée) et dans le champ.
@@ -73,12 +73,15 @@ export default function AjouterMachine({ onAjoutee, onPreparer, onFermer }: Prop
     if (!codeComplet(code) || envoi) return;
     setEnvoi(true);
     lierMachine(code)
-      .then((m) => {
+      .then(async (m) => {
+        // VPS : le code est passé dans la commande (historique du terminal, journaux de l’hébergeur).
+        // On en tire tout de suite un nouveau, que seul ce PC connaît.
+        if (vps) await changerCodeMachine(m.id).catch(() => {});
         onAjoutee(m);
         onFermer();
       })
       .catch((raison) => {
-        setErreur(typeof raison === "string" ? raison : "Ça n'a pas marché.");
+        setErreur(typeof raison === "string" ? raison : "Ça n’a pas marché.");
         setEnvoi(false);
       });
   };
@@ -110,9 +113,7 @@ export default function AjouterMachine({ onAjoutee, onPreparer, onFermer }: Prop
           </p>
         ) : vps ? (
           <p className="code-aide">Commande copiée. Colle-la sur ton VPS, puis Ajouter quand elle a fini.</p>
-        ) : (
-          <p className="code-aide">Il est aussi dans les réglages de la machine.</p>
-        )}
+        ) : null}
         <div className="dlg-btns">
           <button type="button" className="dlg-cancel" disabled={envoi} onClick={onFermer}>
             Annuler

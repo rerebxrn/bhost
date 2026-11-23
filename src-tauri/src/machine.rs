@@ -256,7 +256,7 @@ pub fn lire(dossier: &Path) -> Vec<MachineLiee> {
 fn ecrire(dossier: &Path, liste: &[MachineLiee]) -> Result<(), String> {
     let json = serde_json::to_vec_pretty(liste).map_err(|e| e.to_string())?;
     let temporaire = fichier(dossier).with_extension("json.tmp");
-    std::fs::write(&temporaire, json).and_then(|_| std::fs::rename(&temporaire, fichier(dossier))).map_err(|_| "Impossible d'enregistrer la liste des machines.".to_string())
+    std::fs::write(&temporaire, json).and_then(|_| std::fs::rename(&temporaire, fichier(dossier))).map_err(|_| "Impossible d’enregistrer la liste des machines.".to_string())
 }
 
 /// Ajoute (ou met à jour) une machine reliée. Nouvelle : « Machine dédiée », « Machine dédiée 2 »…
@@ -293,7 +293,7 @@ pub fn reponse_liaison(ligne: &str) -> Result<String, String> {
     match protocole::lire_du_relais(ligne) {
         Some(DuRelais::Liee { id }) => Ok(id),
         Some(DuRelais::Non { raison }) if raison == "bloque" => Err("Trop de codes faux. Réessaie dans 15 minutes.".into()),
-        Some(DuRelais::Non { raison }) if raison == "code" => Err("Aucune machine avec ce code. Vérifie qu'elle est allumée.".into()),
+        Some(DuRelais::Non { raison }) if raison == "code" => Err("Aucune machine avec ce code. Vérifie qu’elle est allumée.".into()),
         Some(DuRelais::Non { raison }) if raison == "version" => Err("Mets BHOST à jour pour relier une machine.".into()),
         _ => Err("Le relais a mal répondu. Réessaie.".into()),
     }
@@ -306,7 +306,8 @@ fn demander_au_relais(code: &str) -> Result<String, String> {
     let mut flux = crate::tunnel::connecter(adresse).map_err(|_| injoignable())?;
     let _ = flux.set_read_timeout(Some(Duration::from_secs(10)));
     let _ = flux.set_write_timeout(Some(Duration::from_secs(10)));
-    let lier = protocole::ecrire_de_bhost(&protocole::DeBhost::Lier { code: code.to_string() });
+    // Le relais ne voit que l'empreinte du code (appairage.rs) : le code lui-même ne quitte jamais ce PC.
+    let lier = protocole::ecrire_de_bhost(&protocole::DeBhost::Lier { empreinte: crate::appairage::empreinte_code(code) });
     flux.write_all(format!("BHOST {}\n{lier}", protocole::VERSION).as_bytes()).map_err(|_| injoignable())?;
     let mut ligne = String::new();
     // Une ligne du relais : 300 octets au plus.
@@ -379,7 +380,7 @@ fn lien_vivant(id: &str) -> bool {
 impl Lien {
     /// Envoie une commande et attend sa réponse (au plus `delai`).
     fn appeler(&self, commande: &str, args: Value, delai: Duration) -> Result<Value, Value> {
-        let hors_ligne = || Value::String("La machine ne répond pas. Vérifie qu'elle est allumée.".into());
+        let hors_ligne = || Value::String("La machine ne répond pas. Vérifie qu’elle est allumée.".into());
         if !self.vivant.load(Ordering::Relaxed) {
             return Err(hors_ligne());
         }
@@ -409,7 +410,7 @@ fn lien(app: &AppHandle, m: &MachineLiee) -> Result<Arc<Lien>, String> {
         let mut essais = ESSAIS.lock().unwrap();
         let essais = essais.get_or_insert_with(HashMap::new);
         if essais.get(&m.id).is_some_and(|t| t.elapsed() < Duration::from_secs(15)) {
-            return Err("La machine ne répond pas. Vérifie qu'elle est allumée.".into());
+            return Err("La machine ne répond pas. Vérifie qu’elle est allumée.".into());
         }
         essais.insert(m.id.clone(), Instant::now());
     }
@@ -418,24 +419,21 @@ fn lien(app: &AppHandle, m: &MachineLiee) -> Result<Arc<Lien>, String> {
     Ok(l)
 }
 
-const MACHINE_MUETTE: &str = "La machine ne répond pas. Vérifie qu'elle est allumée.";
+const MACHINE_MUETTE: &str = "La machine ne répond pas. Vérifie qu’elle est allumée.";
 const CODE_A_CHANGE: &str = "Le code de cette machine a changé. Retire-la, puis ajoute-la avec son nouveau code.";
-const PAS_LA_MEME: &str = "Ce n'est plus la même machine. Retire-la, puis ajoute-la avec son code.";
+const PAS_LA_MEME: &str = "Ce n’est plus la même machine. Retire-la, puis ajoute-la avec son code.";
 
 /// Une connexion chiffrée et acceptée par la machine : de quoi écrire, de quoi lire, sa clé, et « en direct ? ».
 type Connexion = (crate::chiffre::Canal, BufReader<crate::chiffre::Lecteur>, [u8; 32], bool);
 
-/// Donne le code à la machine (dans le tunnel chiffré) et attend « OK <id> ».
+/// Prouve le code à la machine (dans le tunnel chiffré, sans l'envoyer : appairage.rs) et attend « OK <id> ».
 fn presenter(c: crate::chiffre::Chiffree, m: &MachineLiee) -> Result<(crate::chiffre::Canal, BufReader<crate::chiffre::Lecteur>), String> {
-    c.canal.ecrire_ligne(&format!("CODE {}", m.code)).map_err(|_| MACHINE_MUETTE.to_string())?;
     let mut lecteur = BufReader::new(c.lecteur);
-    let mut ligne = String::new();
-    std::io::Read::take(&mut lecteur, 300).read_line(&mut ligne).map_err(|_| MACHINE_MUETTE.to_string())?;
-    match ligne.trim().split(' ').collect::<Vec<_>>()[..] {
-        ["OK", id] if id == m.id => {}
-        ["NON", "code"] => return Err(CODE_A_CHANGE.into()),
-        ["NON", "bloque"] => return Err("Trop de codes faux. Réessaie dans 15 minutes.".into()),
-        _ => return Err(MACHINE_MUETTE.into()),
+    match crate::appairage::cote_pc(&c.canal, &mut lecteur, &m.code, &m.id) {
+        Ok(()) => {}
+        Err(crate::appairage::Refus::Code) => return Err(CODE_A_CHANGE.into()),
+        Err(crate::appairage::Refus::Bloque) => return Err("Trop de codes faux. Réessaie dans 15 minutes.".into()),
+        Err(crate::appairage::Refus::Muette) => return Err(MACHINE_MUETTE.into()),
     }
     // Les commandes peuvent être longues (création d'un serveur) : plus de délai de lecture.
     lecteur.get_ref().delai(None).map_err(|_| MACHINE_MUETTE.to_string())?;
@@ -456,6 +454,7 @@ fn en_direct(m: &MachineLiee, connue: Option<[u8; 32]>) -> Result<Connexion, Str
     let adresse = std::net::SocketAddr::new(ip, crate::chiffre::port_direct());
     let flux = std::net::TcpStream::connect_timeout(&adresse, Duration::from_millis(1500)).map_err(|_| MACHINE_MUETTE.to_string())?;
     let _ = flux.set_nodelay(true);
+    crate::chiffre::garder_vivante(&flux);
     let _ = flux.set_read_timeout(Some(Duration::from_secs(5)));
     let (c, cle) = chiffrer(flux, m, connue)?;
     let (canal, lecteur) = presenter(c, m)?;
@@ -467,8 +466,9 @@ fn par_le_relais(m: &MachineLiee, connue: Option<[u8; 32]>) -> Result<Connexion,
     let injoignable = || "Le relais ne répond pas. Vérifie ta connexion à Internet.".to_string();
     let adresse = crate::tunnel::adresse_relais().map_err(|_| injoignable())?;
     let mut flux = crate::tunnel::connecter(adresse).map_err(|_| injoignable())?;
+    crate::chiffre::garder_vivante(&flux);
     let _ = flux.set_read_timeout(Some(Duration::from_secs(15)));
-    let piloter = protocole::ecrire_de_bhost(&protocole::DeBhost::Piloter { code: m.code.clone(), id: m.id.clone() });
+    let piloter = protocole::ecrire_de_bhost(&protocole::DeBhost::Piloter { empreinte: crate::appairage::empreinte_code(&m.code), id: m.id.clone() });
     flux.write_all(format!("BHOST {}\n{piloter}", protocole::VERSION).as_bytes()).map_err(|_| injoignable())?;
     // Octet par octet jusqu'à la fin de la ligne : ce qui suit est déjà le tunnel chiffré.
     let mut ligne = Vec::new();
@@ -600,7 +600,7 @@ fn demarrer_lien(canal: crate::chiffre::Canal, mut lecteur: BufReader<crate::chi
 pub async fn machine_appel(app: AppHandle, machine: String, commande: String, args: Value) -> Result<Value, Value> {
     crate::hote::async_runtime::spawn_blocking(move || {
         let etat = crate::hote::Manager::state::<crate::Etat>(&app);
-        let m = lire(&etat.dossier).into_iter().find(|m| m.id == machine).ok_or_else(|| Value::String("Cette machine n'est plus reliée.".into()))?;
+        let m = lire(&etat.dossier).into_iter().find(|m| m.id == machine).ok_or_else(|| Value::String("Cette machine n’est plus reliée.".into()))?;
         let l = lien(&app, &m).map_err(Value::String)?;
         // Une création de serveur ou une sauvegarde peut durer : jusqu'à 30 minutes.
         let r = l.appeler(&commande, args, Duration::from_secs(30 * 60));
@@ -700,14 +700,14 @@ fn envoyer_fichier(l: &Lien, envoi: &str, fichier: &Path, nom: &str, zip: bool, 
 pub async fn envoyer_a_machine(app: AppHandle, machine: String, id: String, sources: Vec<String>, quoi: String, dossier: Option<String>, actuel: Option<bool>) -> Result<Value, Value> {
     crate::hote::async_runtime::spawn_blocking(move || {
         let etat = crate::hote::Manager::state::<crate::Etat>(&app);
-        let m = lire(&etat.dossier).into_iter().find(|m| m.id == machine).ok_or_else(|| Value::String("Cette machine n'est plus reliée.".into()))?;
+        let m = lire(&etat.dossier).into_iter().find(|m| m.id == machine).ok_or_else(|| Value::String("Cette machine n’est plus reliée.".into()))?;
         let l = lien(&app, &m).map_err(Value::String)?;
         let sources: Vec<PathBuf> = sources.into_iter().map(PathBuf::from).filter(|p| p.exists()).collect();
         if sources.is_empty() {
             return Err(Value::String("Rien à envoyer.".into()));
         }
         let mut hasard = [0u8; 8];
-        getrandom::fill(&mut hasard).map_err(|_| Value::String("Ça n'a pas marché.".into()))?;
+        getrandom::fill(&mut hasard).map_err(|_| Value::String("Ça n’a pas marché.".into()))?;
         let envoi = protocole::hexa(&hasard);
         let dire = |etape: &str, pourcent: u8| {
             let _ = app.emit("travail", serde_json::json!({ "id": id, "etape": etape, "pourcent": pourcent }));
@@ -759,13 +759,13 @@ fn noter_nouveau_code(app: &AppHandle, dossier: &Path, id: &str, code: &str) {
 /// Relie une machine avec son code. Le relais est contacté hors du fil de l'interface.
 #[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn lier_machine(app: AppHandle, code: String, etat: State<'_, crate::Etat>) -> Result<MachineVue, String> {
-    let code = nettoyer_code(&code).ok_or("Ce code n'est pas valide. Vérifie-le.")?;
+    let code = nettoyer_code(&code).ok_or("Ce code n’est pas valide. Vérifie-le.")?;
     let dossier = etat.dossier.clone();
     let id = match machine_de_test(&code) {
         Some(id) => id.to_string(),
         None => {
             let c = code.clone();
-            crate::hote::async_runtime::spawn_blocking(move || demander_au_relais(&c)).await.map_err(|_| "Ça n'a pas marché.".to_string())??
+            crate::hote::async_runtime::spawn_blocking(move || demander_au_relais(&c)).await.map_err(|_| "Ça n’a pas marché.".to_string())??
         }
     };
     let _une_seule = VERROU.lock().unwrap();
@@ -801,7 +801,7 @@ pub fn renommer_machine(app: AppHandle, id: String, nom: String, etat: State<cra
     let nom = nom_valide(&nom)?;
     let _une_seule = VERROU.lock().unwrap();
     let mut liste = lire(&etat.dossier);
-    let m = liste.iter_mut().find(|m| m.id == id).ok_or("Cette machine n'est plus reliée.")?;
+    let m = liste.iter_mut().find(|m| m.id == id).ok_or("Cette machine n’est plus reliée.")?;
     m.nom = nom;
     ecrire(&etat.dossier, &liste)?;
     prevenir(&app, &liste);
@@ -849,7 +849,7 @@ mod tests {
         assert_eq!(reponse_liaison(&format!("LIEE {}\n", "ab".repeat(8))), Ok("ab".repeat(8)));
         assert!(reponse_liaison("NON code\n").unwrap_err().contains("Aucune machine"));
         assert!(reponse_liaison("NON bloque\n").unwrap_err().contains("15 minutes"));
-        assert!(reponse_liaison("n'importe quoi").is_err());
+        assert!(reponse_liaison("n’importe quoi").is_err());
     }
 
     #[test]

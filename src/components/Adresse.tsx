@@ -12,8 +12,8 @@ type Props = {
   onErreur: (texte: string) => void;
 };
 
-// La case « Adresse » de l'Accueil. Par le relais (« survie.bhost.app ») : un clic dans la case, et on tape
-// le mot. « Libre », ou « Pris · survie2 ? » s'affiche dedans ; Entrée ou OK change l'adresse, Échap annule.
+// La case « Adresse » de l’Accueil. Par le relais (« survie.bhost.app ») : un clic dans la case, et on tape
+// le mot. « Libre », ou « Pris · survie2 ? » s’affiche dedans ; Entrée ou OK change l’adresse, Échap annule.
 export default function Adresse({ serveur, acces, onInfo, onErreur }: Props) {
   const pourAmis = serveur.ouvertAmis ? acces : undefined;
   const publique = pourAmis?.etat === "ouvert" ? pourAmis.adresse : undefined;
@@ -33,7 +33,7 @@ export default function Adresse({ serveur, acces, onInfo, onErreur }: Props) {
   const champ = useRef<HTMLInputElement>(null);
   const boite = useRef<HTMLDivElement>(null);
 
-  // Un autre serveur, ou l'adresse n'est plus par le relais : on arrête de modifier.
+  // Un autre serveur, ou l’adresse n’est plus par le relais : on arrête de modifier.
   useEffect(() => setMot(null), [serveur.id, modifiable]);
 
   // Le relais dit si le mot est libre (un peu après la dernière touche).
@@ -82,7 +82,7 @@ export default function Adresse({ serveur, acces, onInfo, onErreur }: Props) {
       },
       (e) => {
         setEnvoi(false);
-        onErreur(typeof e === "string" ? e : "Ça n'a pas marché.");
+        onErreur(typeof e === "string" ? e : "Ça n’a pas marché.");
       },
     );
   };
@@ -95,7 +95,7 @@ export default function Adresse({ serveur, acces, onInfo, onErreur }: Props) {
     return (
       <>
         {modifiable ? (
-          <button type="button" id="addr" className="field adr-case" title="Changer l'adresse" onClick={commencer}>
+          <button type="button" id="addr" className="field adr-case" title="Changer l’adresse" onClick={commencer}>
             <span>{texte}</span>
             <IconPencil size={13} stroke={2} className="adr-crayon" aria-hidden />
           </button>
@@ -117,7 +117,7 @@ export default function Adresse({ serveur, acces, onInfo, onErreur }: Props) {
     );
   }
 
-  // Ce qui s'affiche à droite, dans la case.
+  // Ce qui s’affiche à droite, dans la case.
   let etat = null;
   if (verif === null) etat = <span className="adr-st">…</span>;
   else if (verif.etat === "libre")
@@ -139,7 +139,7 @@ export default function Adresse({ serveur, acces, onInfo, onErreur }: Props) {
       <span className="adr-st">Pris</span>
     );
   else if (verif.etat === "invalide") etat = <span className="adr-st">3 à 32 lettres</span>;
-  else if (verif.etat === "trop") etat = <span className="adr-st">Trop d'essais</span>;
+  else if (verif.etat === "trop") etat = <span className="adr-st">Trop d’essais</span>;
   else if (verif.etat === "injoignable") etat = <span className="adr-st">Relais muet</span>;
   else if (verif.etat === "ancienne") etat = <span className="adr-st">Machine à mettre à jour</span>;
 

@@ -1,4 +1,4 @@
-// Les mots de base de BHOST, partagés par toute l'interface.
+// Les mots de base de BHOST, partagés par toute l’interface.
 
 export type Statut = "arrete" | "demarrage" | "en-ligne" | "arret" | "plante";
 
@@ -24,18 +24,18 @@ export type Serveur = {
   ramMo: number;
   port: number;
   statut: Statut;
-  depuis: number | null; // heure (ms) de son passage en ligne, s'il l'est
+  depuis: number | null; // heure (ms) de son passage en ligne, s’il l’est
   joueurs: string[]; // pseudos des joueurs connectés
   joueursMax: number;
   java?: { version: number; pourcent: number }; // pendant le téléchargement de Java, avant le démarrage
   couleur?: string; // couleur du cube (clic droit › Icône…)
-  javaChoix?: string; // Paramètres › Avancé : absent = auto ; « 8 », « 17 », « 21 », « 25 » ou chemin d'un java.exe
+  javaChoix?: string; // Paramètres › Avancé : absent = auto ; « 8 », « 17 », « 21 », « 25 » ou chemin d’un java.exe
   demarrerAuto?: boolean; // Paramètres › Démarrer avec BHOST
   ouvertAmis?: boolean; // Paramètres › Ouvert à tes amis (port ouvert sur la box)
   optimise?: boolean; // Paramètres › Réglages de démarrage optimisés
   arguments?: string; // Paramètres › Arguments en plus
   priorite?: Priorite; // Paramètres › Performances › Priorité (absente : normale)
-  machine?: string; // id de la machine dédiée qui l'héberge ; absent = ce PC
+  machine?: string; // id de la machine dédiée qui l’héberge ; absent = ce PC
   disqueMo?: number; // machine dédiée : place prise par le serveur
   disqueMaxMo?: number; // machine dédiée : son stockage max (Créer un serveur › Stockage max)
 };
@@ -58,17 +58,17 @@ export type Machine = {
   vueIlYa?: number; // hors ligne : dernière fois vue (ms)
 };
 
-// Ouvert à tes amis : où en est l'ouverture du port sur la box (absent = fermé).
+// Ouvert à tes amis : où en est l’ouverture du port sur la box (absent = fermé).
 export type Acces = {
   id: string;
   etat: "ouverture" | "ouvert" | "erreur";
-  adresse?: string; // « 82.64.1.2 », ou avec « :port » si ce n'est pas 25565
-  message?: string; // la phrase d'erreur
+  adresse?: string; // « 82.64.1.2 », ou avec « :port » si ce n’est pas 25565
+  message?: string; // la phrase d’erreur
   bedrock?: string; // joueurs Bedrock : « 82.64.1.2 · 19132 »
-  bedrockMessage?: string; // joueurs Bedrock : le port n'a pas pu être ouvert
+  bedrockMessage?: string; // joueurs Bedrock : le port n’a pas pu être ouvert
 };
 
-// Les dernières mesures d'un serveur (une toutes les deux secondes), pour les mini-courbes.
+// Les dernières mesures d’un serveur (une toutes les deux secondes), pour les mini-courbes.
 // tps : les ticks par seconde (un relevé toutes les dix secondes ; vide si le serveur ne les donne pas).
 export type Mesures = { processeur: number[]; memoireMo: number[]; joueurs: number[]; tps: number[] };
 
@@ -82,12 +82,12 @@ export function decimale(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
-// « localhost », ou « localhost:25570 » si le port n'est pas celui par défaut.
+// « localhost », ou « localhost:25570 » si le port n’est pas celui par défaut.
 export function adresseLocale(s: Pick<Serveur, "port">): string {
   return s.port === 25565 ? "localhost" : `localhost:${s.port}`;
 }
 
-// « 3 h 42 », « 38 min », ou vide en dessous d'une minute.
+// « 3 h 42 », « 38 min », ou vide en dessous d’une minute.
 export function duree(depuis: number, maintenant: number): string {
   const minutes = Math.floor((maintenant - depuis) / 60000);
   if (minutes < 1) return "";
@@ -110,7 +110,7 @@ export type Onglet =
   | "automatisations"
   | "parametres";
 
-// Ce qu'on lit sous le nom du serveur et à côté de la pastille.
+// Ce qu’on lit sous le nom du serveur et à côté de la pastille.
 export const NOM_STATUT: Record<Statut, string> = {
   arrete: "Arrêté",
   demarrage: "Démarrage…",
@@ -119,13 +119,13 @@ export const NOM_STATUT: Record<Statut, string> = {
   plante: "A planté",
 };
 
-// L'état en toutes lettres : « Java 21 · 42 % » pendant le téléchargement de Java.
+// L’état en toutes lettres : « Java 21 · 42 % » pendant le téléchargement de Java.
 export function texteStatut(s: Pick<Serveur, "statut" | "java">): string {
   if (s.java && s.statut === "demarrage") return `Java ${s.java.version} · ${s.java.pourcent} %`;
   return NOM_STATUT[s.statut];
 }
 
-// L'onglet des extensions change de nom selon le logiciel du serveur.
+// L’onglet des extensions change de nom selon le logiciel du serveur.
 export function nomExtensions(logiciel: Logiciel): string {
   if (logiciel === "Vanilla") return "Datapacks";
   if (logiciel === "Fabric" || logiciel === "Forge" || logiciel === "NeoForge") return "Mods";

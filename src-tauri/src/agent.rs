@@ -61,7 +61,7 @@ pub async fn repondre(app: &AppHandle, demande: Demande) -> String {
             let app = app.clone();
             tokio::task::spawn_blocking(move || etat_machine(&app)).await.map_err(|e| json(e.to_string()))
         }
-        "etat_systeme" => Ok(etat_systeme()),
+        "etat_systeme" => Ok(etat_systeme(app)),
         "systeme_machine" => systeme_machine(app, &demande.args),
         "changer_code" => {
             let dossier = app.state::<Etat>().dossier.clone();
@@ -97,11 +97,19 @@ const VERSION_OS: &str = "/etc/bhost-os-version";
 
 /// Version de BHOST OS ; mises à jour en attente, recherche ou installation en cours, redémarrage nécessaire
 /// (nouveau noyau) : `{version, attente, enCours, redemarrage, verifie}` (verifie : secondes depuis 1970).
-fn etat_systeme() -> Value {
+fn etat_systeme(app: &AppHandle) -> Value {
     let version = std::fs::read_to_string(VERSION_OS).map(|v| v.trim().to_string()).unwrap_or_default();
     let mut etat = std::fs::read_to_string(ETAT_SYSTEME).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).unwrap_or_else(|| vers_json!({}));
+    // Un agent plus récent publié : compté avec les mises à jour du système (« Mettre à jour » l'installe aussi).
+    let agent = crate::maj_agent::nouvelle(&app.state::<Etat>().reseau);
     if let Value::Object(o) = &mut etat {
         o.insert("version".into(), Value::String(version));
+        o.insert("agent".into(), Value::String(crate::maj_agent::version().into()));
+        if let Some(a) = &agent {
+            o.insert("agentNouveau".into(), Value::String(a.clone()));
+            let attente = o.get("attente").and_then(Value::as_u64).unwrap_or(0);
+            o.insert("attente".into(), Value::from(attente + 1));
+        }
     }
     etat
 }
@@ -115,9 +123,34 @@ fn systeme_machine(app: &AppHandle, args: &Value) -> Result<Value, Value> {
     if !std::path::Path::new(VERSION_OS).exists() {
         return Err(json("Seulement sur BHOST OS."));
     }
-    let dossier = app.state::<Etat>().dossier.join("systeme");
+    let etat = app.state::<Etat>();
+    let (racine, reseau) = (etat.dossier.clone(), etat.reseau.clone());
+    let dossier = racine.join("systeme");
     std::fs::create_dir_all(&dossier).map_err(|e| json(e.to_string()))?;
-    crate::garde::ecrire_atomique(&dossier.join("demande"), action.as_bytes()).map_err(|e| json(format!("Ça n'a pas marché : {e}")))?;
+    let demander = move |action: &str| crate::garde::ecrire_atomique(&dossier.join("demande"), action.as_bytes());
+    match action {
+        // Rechercher : le système (bhost-systeme) et l'agent (GitHub) en même temps.
+        "verifier" => {
+            std::thread::spawn(move || {
+                let _ = crate::maj_agent::chercher(&reseau);
+            });
+        }
+        // Mettre à jour : d'abord le nouvel agent (téléchargé, signature vérifiée), puis la demande à bhost-systeme,
+        // qui installe le système puis l'agent. Le téléchargement se fait en fond : BHOST n'attend pas.
+        "mettre-a-jour" => {
+            std::thread::spawn(move || {
+                if let Err(e) = crate::maj_agent::preparer(&reseau, &racine) {
+                    eprintln!("mise à jour de l'agent : {e}");
+                }
+                if let Err(e) = demander("mettre-a-jour") {
+                    eprintln!("mise à jour : {e}");
+                }
+            });
+            return Ok(Value::Null);
+        }
+        _ => {}
+    }
+    demander(action).map_err(|e| json(format!("Ça n’a pas marché : {e}")))?;
     Ok(Value::Null)
 }
 
@@ -156,6 +189,14 @@ fn recevoir_envoi(dossier: &std::path::Path, args: &Value) -> Result<Value, Valu
     let ici = dossier_envoi(dossier, &envoi)?;
     let fichier = ici.join(&nom);
     let octets = base64::engine::general_purpose::STANDARD.decode(donnees.as_bytes()).map_err(|_| json("Morceau abîmé."))?;
+    // Un envoi ne remplit jamais le disque de la machine (les serveurs en ont besoin).
+    const ENVOI_MAX: u64 = 32 * 1024 * 1024 * 1024;
+    if position + octets.len() as u64 > ENVOI_MAX {
+        return Err(json("Envoi trop gros pour la machine."));
+    }
+    if crate::garde::place_libre(dossier).is_some_and(|libre| libre < octets.len() as u64 + 1024 * 1024 * 1024) {
+        return Err(json("Plus assez de place sur la machine."));
+    }
     let erreur = |e: std::io::Error| json(format!("Enregistrement impossible sur la machine ({e})."));
     if position == 0 {
         std::fs::create_dir_all(&ici).map_err(erreur)?;

@@ -2,7 +2,7 @@
 .errs {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-10);
   margin-bottom: 18px;
 }
 
@@ -11,7 +11,7 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px 14px 14px 16px;
+  padding: var(--space-14) var(--space-14) var(--space-14) var(--space-16);
   --err: var(--st-busy);
 }
 
@@ -59,15 +59,15 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   margin-top: 9px;
 }
 
 .err-lien {
   border: 0;
   background: none;
-  padding: 0 4px;
-  margin-left: 4px;
+  padding: 0 var(--space-4);
+  margin-left: var(--space-4);
   font: var(--f-bouton);
   color: var(--acc-text, var(--acc));
   cursor: pointer;
@@ -88,7 +88,7 @@
 .err-av {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-6);
   margin-top: 9px;
   font: var(--f-legende);
   color: var(--text2);

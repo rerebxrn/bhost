@@ -77,7 +77,7 @@ pub fn lire_paquet(reponse: &[u8]) -> Option<Paquet> {
 /// Recopie un flux dans un fichier en calculant son empreinte, et prévient de l'avancement (de 0 à 100).
 /// Renvoie l'empreinte SHA-256 en minuscules.
 pub fn recopier(mut flux: impl Read, fichier: &Path, taille: u64, avancement: &mut dyn FnMut(u8)) -> Result<String, String> {
-    let mut sortie = fs::File::create(fichier).map_err(|e| format!("Impossible d'écrire le fichier ({e})."))?;
+    let mut sortie = fs::File::create(fichier).map_err(|e| format!("Impossible d’écrire le fichier ({e})."))?;
     let mut hachage = Sha256::new();
     let mut tampon = vec![0u8; 64 * 1024];
     let (mut lu, mut dernier) = (0u64, u8::MAX);
@@ -91,14 +91,14 @@ pub fn recopier(mut flux: impl Read, fichier: &Path, taille: u64, avancement: &m
             return Err("Fichier trop gros.".into());
         }
         hachage.update(&tampon[..n]);
-        sortie.write_all(&tampon[..n]).map_err(|e| format!("Impossible d'écrire le fichier ({e})."))?;
+        sortie.write_all(&tampon[..n]).map_err(|e| format!("Impossible d’écrire le fichier ({e})."))?;
         let pourcent = if taille > 0 { (lu * 100 / taille).min(99) as u8 } else { 0 };
         if pourcent != dernier {
             dernier = pourcent;
             avancement(pourcent);
         }
     }
-    sortie.flush().map_err(|e| format!("Impossible d'écrire le fichier ({e})."))?;
+    sortie.flush().map_err(|e| format!("Impossible d’écrire le fichier ({e})."))?;
     Ok(hachage.finalize().iter().map(|o| format!("{o:02x}")).collect())
 }
 
@@ -190,11 +190,11 @@ pub fn ranger(archive: &Path, racine: &Path, version: u32, jdk: bool) -> Result<
     fs::create_dir_all(&provisoire).map_err(|e| e.to_string())?;
     let resultat = (|| {
         extraire(archive, &provisoire)?;
-        let trouve = racine_java(&provisoire).ok_or("Java introuvable dans l'archive.")?;
+        let trouve = racine_java(&provisoire).ok_or("Java introuvable dans l’archive.")?;
         let final_ = dossier_version(racine, version, jdk);
         let _ = fs::remove_dir_all(&final_);
         fs::rename(&trouve, &final_).map_err(|e| e.to_string())?;
-        installe(racine, version, jdk).ok_or_else(|| "Java introuvable après l'installation.".to_string())
+        installe(racine, version, jdk).ok_or_else(|| "Java introuvable après l’installation.".to_string())
     })();
     let _ = fs::remove_dir_all(&provisoire);
     resultat
@@ -211,7 +211,7 @@ pub fn installer(
     avancement: &mut dyn FnMut(u8),
 ) -> Result<PathBuf, String> {
     let reponse = lire_texte(&adresse_api(version, jdk))?;
-    let paquet = lire_paquet(&reponse).ok_or("Adoptium n'a pas donné de Java pour ce système.")?;
+    let paquet = lire_paquet(&reponse).ok_or("Adoptium n’a pas donné de Java pour ce système.")?;
     fs::create_dir_all(racine).map_err(|e| e.to_string())?;
     let extension = if paquet.adresse.ends_with(".tar.gz") { "tar.gz" } else { "zip" };
     let archive = racine.join(format!(".{}{version}.{extension}", if jdk { "jdk-" } else { "" }));

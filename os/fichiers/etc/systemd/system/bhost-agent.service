@@ -12,14 +12,29 @@ ExecStart=/usr/local/bin/bhost-agent
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM
-TimeoutStopSec=90
+# Les serveurs ont jusqu'à 90 s pour enregistrer leurs mondes : systemd attend un peu plus.
+TimeoutStopSec=120
+# SIGTERM à l'agent seulement : c'est lui qui arrête proprement les serveurs (Java ne reçoit pas le signal en même temps).
+KillMode=mixed
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/var/lib/bhost
 PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
 LimitNOFILE=65536
 # Chaque serveur a son groupe (mémoire max, part du processeur) : systemd confie le groupe de l'agent à l'agent.
+# (Pas de ProtectControlGroups : il casserait Delegate ; pas de MemoryDenyWriteExecute : Java en a besoin.)
 Delegate=yes
 
 [Install]

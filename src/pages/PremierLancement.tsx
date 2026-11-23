@@ -18,7 +18,7 @@ import {
 import "./PremierLancement.css";
 
 // Premier lancement : on choisit où héberger ses serveurs.
-// « Sur cet ordinateur » ouvre l'appli, « Sur une machine dédiée » ouvre le tutoriel.
+// « Sur cet ordinateur » ouvre l’appli, « Sur une machine dédiée » ouvre le tutoriel.
 type Choix = "local" | "machine";
 
 type Props = {
@@ -142,7 +142,7 @@ function Carte(p: {
   );
 }
 
-// Le logo de l'appli (le B et son point), aux couleurs du thème.
+// Le logo de l’appli (le B et son point), aux couleurs du thème.
 export function Tuile() {
   return (
     <svg className="pl-tuile" viewBox="-165 -765 1060 1060" aria-hidden>
@@ -174,7 +174,7 @@ function Legende({ x, texte, nuit = false }: { x: number; texte: string; nuit?: 
 }
 
 // Sur ce PC : ton PC fait les deux, tu y joues (badge manette) et il héberge le serveur (badge serveur).
-// Tes amis s'y connectent des deux côtés.
+// Tes amis s’y connectent des deux côtés.
 function SceneLocal() {
   return (
     <svg viewBox="0 8 400 200" preserveAspectRatio="xMidYMid meet" aria-hidden>

@@ -147,7 +147,7 @@ pub fn verifier(a: &mut Automatisation, tps_possible: bool, maj_possible: bool) 
         return Err("Pas encore pour ce logiciel.".into());
     }
     if a.trig == "upd" && !maj_possible {
-        return Err("Ce serveur n'a ni plugins ni mods.".into());
+        return Err("Ce serveur n’a ni plugins ni mods.".into());
     }
     if !matches!(a.warn_min, 1 | 5 | 15) {
         a.warn_min = 5;
@@ -226,7 +226,7 @@ pub fn echeances(a: &Automatisation, avant: NaiveDateTime, maintenant: NaiveDate
 /// Le message envoyé aux joueurs avant un arrêt ou un redémarrage.
 pub fn message_avant(act: &str, secondes: i64) -> String {
     let quand = if secondes >= 60 { format!("{} min", secondes / 60) } else { format!("{secondes} s") };
-    if act == "stop" { format!("Le serveur s'arrête dans {quand}.") } else { format!("Le serveur redémarre dans {quand}.") }
+    if act == "stop" { format!("Le serveur s’arrête dans {quand}.") } else { format!("Le serveur redémarre dans {quand}.") }
 }
 
 /// Remplace {joueur} par le pseudo.
@@ -423,7 +423,7 @@ mod tests {
         // Une annonce ne prévient pas.
         assert_eq!(avances(&Automatisation { act: "say".into(), ..r }), [0]);
         assert_eq!(message_avant("restart", 300), "Le serveur redémarre dans 5 min.");
-        assert_eq!(message_avant("stop", 10), "Le serveur s'arrête dans 10 s.");
+        assert_eq!(message_avant("stop", 10), "Le serveur s’arrête dans 10 s.");
     }
 
     #[test]

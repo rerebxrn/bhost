@@ -52,7 +52,7 @@ const FREQUENCES = [
   { id: "24h" as const, nom: "Chaque jour" },
 ];
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 
 // « Aujourd’hui à 06:00 », « Hier à 21:47 », « Dim. 15 nov. à 14:12 ».
 export function quand(ms: number, maintenant = Date.now()): string {
@@ -72,7 +72,7 @@ function dans(ms: number): string {
   return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
 }
 
-// L'onglet Sauvegardes : sauvegarde automatique, historique, restauration.
+// L’onglet Sauvegardes : sauvegarde automatique, historique, restauration.
 export default function Sauvegardes({ serveur, onChange, onErreur, onInfo }: Props) {
   const [vue, setVue] = useState<Vue | null>(null);
   const [envoi, setEnvoi] = useState(false);
@@ -103,7 +103,7 @@ export default function Sauvegardes({ serveur, onChange, onErreur, onInfo }: Pro
   };
 
   const exporter = async (s: Sauvegarde) => {
-    const cible = await choisirEnregistrement(`${serveur.nom} ${s.fichier}`);
+    const cible = await choisirEnregistrement(`${serveur.nom} ${s.fichier}`, "Enregistrer la sauvegarde");
     if (!cible) return;
     exporterSauvegarde(serveur.id, s.fichier, cible).then(() => onInfo("Sauvegarde exportée"), (e) => onErreur(phrase(e)));
   };
@@ -119,13 +119,15 @@ export default function Sauvegardes({ serveur, onChange, onErreur, onInfo }: Pro
         <span className="t2">
           {liste.length
             ? `${liste.length} sauvegarde${liste.length > 1 ? "s" : ""} · ${poids(total)} · ${nombre(vue?.libreGo ?? 0)} Go libres`
-            : "Aucune sauvegarde pour l’instant"}
+            : `${nombre(vue?.libreGo ?? 0)} Go libres`}
         </span>
         <div className="bk-btns">
-          <button type="button" className="btn" onClick={() => ouvrirSauvegardes(serveur.id).catch((e) => onErreur(phrase(e)))}>
-            <IconFolder size={14} stroke={2} aria-hidden />
-            Ouvrir le dossier
-          </button>
+          {!serveur.machine && (
+            <button type="button" className="btn" onClick={() => ouvrirSauvegardes(serveur.id).catch((e) => onErreur(phrase(e)))}>
+              <IconFolder size={14} stroke={2} aria-hidden />
+              Ouvrir le dossier
+            </button>
+          )}
           <button type="button" className="btn acc" disabled={envoi} onClick={maintenant}>
             <IconDeviceFloppy size={14} stroke={2} aria-hidden />
             Sauvegarder maintenant
@@ -211,7 +213,7 @@ export default function Sauvegardes({ serveur, onChange, onErreur, onInfo }: Pro
                 >
                   <IconPin size={15} stroke={2} aria-hidden />
                 </button>
-                <button type="button" className="icb" aria-label="Exporter en .zip" title="Exporter en .zip" onClick={() => exporter(s)}>
+                <button type="button" className="icb" aria-label="Exporter en .zip" title={serveur.machine ? "Seulement pour les serveurs de ce PC" : "Exporter en .zip"} disabled={!!serveur.machine} onClick={() => exporter(s)}>
                   <IconDownload size={15} stroke={2} aria-hidden />
                 </button>
                 <button
@@ -266,7 +268,7 @@ type PropsRestaurer = {
   onFini: (s: Serveur) => void;
 };
 
-// « Restaurer… » : tout le serveur, ou seulement le monde. L'état actuel est sauvegardé avant.
+// « Restaurer… » : tout le serveur, ou seulement le monde. L’état actuel est sauvegardé avant.
 function Restaurer({ serveur, sauvegarde, allume, onFermer, onFini }: PropsRestaurer) {
   const toutPossible = sauvegarde.quoi !== "monde";
   const [tout, setTout] = useState(toutPossible);

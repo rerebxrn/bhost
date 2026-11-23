@@ -45,7 +45,7 @@ function fleches<T extends string>(ids: T[], actuel: T, choisir: (id: T) => void
   };
 }
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 
 // « 3,8 Go », « 640 Mo ».
 function taille(octets: number): string {
@@ -62,7 +62,7 @@ type Maj =
   | { etape: "telechargement"; version: string; pourcent: number }
   | { etape: "erreur"; texte: string };
 
-// Réglages de BHOST (bouton en bas de la barre latérale), d'après la maquette.
+// Réglages de BHOST (bouton en bas de la barre latérale), d’après la maquette.
 type Props = {
   machines: Machine[];
   onAjouterMachine: () => void;
@@ -92,7 +92,7 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
     reglagesBhost().then(recevoir, (e) => setErreur(phrase(e)));
   }, []);
 
-  // L'avancement du téléchargement de la mise à jour.
+  // L’avancement du téléchargement de la mise à jour.
   useEffect(
     () =>
       suivreMiseAJour((pourcent) =>
@@ -111,7 +111,7 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
 
   const installer = (version: string) => {
     setMaj({ etape: "telechargement", version, pourcent: 0 });
-    // Si tout va bien, BHOST se ferme et l'installeur le rouvre : on ne revient pas ici.
+    // Si tout va bien, BHOST se ferme et l’installeur le rouvre : on ne revient pas ici.
     installerMiseAJour().catch((e) => setMaj({ etape: "erreur", texte: phrase(e) }));
   };
 
@@ -129,13 +129,13 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
       case "erreur":
         return maj.texte;
       default:
-        return "Version de test";
+        return "Cherchée aussi à chaque lancement.";
     }
   })();
 
   const regler = (changement: ChangementReglages) => {
     setErreur("");
-    // L'interrupteur bouge tout de suite ; Rust confirme juste après.
+    // L’interrupteur bouge tout de suite ; Rust confirme juste après.
     setVue((v) => v && { ...v, ...changement });
     reglerBhost(changement).then(recevoir, (e) => {
       setErreur(phrase(e));
@@ -317,7 +317,7 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
                   className={"ap" + (theme.fond === f.id ? " sel" : "")}
                   onClick={() => theme.changer({ fond: f.id })}
                 >
-                  {/* Toujours la version claire : c'est là que les deux thèmes se distinguent le mieux */}
+                  {/* Toujours la version claire : c’est là que les deux thèmes se distinguent le mieux */}
                   <i className={"v-" + f.id + "-clair"}>
                     <span />
                   </i>
@@ -401,7 +401,7 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
   );
 }
 
-// L'appli se recharge et remontre l'écran du premier lancement (voir App.tsx).
+// L’appli se recharge et remontre l’écran du premier lancement (voir App.tsx).
 function revoirBienvenue() {
   try {
     localStorage.setItem("bhost.accueil", "revoir");

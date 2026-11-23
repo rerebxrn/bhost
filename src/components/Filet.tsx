@@ -3,8 +3,8 @@ import { Component, type ReactNode } from "react";
 type Props = { children: ReactNode };
 type Etat = { panne: boolean };
 
-// Un filet de sécurité : si une page plante, on l'affiche à la place d'un écran blanc.
-// Changer d'onglet ou de serveur remonte la page (la clé change) et efface la panne.
+// Un filet de sécurité : si une page plante, on l’affiche à la place d’un écran blanc.
+// Changer d’onglet ou de serveur remonte la page (la clé change) et efface la panne.
 export default class Filet extends Component<Props, Etat> {
   state: Etat = { panne: false };
 

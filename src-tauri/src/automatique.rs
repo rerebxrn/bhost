@@ -163,7 +163,7 @@ fn faire(app: &AppHandle, s: &Serveur, a: &Automatisation, joueur: Option<&str>)
         "notify" => {
             let texte = match a.trig.as_str() {
                 "crash" => "Le serveur a planté.".to_string(),
-                "join" => format!("{qui} vient d'arriver."),
+                "join" => format!("{qui} vient d’arriver."),
                 "boot" => "Le serveur est prêt.".to_string(),
                 "lag" => "Le serveur lag.".to_string(),
                 "mem" => "La mémoire est presque pleine.".to_string(),
@@ -319,7 +319,7 @@ fn reveiller(app: &AppHandle, id: &str, pseudo: &str) {
     etat.auto.interne.lock().unwrap().en_reveil.insert(id.to_string());
     etat.auto.veilleurs.lock().unwrap().remove(id);
     // Le pseudo vient d'Internet : on ne l'affiche que s'il ressemble à un vrai pseudo.
-    let qui = if crate::listes::pseudo_valide(pseudo) { pseudo.to_string() } else { "Quelqu'un".to_string() };
+    let qui = if crate::listes::pseudo_valide(pseudo) { pseudo.to_string() } else { "Quelqu’un".to_string() };
     dire_ligne(app, id, &format!("[BHOST] {qui} veut entrer : le serveur se réveille."));
     match lancer_serveur(app, id) {
         Ok(()) => noter(app, id, "start", &format!("réveillé par {qui}")),
@@ -639,7 +639,7 @@ fn changer(app: &AppHandle, id: &str, change: impl FnOnce(&mut Vec<Automatisatio
     let etat = app.state::<Etat>();
     {
         let mut liste = etat.liste.lock().unwrap();
-        let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+        let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
         let copie = serveur.clone();
         change(&mut serveur.automatisations, &copie)?;
         serveurs::enregistrer(&etat.fichier, &liste)?;
@@ -710,7 +710,7 @@ pub fn supprimer_automatisation(app: AppHandle, id: String, aid: String) -> Resu
 #[cfg_attr(feature = "bureau", tauri::command)]
 pub fn activer_automatisation(app: AppHandle, id: String, aid: String, on: bool) -> Result<VueAuto, String> {
     changer(&app, &id, |liste, _| {
-        liste.iter_mut().find(|a| a.id == aid).ok_or("Cette automatisation n'existe plus.")?.on = on;
+        liste.iter_mut().find(|a| a.id == aid).ok_or("Cette automatisation n’existe plus.")?.on = on;
         Ok(())
     })
 }

@@ -165,7 +165,7 @@ mod vitesse {
 }
 
 /// Le groupe de programmes d'un serveur (Windows : Job Object). Ailleurs : rien.
-mod groupe {
+pub(crate) mod groupe {
     #[cfg(windows)]
     pub struct Groupe(Option<isize>);
 
@@ -362,12 +362,21 @@ pub mod cgroupes {
     }
 }
 
+/// Un octet de l'ancien encodage de Windows (CP1252) : comme Latin-1, sauf 0x80–0x9F (’ œ € … « »…).
+fn windows_1252(o: u8) -> char {
+    const HAUT: [char; 32] = [
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™',
+        'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
+    ];
+    if (0x80..0xA0).contains(&o) { HAUT[(o - 0x80) as usize] } else { o as char }
+}
+
 /// Enlève les codes de couleur du terminal et les retours chariot d'une ligne.
 pub fn nettoyer(octets: &[u8]) -> String {
     // UTF-8 si possible ; sinon l'ancien encodage de Windows (un octet = une lettre).
     let texte = match std::str::from_utf8(octets) {
         Ok(t) => t.to_string(),
-        Err(_) => octets.iter().map(|&o| o as char).collect(),
+        Err(_) => octets.iter().map(|&o| windows_1252(o)).collect(),
     };
     let mut propre = String::with_capacity(texte.len());
     let mut lettres = texte.chars().peekable();
@@ -424,6 +433,9 @@ fn lire(flux: impl Read + Send + 'static, ecoute: Ecoute, en_cours: Arc<AtomicUs
 /// `variables` : des variables d'environnement en plus pour le serveur (GEYSER_BEDROCK_PORT…).
 pub fn lancer(dossier: &Path, programme: &str, arguments: &[String], variables: &[(String, String)], ecoute: Ecoute) -> Result<Arc<Processus>, String> {
     let mut commande = Command::new(programme);
+    // BHOST OS : le serveur ne voit que son dossier, Java et le système (pas les clés de la machine ni les autres serveurs).
+    #[cfg(all(target_os = "linux", feature = "agent"))]
+    let _cloison = cloison::enfermer(&mut commande, dossier, Path::new(programme));
     commande
         .args(arguments)
         .envs(variables.iter().map(|(k, v)| (k, v)))
@@ -441,7 +453,7 @@ pub fn lancer(dossier: &Path, programme: &str, arguments: &[String], variables: 
         if e.kind() == std::io::ErrorKind::NotFound {
             "Java est introuvable sur ce PC.".to_string()
         } else {
-            format!("Le serveur n'a pas pu démarrer ({e}).")
+            format!("Le serveur n’a pas pu démarrer ({e}).")
         }
     })?;
 
@@ -485,6 +497,158 @@ pub fn lancer(dossier: &Path, programme: &str, arguments: &[String], variables: 
     });
 
     Ok(processus)
+}
+
+/// BHOST OS : un serveur Minecraft (et ses plugins) est enfermé avec Landlock (noyau Linux ≥ 5.13).
+/// Il peut écrire dans son dossier, /tmp et /dev ; lire Java et le système. Il ne peut ni lire les clés de la machine
+/// (relais-cle.txt, machine-code.txt), ni toucher aux autres serveurs. Sans Landlock (vieux noyau), rien ne change.
+#[cfg(target_os = "linux")]
+#[cfg_attr(not(feature = "agent"), allow(dead_code))]
+pub mod cloison {
+    use std::ffi::CString;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::process::CommandExt;
+    use std::path::Path;
+    use std::process::Command;
+
+    const EXECUTE: u64 = 1 << 0;
+    const READ_FILE: u64 = 1 << 2;
+    const READ_DIR: u64 = 1 << 3;
+    /// ABI 1 : les 13 premiers droits sur les fichiers.
+    const ABI1: u64 = (1 << 13) - 1;
+    const REFER: u64 = 1 << 13;
+    const TRUNCATE: u64 = 1 << 14;
+    const IOCTL_DEV: u64 = 1 << 15;
+    const LECTURE: u64 = EXECUTE | READ_FILE | READ_DIR;
+
+    #[repr(C)]
+    struct Regles {
+        fs: u64,
+    }
+    #[repr(C, packed)]
+    struct Sous {
+        permis: u64,
+        dossier: i32,
+    }
+
+    fn droits() -> Option<u64> {
+        // SAFETY : demande seulement la version de Landlock (pointeur nul, taille 0).
+        let abi = unsafe { libc::syscall(libc::SYS_landlock_create_ruleset, std::ptr::null::<Regles>(), 0usize, 1u32) };
+        if abi < 1 {
+            return None;
+        }
+        let mut d = ABI1;
+        if abi >= 2 {
+            d |= REFER;
+        }
+        if abi >= 3 {
+            d |= TRUNCATE;
+        }
+        if abi >= 5 {
+            d |= IOCTL_DEV;
+        }
+        Some(d)
+    }
+
+    fn permettre(regles: &OwnedFd, chemin: &Path, permis: u64) {
+        let Ok(c) = CString::new(chemin.as_os_str().as_bytes()) else { return };
+        // SAFETY : open avec O_PATH ne lit rien ; le descripteur est fermé à la fin.
+        let fd = unsafe { libc::open(c.as_ptr(), libc::O_PATH | libc::O_CLOEXEC) };
+        if fd < 0 {
+            return;
+        }
+        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+        // Un fichier (pas un dossier) n'accepte que les droits d'un fichier.
+        let est_dossier = std::fs::metadata(chemin).is_ok_and(|m| m.is_dir());
+        let permis = if est_dossier { permis } else { permis & (EXECUTE | READ_FILE | (1 << 1) | TRUNCATE | IOCTL_DEV) };
+        let regle = Sous { permis, dossier: fd.as_raw_fd() };
+        // SAFETY : la règle est une structure valide pendant l'appel.
+        unsafe { libc::syscall(libc::SYS_landlock_add_rule, regles.as_raw_fd(), 1u32, &regle as *const Sous, 0u32) };
+    }
+
+    /// Prépare la cloison et la pose sur `commande` (appliquée dans le processus du serveur, juste avant Java).
+    /// Le descripteur rendu doit vivre jusqu'au lancement.
+    pub fn enfermer(commande: &mut Command, dossier: &Path, programme: &Path) -> Option<OwnedFd> {
+        let tout = droits()?;
+        let r = Regles { fs: tout };
+        // SAFETY : la structure vit pendant l'appel ; le noyau rend un descripteur (O_CLOEXEC).
+        let fd = unsafe { libc::syscall(libc::SYS_landlock_create_ruleset, &r as *const Regles, std::mem::size_of::<Regles>(), 0u32) };
+        if fd < 0 {
+            return None;
+        }
+        let regles = unsafe { OwnedFd::from_raw_fd(fd as i32) };
+        for systeme in ["/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/etc", "/opt", "/proc", "/sys", "/run"] {
+            permettre(&regles, Path::new(systeme), LECTURE);
+        }
+        for ecriture in ["/tmp", "/var/tmp", "/dev"] {
+            permettre(&regles, Path::new(ecriture), tout);
+        }
+        // Java : le dossier de son installation (…/java/21 pour …/java/21/bin/java).
+        if let Ok(vrai) = std::fs::canonicalize(programme)
+            && let Some(maison) = vrai.parent().and_then(Path::parent)
+        {
+            permettre(&regles, maison, LECTURE);
+        }
+        permettre(&regles, dossier, tout);
+        // Les réglages que Java et les plugins rangent dans « ~ » vont dans le dossier du serveur.
+        commande.env("HOME", dossier);
+        let brut = regles.as_raw_fd();
+        // SAFETY : entre fork et exec, seulement deux appels système (pas d'allocation).
+        unsafe {
+            commande.pre_exec(move || {
+                if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if libc::syscall(libc::SYS_landlock_restrict_self, brut, 0u32) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        Some(regles)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn le_serveur_ne_voit_que_son_dossier() {
+            let racine = std::env::temp_dir().join(format!("bhost-cloison-{}", std::process::id()));
+            let serveur = racine.join("serveurs").join("s1");
+            std::fs::create_dir_all(&serveur).unwrap();
+            std::fs::write(racine.join("machine-code.txt"), "SECRET").unwrap();
+            // Dans /var/lib (pas dans /tmp, qui est permis) : on copie la racine ailleurs si possible.
+            let racine2 = std::path::PathBuf::from("/var/lib/bhost-essai-cloison");
+            if std::fs::create_dir_all(racine2.join("s1")).is_err() || droits().is_none() {
+                return; // pas les droits, ou pas de Landlock ici
+            }
+            std::fs::write(racine2.join("machine-code.txt"), "SECRET").unwrap();
+            let lancer = |script: &str| {
+                let mut c = Command::new("/bin/sh");
+                c.args(["-c", script]).current_dir(racine2.join("s1"));
+                let _g = enfermer(&mut c, &racine2.join("s1"), Path::new("/bin/sh"));
+                c.status().unwrap().success()
+            };
+            assert!(lancer("echo ok > ./monde.txt && cat ./monde.txt"));
+            assert!(!lancer("cat ../machine-code.txt"));
+            assert!(!lancer("echo x > ../autre.txt"));
+            assert!(lancer("ls /usr/bin > /dev/null && echo x > /tmp/bhost-essai-cloison"));
+            // Java démarre et écrit dans son dossier (si Java est installé ici).
+            if Path::new("/usr/bin/java").exists() {
+                std::fs::write(racine2.join("s1").join("Essai.java"), "public class Essai { public static void main(String[] a) throws Exception { java.nio.file.Files.writeString(java.nio.file.Path.of(\"monde.dat\"), \"ok\"); System.out.println(Runtime.getRuntime().availableProcessors()); } }").unwrap();
+                let mut c = Command::new("/usr/bin/java");
+                c.args(["-Xmx64m", "Essai.java"]).current_dir(racine2.join("s1"));
+                let _g = enfermer(&mut c, &racine2.join("s1"), Path::new("/usr/bin/java"));
+                let sortie = c.output().unwrap();
+                assert!(sortie.status.success(), "{}", String::from_utf8_lossy(&sortie.stderr));
+                assert_eq!(std::fs::read_to_string(racine2.join("s1").join("monde.dat")).unwrap(), "ok");
+            }
+            let _ = std::fs::remove_dir_all(&racine2);
+            let _ = std::fs::remove_dir_all(&racine);
+        }
+    }
 }
 
 #[cfg(test)]

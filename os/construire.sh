@@ -49,10 +49,14 @@ dans apt-get install -y -q --no-install-recommends \
 	network-manager wpasupplicant iw linux-image-generic initramfs-tools busybox-initramfs \
 	grub-pc-bin grub-efi-amd64-bin grub-efi-amd64-signed shim-signed grub2-common \
 	gdisk dosfstools e2fsprogs squashfs-tools util-linux libssl3t64 unattended-upgrades \
-	tzdata zstd less nano curl libpam-systemd qrencode eject systemd-timesyncd systemd-resolved
+	tzdata zstd less nano curl libpam-systemd qrencode eject systemd-timesyncd systemd-resolved systemd-zram-generator
 
 # ---------- 2. Alléger : pas de pilotes de son, de caméra, de cartes serveur, ni leurs microcodes ----------
 K=$(ls "$RACINE/usr/lib/modules" | sort -V | tail -1)
+# Un seul noyau (une reconstruction sur un dossier existant peut en avoir ajouté un) : l'installeur prend celui-là.
+for v in $(ls "$RACINE/usr/lib/modules"); do
+	[ "$v" = "$K" ] || dans apt-get purge -y -q "linux-image-$v" "linux-modules-$v" "linux-modules-extra-$v" >/dev/null 2>&1 || true
+done
 M=$RACINE/usr/lib/modules/$K/kernel
 for d in sound drivers/media drivers/iio drivers/infiniband drivers/staging drivers/comedi drivers/mtd drivers/target \
 	drivers/isdn drivers/net/can drivers/gpu/drm/amd zfs drivers/net/wireless/ti drivers/net/ethernet/mellanox \

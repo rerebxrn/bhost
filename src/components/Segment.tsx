@@ -5,15 +5,15 @@ type Props<T extends string> = {
   options: { id: T; nom: string; n?: number }[]; // n : un petit compteur après le nom (Joueurs)
   valeur: T;
   onChoisir: (id: T) => void;
-  etiquette: string; // pour les lecteurs d'écran
+  etiquette: string; // pour les lecteurs d’écran
   off?: boolean; // tout grisé
 };
 
 type Tirage = { x0: number; x: number; bouge: boolean };
 
 // Un choix parmi quelques options (Difficulté, Thème…), comme sur iPhone :
-// la pastille glisse d'une option à l'autre ; quand on appuie, elle devient une goutte de verre
-// qu'on peut tirer, puis elle s'aimante à l'option la plus proche.
+// la pastille glisse d’une option à l’autre ; quand on appuie, elle devient une goutte de verre
+// qu’on peut tirer, puis elle s’aimante à l’option la plus proche.
 export default function Segment<T extends string>({ options, valeur, onChoisir, etiquette, off }: Props<T>) {
   const rangee = useRef<HTMLDivElement>(null);
   const pouceEl = useRef<HTMLSpanElement>(null);
@@ -22,7 +22,7 @@ export default function Segment<T extends string>({ options, valeur, onChoisir, 
   const [appui, setAppui] = useState(false);
   const noms = options.map((o) => o.nom).join("|");
 
-  // On mesure l'option choisie pour poser la pastille dessus.
+  // On mesure l’option choisie pour poser la pastille dessus.
   useLayoutEffect(() => {
     const el = rangee.current;
     if (!el) return;
@@ -54,7 +54,7 @@ export default function Segment<T extends string>({ options, valeur, onChoisir, 
     const t = tirage.current;
     const el = rangee.current;
     if (!t || !el) return;
-    // On ne tire la pastille que si on part d'elle, et après 4 px (pour ne pas gêner un simple clic).
+    // On ne tire la pastille que si on part d’elle, et après 4 px (pour ne pas gêner un simple clic).
     const cadre = el.getBoundingClientRect();
     if (!t.bouge) {
       const depart = t.x0 - cadre.left;
@@ -71,7 +71,7 @@ export default function Segment<T extends string>({ options, valeur, onChoisir, 
     tirage.current = null;
     setAppui(false);
     if (!t?.bouge || !rangee.current) return;
-    // L'option dont le centre est le plus proche du centre de la pastille.
+    // L’option dont le centre est le plus proche du centre de la pastille.
     const centre = t.x + pouce.largeur / 2;
     let choix = valeur;
     let ecart = Infinity;

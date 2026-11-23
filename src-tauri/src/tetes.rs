@@ -57,7 +57,7 @@ fn ouvrir_png(octets: &[u8]) -> Result<(usize, usize, Vec<u8>), String> {
     let (largeur, hauteur) = (lecteur.info().width as usize, lecteur.info().height as usize);
     // Un skin fait 64 × 64 (ou 64 × 32 pour les anciens). On refuse le reste avant de réserver de la mémoire.
     if largeur != 64 || (hauteur != 64 && hauteur != 32) {
-        return Err("Ce n'est pas un skin.".into());
+        return Err("Ce n’est pas un skin.".into());
     }
     let mut brut = vec![0; lecteur.output_buffer_size().ok_or("Skin illisible.")?];
     let image = lecteur.next_frame(&mut brut).map_err(illisible)?;
@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(chercher(&faux_mojang, ".Lea", None).unwrap(), None);
         assert!(vues.borrow().is_empty());
         // Réseau coupé : une erreur, pas un « inconnu ».
-        assert!(chercher(&|_| Err("pas d'Internet".into()), "Notch", None).is_err());
+        assert!(chercher(&|_| Err("pas d’Internet".into()), "Notch", None).is_err());
     }
 
     #[test]
@@ -361,7 +361,7 @@ mod tests {
         // Tête trop vieille et réseau coupé : on garde l'ancienne.
         let vieux = std::time::SystemTime::now() - Duration::from_secs(3 * 24 * 3600);
         fs::File::options().write(true).open(dossier.join("notch.png")).unwrap().set_modified(vieux).unwrap();
-        assert_eq!(avec_cache(&dossier, "Notch", || Err("pas d'Internet".into())), Some(vec![1, 2, 3]));
+        assert_eq!(avec_cache(&dossier, "Notch", || Err("pas d’Internet".into())), Some(vec![1, 2, 3]));
         // Tête trop vieille et réseau présent : on la remplace.
         assert_eq!(avec_cache(&dossier, "Notch", || Ok(Some(vec![9]))), Some(vec![9]));
         // Le joueur n'a plus de skin : on oublie sa tête.

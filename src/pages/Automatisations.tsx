@@ -36,7 +36,7 @@ const ACTIONS: Record<ActionAuto, string> = {
   update: "Tout mettre à jour",
 };
 
-// « Quand » : le nom dans le menu, une petite aide, les actions possibles (la première est choisie d'office).
+// « Quand » : le nom dans le menu, une petite aide, les actions possibles (la première est choisie d’office).
 const DECLENCHEURS: Record<Declencheur, { nom: string; aide: string; actions: ActionAuto[] }> = {
   time: { nom: "À une heure précise", aide: "", actions: ["restart", "stop", "start", "backup", "say", "cmd", "notify"] },
   crash: { nom: "Si le serveur plante", aide: "3 essais maximum.", actions: ["restart", "notify"] },
@@ -65,14 +65,14 @@ const AVANT = [
   { id: "15" as const, nom: "15 min avant" },
 ];
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 const p2 = (n: number) => String(n).padStart(2, "0");
 const majuscule = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 const minuscule = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
 const jourSemaine = (d: Date) => (d.getDay() + 6) % 7; // 0 = lundi
 const dateTexte = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 
-// Le jour « k » à partir d'aujourd'hui, à l'heure « 05:00 ».
+// Le jour « k » à partir d’aujourd’hui, à l’heure « 05:00 ».
 function a(k: number, heure: string, maintenant: Date): Date {
   const d = new Date(maintenant);
   d.setDate(d.getDate() + k);
@@ -81,7 +81,7 @@ function a(k: number, heure: string, maintenant: Date): Date {
   return d;
 }
 
-// Le jour et l'heure d'une automatisation « une fois ».
+// Le jour et l’heure d’une automatisation « une fois ».
 function dateDe(t: Automatisation): Date | null {
   const [y, mo, j] = t.date.split("-").map(Number);
   if (!y) return null;
@@ -89,7 +89,7 @@ function dateDe(t: Automatisation): Date | null {
   return new Date(y, mo - 1, j, h || 0, m || 0);
 }
 
-// La prochaine fois (comme dans automatisations.rs) : null si c'est passé.
+// La prochaine fois (comme dans automatisations.rs) : null si c’est passé.
 function prochaine(t: Automatisation, maintenant: Date): Date | null {
   if (t.trig !== "time") return null;
   if (t.when === "every") {
@@ -180,8 +180,8 @@ const VIDE: Automatisation = {
   motd: "",
 };
 
-// L'onglet Automatisations : ce que BHOST fait tout seul pour ce serveur.
-// Une liste calme, comme les alarmes de l'app Horloge : l'heure en gros, la phrase en dessous.
+// L’onglet Automatisations : ce que BHOST fait tout seul pour ce serveur.
+// Une liste calme, comme les alarmes de l’app Horloge : l’heure en gros, la phrase en dessous.
 export default function Automatisations({ serveur, onErreur, onInfo }: Props) {
   const [vue, setVue] = useState<VueAutomatisations | null>(null);
   const [edition, setEdition] = useState<Automatisation | null>(null);
@@ -277,7 +277,7 @@ export default function Automatisations({ serveur, onErreur, onInfo }: Props) {
         )}
       </section>
 
-      <p className="au-foot">Marche tant que ton PC est allumé et BHOST ouvert.</p>
+      <p className="au-foot">{serveur.machine ? "Marche tant que la machine est allumée." : "Marche tant que ton PC est allumé et BHOST ouvert."}</p>
 
       {edition && (
         <Edition
@@ -318,7 +318,7 @@ function Edition({ serveur, depart, tpsPossible, majPossible, onFermer, onFini }
   const changer = (patch: Partial<Automatisation>) =>
     setT((x) => {
       const n = { ...x, ...patch };
-      // L'action doit aller avec le déclencheur : sinon on prend la première permise.
+      // L’action doit aller avec le déclencheur : sinon on prend la première permise.
       if (!DECLENCHEURS[n.trig].actions.includes(n.act)) n.act = DECLENCHEURS[n.trig].actions[0];
       // « Une fois » sans jour : demain.
       if (n.when === "once" && !n.date) n.date = dateTexte(a(1, "00:00", new Date()));

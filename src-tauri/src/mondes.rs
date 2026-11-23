@@ -267,13 +267,13 @@ mod tests {
         level_dat(&s.join("survie"), "Survie", "1.21.4", 10);
         level_dat(&s.join("survie_nether"), "Survie", "1.21.4", 10);
         fs::write(s.join("survie_nether").join("gros"), vec![0u8; 100]).unwrap();
-        level_dat(&s.join("ancien"), "Monde de l'été", "1.21.1", 5);
+        level_dat(&s.join("ancien"), "Monde de l’été", "1.21.1", 5);
         fs::create_dir_all(s.join("plugins")).unwrap();
         fs::create_dir_all(s.join("logs")).unwrap();
         let liste = lister(&s);
         assert_eq!(liste.iter().map(|m| m.dossier.as_str()).collect::<Vec<_>>(), ["survie", "ancien"]);
         assert!(liste[0].actuel && !liste[1].actuel);
-        assert_eq!(liste[1].nom, "Monde de l'été");
+        assert_eq!(liste[1].nom, "Monde de l’été");
         assert_eq!(liste[0].version.as_deref(), Some("1.21.4"));
         assert_eq!(liste[0].mode.as_deref(), Some("creatif"));
         assert!(liste[0].taille >= 100); // le Nether compte
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn refuse_les_noms_dangereux() {
-        assert!(nom_valide("world") && nom_valide("Monde de l'été"));
+        assert!(nom_valide("world") && nom_valide("Monde de l’été"));
         assert!(!nom_valide("..") && !nom_valide("a/b") && !nom_valide("a\\b") && !nom_valide("C:") && !nom_valide(""));
     }
 }

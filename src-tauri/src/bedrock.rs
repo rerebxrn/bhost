@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn change_le_port_dans_la_config() {
-        let config = "# Geyser\nbedrock:\n  # L'adresse\n  address: 0.0.0.0\n  signaling:\n    port: 0\n  port: 19132\n  clone-remote-port: false\njava:\n  port: 25565\n";
+        let config = "# Geyser\nbedrock:\n  # L’adresse\n  address: 0.0.0.0\n  signaling:\n    port: 0\n  port: 19132\n  clone-remote-port: false\njava:\n  port: 25565\n";
         let nouvelle = regler_port(config, 19133).unwrap();
         assert!(nouvelle.contains("\n  port: 19133\n"));
         assert!(nouvelle.contains("    port: 0\n") && nouvelle.contains("java:\n  port: 25565\n"));

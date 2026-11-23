@@ -118,7 +118,7 @@ pub fn phrase(probleme: &Probleme) -> String {
         Probleme::Crash => "Le serveur a planté.".into(),
         Probleme::Memoire { demarrage: true, .. } => "Pas assez de mémoire libre pour le lancer.".into(),
         Probleme::Memoire { .. } => "Le serveur a manqué de mémoire.".into(),
-        Probleme::Stockage { .. } => "Stockage max atteint : le serveur s'est arrêté.".into(),
+        Probleme::Stockage { .. } => "Stockage max atteint : le serveur s’est arrêté.".into(),
     }
 }
 

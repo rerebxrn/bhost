@@ -50,7 +50,7 @@ type Props = {
   onInfo: (texte: string) => void;
 };
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 const GERES = ["ops.json", "whitelist.json", "banned-players.json", "banned-ips.json", "usercache.json"];
 const TEXTES = /\.(txt|properties|ya?ml|json5?|toml|cfg|conf|ini|md|csv|sk|mcmeta|lang|bat|cmd|sh|xml|snbt|mcfunction)$/i;
 
@@ -65,7 +65,7 @@ function icone(e: { nom: string; dossier: boolean }) {
 
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
 
-// L'onglet Fichiers : le dossier du serveur à gauche, le fichier choisi à droite (lecture, modification, réglages faciles).
+// L’onglet Fichiers : le dossier du serveur à gauche, le fichier choisi à droite (lecture, modification, réglages faciles).
 export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo }: Props) {
   const [dossier, setDossier] = useState("");
   const [elements, setElements] = useState<Element[] | null>(null);
@@ -76,7 +76,17 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
   const [survol, setSurvol] = useState(false);
   const allume = serveur.statut !== "arrete" && serveur.statut !== "plante";
 
-  const relire = (d = dossier) => fichiersServeur(serveur.id, d).then(setElements, (e) => onErreur(phrase(e)));
+  // Une réponse arrivée en retard (on a déjà changé de dossier ou de fichier) est ignorée :
+  // sinon le contenu d’un fichier pourrait s’afficher, et être enregistré, sous le nom d’un autre.
+  const dossierDemande = useRef(dossier);
+  const cheminDemande = useRef<string | null>(chemin);
+  const relire = (d = dossier) => {
+    dossierDemande.current = d;
+    return fichiersServeur(serveur.id, d).then(
+      (l) => dossierDemande.current === d && setElements(l),
+      (e) => onErreur(phrase(e)),
+    );
+  };
   useEffect(() => {
     setElements(null);
     relire(dossier);
@@ -87,7 +97,12 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
     setChemin(c);
     setBrouillon(null);
     setFichier(null);
-    if (c) lireFichier(serveur.id, c).then(setFichier, (e) => onErreur(phrase(e)));
+    cheminDemande.current = c;
+    if (c)
+      lireFichier(serveur.id, c).then(
+        (f) => cheminDemande.current === c && setFichier(f),
+        (e) => onErreur(phrase(e)),
+      );
   };
   useEffect(() => {
     ouvrirFichier(chemin);
@@ -120,7 +135,7 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
 
   const importer = (sources: string[], d: string) => {
     if (!sources.length) return;
-    // Machine dédiée : les fichiers partent de ce PC, on montre l'envoi.
+    // Machine dédiée : les fichiers partent de ce PC, on montre l’envoi.
     const fin = serveur.machine ? ecouterTravail((qui, etape, pourcent) => qui === serveur.id && onInfo(`${etape}… ${pourcent} %`)) : () => {};
     importerFichiers(serveur.id, d, sources).then(
       (n) => {
@@ -189,9 +204,11 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
           <button type="button" className="icb" aria-label="Importer des fichiers" title="Importer des fichiers" onClick={() => choisirFichiers().then((l) => importer(l, dossier))}>
             <IconUpload size={15} stroke={2} aria-hidden />
           </button>
-          <button type="button" className="icb" aria-label="Ouvrir dans l’Explorateur" title="Ouvrir dans l’Explorateur" onClick={() => montrerFichier(serveur.id, dossier).catch((e) => onErreur(phrase(e)))}>
-            <IconFolderOpen size={15} stroke={2} aria-hidden />
-          </button>
+          {!serveur.machine && (
+            <button type="button" className="icb" aria-label="Ouvrir dans l’Explorateur" title="Ouvrir dans l’Explorateur" onClick={() => montrerFichier(serveur.id, dossier).catch((e) => onErreur(phrase(e)))}>
+              <IconFolderOpen size={15} stroke={2} aria-hidden />
+            </button>
+          )}
         </div>
         {allume && monde && (
           <div className="fx-warn">
@@ -272,9 +289,11 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
                   Lecture seule
                 </span>
               )}
-              <button type="button" className="icb" aria-label="Afficher dans l’Explorateur" title="Afficher dans l’Explorateur" onClick={() => montrerFichier(serveur.id, chemin).catch((e) => onErreur(phrase(e)))}>
-                <IconExternalLink size={15} stroke={2} aria-hidden />
-              </button>
+              {!serveur.machine && (
+                <button type="button" className="icb" aria-label="Afficher dans l’Explorateur" title="Afficher dans l’Explorateur" onClick={() => montrerFichier(serveur.id, chemin).catch((e) => onErreur(phrase(e)))}>
+                  <IconExternalLink size={15} stroke={2} aria-hidden />
+                </button>
+              )}
             </div>
 
             {bandeau && (
@@ -328,11 +347,13 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
                   <IconFileZip size={30} stroke={1.6} aria-hidden />
                 </span>
                 <b>{fichier.genre === "tropGros" ? "Trop gros pour être affiché ici" : infosBinaire(nomFichier, chemin, serveur).titre}</b>
-                <span>{fichier.genre === "tropGros" ? "Ouvre-le depuis l’Explorateur." : infosBinaire(nomFichier, chemin, serveur).texte}</span>
-                <button type="button" className="btn" onClick={() => montrerFichier(serveur.id, chemin).catch((e) => onErreur(phrase(e)))}>
-                  <IconFolderOpen size={14} stroke={2} aria-hidden />
-                  Afficher dans l’Explorateur
-                </button>
+                {!serveur.machine && <span>{fichier.genre === "tropGros" ? "Ouvre-le depuis l’Explorateur." : infosBinaire(nomFichier, chemin, serveur).texte}</span>}
+                {!serveur.machine && (
+                  <button type="button" className="btn" onClick={() => montrerFichier(serveur.id, chemin).catch((e) => onErreur(phrase(e)))}>
+                    <IconFolderOpen size={14} stroke={2} aria-hidden />
+                    Afficher dans l’Explorateur
+                  </button>
+                )}
               </div>
             )}
 
@@ -366,7 +387,7 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
   );
 }
 
-// Ce qu'on dit d'un fichier que BHOST n'ouvre pas.
+// Ce qu’on dit d’un fichier que BHOST n’ouvre pas.
 function infosBinaire(nom: string, chemin: string, serveur: Serveur) {
   if (chemin === serveur.jar) return { titre: "Le logiciel du serveur", texte: `C’est ${serveur.logiciel} lui-même. Sa version se change dans Paramètres.` };
   if (/^(plugins|mods)\/[^/]+\.jar$/i.test(chemin)) return { titre: chemin.startsWith("mods") ? "Fichier d’un mod" : "Fichier d’un plugin", texte: "Remplace-le en important une autre version." };
@@ -418,7 +439,7 @@ function depuis118(version: string) {
   return n[0] > 1 || (n[0] === 1 && n[1] >= 18);
 }
 
-// Le texte d'un motd : les codes de couleur (§a…) et les échappements (é) en moins.
+// Le texte d’un motd : les codes de couleur (§a…) et les échappements (é) en moins.
 function motdLisible(motd: string) {
   return motd.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/§./g, "");
 }
@@ -454,23 +475,49 @@ function ReglagesFaciles({ serveur, onChange, onErreur, onInfo }: Omit<Props, "o
     parametresServeur(serveur.id).then((i) => setPartie(i.partie), () => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serveur.id]);
-  // L'icône dans Minecraft suit celle de BHOST (sauf image à soi).
+  // L’icône dans Minecraft suit celle de BHOST (sauf image à soi).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => lireIcone(), [serveur.id, serveur.couleur]);
 
+  // Relit tout (server.properties et la partie) : chaque réglage voit ce que les autres ont changé.
+  const relireTout = () => {
+    proprietesServeur(serveur.id).then(setP, () => {});
+    parametresServeur(serveur.id).then((i) => setPartie(i.partie), () => {});
+  };
   const regler = (valeurs: Record<string, string>) => {
     if (!p) return;
     setP({ ...p, ...valeurs });
-    reglerProprietes(serveur.id, valeurs).then(setP, (e) => {
-      onErreur(phrase(e));
-      proprietesServeur(serveur.id).then(setP, () => {});
-    });
+    reglerProprietes(serveur.id, valeurs).then(
+      (l) => {
+        setP(l);
+        relireTout();
+        // Port et joueurs max : l’Accueil et la barre latérale les montrent aussi.
+        const port = Number(l["server-port"]);
+        const joueursMax = Number(l["max-players"]);
+        if ((port && port !== serveur.port) || (joueursMax && joueursMax !== serveur.joueursMax)) {
+          onChange({ ...serveur, port: port || serveur.port, joueursMax: joueursMax || serveur.joueursMax });
+        }
+      },
+      (e) => {
+        onErreur(phrase(e));
+        relireTout();
+      },
+    );
   };
   const changerPartie = (change: Partial<Partie>) => {
     if (!partie) return;
     const nouvelle = { ...partie, ...change };
     setPartie(nouvelle);
-    reglerPartie(serveur.id, nouvelle).then(onChange, (e) => onErreur(phrase(e)));
+    reglerPartie(serveur.id, nouvelle).then(
+      (s) => {
+        onChange(s);
+        relireTout();
+      },
+      (e) => {
+        onErreur(phrase(e));
+        relireTout();
+      },
+    );
   };
 
   if (!p || !partie) return <div className="fx-body"><div className="empty">Lecture…</div></div>;
@@ -561,7 +608,7 @@ function ReglagesFaciles({ serveur, onChange, onErreur, onInfo }: Omit<Props, "o
             {icone ? <img className="motd-ic sm" src={icone} alt="" /> : <span className="motd-ic sm vide">{serveur.nom.charAt(0).toUpperCase()}</span>}
             {iconePerso && (
               <button type="button" className="btn" onClick={() => lireIcone(true)} title="Remettre la même icône que dans BHOST">
-                Remettre celle de BHOST
+                Par défaut
               </button>
             )}
             <ChoisirIcone id={serveur.id} onFini={() => lireIcone()} onErreur={onErreur} onInfo={onInfo} />

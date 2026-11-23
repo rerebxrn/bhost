@@ -10,7 +10,7 @@ import "./FicheJoueur.css";
 type Props = {
   id: string; // le serveur
   nom: string;
-  depuis: number | null; // connecté depuis (ms), null s'il n'est pas connecté
+  depuis: number | null; // connecté depuis (ms), null s’il n’est pas connecté
   connecte: boolean;
   op: boolean;
   onOp: () => void;
@@ -40,7 +40,7 @@ const DIMENSIONS: Record<string, string> = {
   the_end: "End",
 };
 
-// La fiche d'un joueur : quelques chiffres (au dernier enregistrement du monde), et les actions.
+// La fiche d’un joueur : quelques chiffres (au dernier enregistrement du monde), et les actions.
 export default function FicheJoueur(p: Props) {
   const [fiche, setFiche] = useState<Fiche | null | undefined>(undefined); // undefined : lecture
   const [mode, setMode] = useState<string>("survie");
@@ -58,7 +58,7 @@ export default function FicheJoueur(p: Props) {
   const agir = (action: string, ok: string) =>
     commandeJoueur(p.id, p.nom, action).then(
       () => p.onInfo(ok),
-      (e) => p.onErreur(typeof e === "string" ? e : "Ça n'a pas marché."),
+      (e) => p.onErreur(typeof e === "string" ? e : "Ça n’a pas marché."),
     );
 
   const stats: [string, string][] = fiche
@@ -123,7 +123,7 @@ export default function FicheJoueur(p: Props) {
         </div>
       ) : fiche === null ? (
         <p className="pf-rien">
-          Pas encore de fiche : il n'a jamais joué sur ce monde.
+          Pas encore de fiche : il n’a jamais joué sur ce monde.
         </p>
       ) : (
         <>

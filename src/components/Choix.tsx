@@ -8,7 +8,7 @@ type Props<T extends string> = {
   options: { id: T; nom: string }[];
   valeur: T;
   onChoisir: (id: T) => void;
-  etiquette: string; // pour les lecteurs d'écran
+  etiquette: string; // pour les lecteurs d’écran
 };
 
 // Un bouton menu façon macOS (« Chaque jour ⌃⌄ ») : un clic ouvre un menu en verre,
@@ -30,7 +30,7 @@ export default function Choix<T extends string>({
   } | null>(null);
   const actuel = options.find((o) => o.id === valeur);
 
-  // Le menu s'aligne sur le bord droit du bouton ; s'il n'y a pas la place en dessous, il s'ouvre au-dessus.
+  // Le menu s’aligne sur le bord droit du bouton ; s’il n’y a pas la place en dessous, il s’ouvre au-dessus.
   useLayoutEffect(() => {
     if (!ouvert || !bouton.current) return;
     const b = bouton.current.getBoundingClientRect();
@@ -49,7 +49,7 @@ export default function Choix<T extends string>({
     bouton.current?.focus();
   };
 
-  // Échap ferme le menu même si le clavier n'est pas dedans (et pas la fenêtre qui est derrière).
+  // Échap ferme le menu même si le clavier n’est pas dedans (et pas la fenêtre qui est derrière).
   useEffect(() => {
     if (!ouvert) return;
     const touche = (e: KeyboardEvent) => {

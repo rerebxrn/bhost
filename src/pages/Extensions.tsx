@@ -34,7 +34,7 @@ type Props = {
 
 type Genre = VueExtensions["genre"];
 
-// Le nom d'un plugin, mod ou datapack du catalogue : un clic ouvre sa page web dans le navigateur.
+// Le nom d’un plugin, mod ou datapack du catalogue : un clic ouvre sa page web dans le navigateur.
 function NomLien({ nom, projet, fleche }: { nom: string; projet: string | null; fleche?: boolean }) {
   if (!projet || !/^[A-Za-z0-9]{8}$/.test(projet)) return <>{nom}</>;
   const adresse = `https://modrinth.com/project/${projet}`;
@@ -85,7 +85,7 @@ const CATEGORIES: Record<Genre, { id: string; nom: string }[]> = {
   ],
 };
 
-// L'ordre des résultats. « Pertinence » n'a de sens qu'avec un mot cherché.
+// L’ordre des résultats. « Pertinence » n’a de sens qu’avec un mot cherché.
 const TRIS: { id: Tri; nom: string; titre: string }[] = [
   { id: "pertinence", nom: "Pertinence", titre: "Résultats" },
   { id: "telecharges", nom: "Plus téléchargés", titre: "Les plus téléchargés" },
@@ -104,18 +104,18 @@ const UNITES: Record<Genre, [string, string]> = {
 // Combien de résultats arrivent à chaque page (comme le catalogue).
 const PAGE = 20;
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 
 // « 12 M », « 3,4 k ».
-function compte(n: number): string {
+export function compte(n: number): string {
   const f = (x: number) => x.toLocaleString("fr-FR", { maximumFractionDigits: x < 10 ? 1 : 0 });
   if (n >= 1_000_000) return `${f(n / 1_000_000)} M`;
   if (n >= 1_000) return `${f(n / 1_000)} k`;
   return String(n);
 }
 
-// La tuile : la vraie icône du projet ; sinon (hors ligne, pas d'icône) sa couleur et son initiale.
-function Tuile({ nom, couleur, icone, taille = 36 }: { nom: string; couleur: number | null; icone?: string | null; taille?: number }) {
+// La tuile : la vraie icône du projet ; sinon (hors ligne, pas d’icône) sa couleur et son initiale.
+export function Tuile({ nom, couleur, icone, taille = 36 }: { nom: string; couleur: number | null; icone?: string | null; taille?: number }) {
   const [casse, setCasse] = useState(false);
   const rayon = Math.round(taille * 0.24);
   if (icone && !casse) {
@@ -172,13 +172,13 @@ function Interrupteur({ actif, nom, off, onClick }: { actif: boolean; nom: strin
   );
 }
 
-// L'onglet Plugins / Mods / Datapacks (maquette A, choisie par Thomas le 18/11) :
+// L’onglet Plugins / Mods / Datapacks (maquette A, choisie par Thomas le 18/11) :
 // la liste calme de ce qui est installé (Mise à jour · Actifs · Coupés), une fiche par extension,
 // et une page à part « Ajouter des … » pour le catalogue.
 export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props) {
   const [vue, setVue] = useState<VueExtensions | null>(null);
-  const [illisible, setIllisible] = useState(false); // la liste n'a pas pu être lue
-  const [horsLigne, setHorsLigne] = useState(false); // le catalogue n'a pas répondu
+  const [illisible, setIllisible] = useState(false); // la liste n’a pas pu être lue
+  const [horsLigne, setHorsLigne] = useState(false); // le catalogue n’a pas répondu
   const [essai, setEssai] = useState(0); // « Réessayer » relance la recherche
   const [ajouter, setAjouter] = useState(false);
   const [fiche, setFiche] = useState<string | null>(null); // fichier ouvert
@@ -194,7 +194,7 @@ export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props)
   const [cherche, setCherche] = useState(false);
   const [plus, setPlus] = useState(false); // « Afficher plus » en cours
   const demande = useRef(0);
-  // Avec un mot cherché : la pertinence d'abord. Sans mot : la pertinence n'a pas de sens.
+  // Avec un mot cherché : la pertinence d’abord. Sans mot : la pertinence n’a pas de sens.
   const avecTexte = texte.trim() !== "";
   const tri: Tri = triChoisi === null || (triChoisi === "pertinence" && !avecTexte) ? (avecTexte ? "pertinence" : "telecharges") : triChoisi;
 
@@ -213,12 +213,22 @@ export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serveur.id, serveur.logiciel, serveur.version, genreChoisi]);
 
+  // La liste installée : seule la dernière demande compte (une réponse en retard d’un autre serveur est jetée).
+  const lectureListe = useRef(0);
+  function relireListe(avecErreur = false) {
+    const numero = ++lectureListe.current;
+    if (avecErreur) setIllisible(false);
+    extensionsServeur(serveur.id, genreChoisi).then(
+      (v) => numero === lectureListe.current && setVue(v),
+      (e) => {
+        if (numero !== lectureListe.current || !avecErreur) return;
+        setIllisible(true);
+        onErreur(phrase(e));
+      },
+    );
+  }
   function lire() {
-    setIllisible(false);
-    extensionsServeur(serveur.id, genreChoisi).then(setVue, (e) => {
-      setIllisible(true);
-      onErreur(phrase(e));
-    });
+    relireListe(true);
   }
 
   // Le serveur redémarre : la note « Redémarre pour appliquer » disparaît.
@@ -226,17 +236,17 @@ export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props)
   useEffect(() => {
     if (statut.current === serveur.statut) return;
     statut.current = serveur.statut;
-    if (serveur.statut === "en-ligne" || serveur.statut === "arrete") extensionsServeur(serveur.id, genreChoisi).then(setVue, () => {});
+    if (serveur.statut === "en-ligne" || serveur.statut === "arrete") relireListe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serveur.statut]);
 
-  // Un plugin n'a pas démarré (vu dans la console) : on relit la liste, un peu après la dernière ligne.
+  // Un plugin n’a pas démarré (vu dans la console) : on relit la liste, un peu après la dernière ligne.
   useEffect(() => {
     let minuterie = 0;
     const arreter = ecouterExtensions((id) => {
       if (id !== serveur.id) return;
       window.clearTimeout(minuterie);
-      minuterie = window.setTimeout(() => extensionsServeur(serveur.id, genreChoisi).then(setVue, () => {}), 800);
+      minuterie = window.setTimeout(() => relireListe(), 800);
     });
     return () => {
       window.clearTimeout(minuterie);
@@ -299,7 +309,7 @@ export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props)
 
   const genre: Genre =
     genreChoisi ?? vue?.genre ?? (serveur.logiciel === "Vanilla" ? "datapacks" : ["Fabric", "Forge", "NeoForge", "Youer", "Arclight", "Mohist"].includes(serveur.logiciel) ? "mods" : "plugins");
-  // Plusieurs genres (plugins + datapacks) : le sélecteur en haut, comme dans l'onglet Joueurs.
+  // Plusieurs genres (plugins + datapacks) : le sélecteur en haut, comme dans l’onglet Joueurs.
   const [genres, setGenres] = useState<Genre[]>([]);
   const [nombres, setNombres] = useState<VueExtensions["nombres"]>({});
   useEffect(() => {
@@ -324,10 +334,11 @@ export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props)
   const agir = (cle: string, action: Promise<VueExtensions>, message?: string) => {
     onErreur("");
     setOccupe(cle);
+    const numero = ++lectureListe.current;
     action
       .then(
         (v) => {
-          setVue(v);
+          if (numero === lectureListe.current) setVue(v);
           if (message) onInfo(message);
         },
         (e) => onErreur(phrase(e)),
@@ -346,10 +357,11 @@ export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props)
   const majFaite = (cle: string, fichiers: string[], reussi: (faits: number) => string) => {
     onErreur("");
     setOccupe(cle);
+    const numero = ++lectureListe.current;
     mettreAJourExtensions(serveur.id, fichiers, genreChoisi)
       .then(
         ({ vue: v, faits }) => {
-          setVue(v);
+          if (numero === lectureListe.current) setVue(v);
           onInfo(faits > 0 ? reussi(faits) : "Rien de plus récent qui marche ici");
         },
         (e) => onErreur(phrase(e)),
@@ -366,10 +378,11 @@ export default function Extensions({ serveur, erreur, onErreur, onInfo }: Props)
   const installer = (p: Projet) => {
     onErreur("");
     setOccupe(p.id);
+    const numero = ++lectureListe.current;
     installerExtension(serveur.id, p.id, genreChoisi)
       .then(
         ({ vue: v, avec, manque }) => {
-          setVue(v);
+          if (numero === lectureListe.current) setVue(v);
           onInfo(`${p.nom} installé` + (avec.length ? ` avec ${avec.join(", ")}` : ""));
           if (manque.length) onErreur(`Il lui faut aussi ${manque.join(", ")}, introuvable pour ${nomLogiciel(serveur)}.`);
         },

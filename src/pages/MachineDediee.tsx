@@ -26,7 +26,7 @@ import "./NouveauServeur.css";
 import "./MachineDediee.css";
 
 // Tutoriel « machine dédiée » : préparer un 2ᵉ PC avec BHOST OS, puis le relier à ce PC.
-// Clé USB : BHOST télécharge BHOST OS et l'écrit sur la clé, avec le Wi-Fi (src-tauri/src/cle.rs).
+// Clé USB : BHOST télécharge BHOST OS et l’écrit sur la clé, avec le Wi-Fi (src-tauri/src/cle.rs).
 
 type Etape = "materiel" | "cle" | "demarrage" | "installation" | "liaison";
 const ETAPES: Etape[] = ["materiel", "cle", "demarrage", "installation", "liaison"];
@@ -57,8 +57,9 @@ const PAS_ENCORE = "BHOST OS n’est pas encore disponible : cette étape marche
 
 export default function MachineDediee({ onQuitter, onLiee }: { onQuitter: () => void; onLiee: (m: Machine) => void }) {
   const [etape, setEtape] = useState<Etape>("materiel");
+  const [defile, setDefile] = useState(false); // la page a défilé : effet de bord sous les étapes
   const [atteinte, setAtteinte] = useState(0); // la plus loin des étapes déjà ouvertes
-  // Étape « Clé USB » : le bouton du bas écrit la clé tant qu'elle n'est pas prête, puis devient « Continuer ».
+  // Étape « Clé USB » : le bouton du bas écrit la clé tant qu’elle n’est pas prête, puis devient « Continuer ».
   const [cle, setCle] = useState<EtatCle>({ prete: false, peutEcrire: false, enCours: false });
   const [demandeEcriture, setDemandeEcriture] = useState(0);
   const ecrireAvant = etape === "cle" && !cle.prete;
@@ -76,7 +77,8 @@ export default function MachineDediee({ onQuitter, onLiee }: { onQuitter: () => 
     <div className="corps">
       <main className="main md-main">
         <Tabs onglets={onglets} actif={etape} onChoisir={(e) => ETAPES.indexOf(e) <= atteinte && aller(e)} etiquette="Étapes du tutoriel" />
-        <div className="scroll">
+        <div className={"edgebar" + (defile ? " on" : "")} aria-hidden />
+        <div className="scroll" onScroll={(e) => setDefile(e.currentTarget.scrollTop > 4)}>
           <div className="page wz md" key={etape}>
             <div className="wz-head">
               <span className="wz-kick">{`Étape ${rang + 1} sur ${ETAPES.length}`}</span>
@@ -137,7 +139,7 @@ export default function MachineDediee({ onQuitter, onLiee }: { onQuitter: () => 
   );
 }
 
-// ---------- Ce qu'on lit et ce qu'on fait, à droite ----------
+// ---------- Ce qu’on lit et ce qu’on fait, à droite ----------
 
 type EtatCle = { prete: boolean; peutEcrire: boolean; enCours: boolean };
 
@@ -253,7 +255,7 @@ function ChoixCle({ demande, deja, onEtat, onPasser }: { demande: number; deja: 
 
   const cle = cles?.find((k) => k.disque === choix);
   const enCours = avance !== null;
-  // Le bouton du bas (« Écrire la clé ») suit l'état d'ici ; un clic dessus ouvre la confirmation.
+  // Le bouton du bas (« Écrire la clé ») suit l’état d’ici ; un clic dessus ouvre la confirmation.
   useEffect(() => onEtat({ prete: fini, peutEcrire: choix !== null, enCours }), [fini, choix, enCours, onEtat]);
   const premiereDemande = useRef(demande);
   useEffect(() => {

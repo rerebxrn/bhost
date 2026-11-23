@@ -25,7 +25,7 @@ export default function Bannir({ nom, onBannir, onFermer }: Props) {
     onBannir(motif.trim())
       .then(onFermer)
       .catch((raison) => {
-        setErreur(typeof raison === "string" ? raison : "Ça n'a pas marché.");
+        setErreur(typeof raison === "string" ? raison : "Ça n’a pas marché.");
         setEnvoi(false);
       });
   };

@@ -1,4 +1,4 @@
-// Les styles de base d'abord (jetons, verre), pour que ceux des composants passent après.
+// Les styles de base d’abord (jetons, verre), pour que ceux des composants passent après.
 import "./theme/theme.css";
 import "./theme/glass.css";
 import React from "react";

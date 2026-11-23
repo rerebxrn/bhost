@@ -15,7 +15,9 @@ fn main() {
     let stdio = std::env::args().any(|a| a == "--stdio");
     // BHOST OS : chaque serveur aura son groupe (mémoire max, part du processeur). Avant tout lancement.
     bhost_lib::processus::cgroupes::preparer();
-    let runtime = tokio::runtime::Runtime::new().expect("tokio");
+    // Beaucoup de commandes de l'appli sont bloquantes (lire un dossier, écrire un fichier) : assez de fils
+    // pour qu'une commande lente ne fige pas les autres, même sur un mini-PC à 2 cœurs.
+    let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(16).enable_all().build().expect("tokio");
     let _dedans = runtime.enter();
 
     // Une seule écriture à la fois sur la sortie (réponses et nouvelles se mélangent sinon).
@@ -50,7 +52,9 @@ fn main() {
     match (pilotage::code(&dossier), pilotage::id(&dossier)) {
         (Ok(code), Ok(id)) => {
             agent::noter_machine(id.clone());
-            eprintln!("[bhost-agent] prêt · machine {id} · code {}-{}", &code[..4], &code[4..]);
+            // Le code n'est jamais écrit dans le journal (il donne tout le contrôle de la machine).
+            let _ = code;
+            eprintln!("[bhost-agent] prêt · machine {id}");
         }
         (Err(e), _) | (_, Err(e)) => {
             eprintln!("[bhost-agent] code ou clé de la machine : {e}");

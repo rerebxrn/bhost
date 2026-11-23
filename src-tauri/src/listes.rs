@@ -115,7 +115,7 @@ pub fn modifier(dossier: &Path, fichier: &str, changement: Changement, maintenan
         }
     }
     let texte = serde_json::to_string_pretty(&liste).map_err(|e| e.to_string())?;
-    crate::garde::ecrire_atomique(&dossier.join(fichier), (texte + "\n").as_bytes()).map_err(|e| format!("Impossible d'écrire {fichier}. {e}"))
+    crate::garde::ecrire_atomique(&dossier.join(fichier), (texte + "\n").as_bytes()).map_err(|e| format!("Impossible d’écrire {fichier}. {e}"))
 }
 
 /// Un motif de bannissement propre : une ligne, 100 lettres au plus.

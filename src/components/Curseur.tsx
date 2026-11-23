@@ -6,15 +6,15 @@ type Props = {
   max: number;
   valeur: number; // un nombre entier
   onChange: (v: number) => void;
-  etiquette: string; // pour les lecteurs d'écran
-  unite?: string; // lue par les lecteurs d'écran (« Go »)
+  etiquette: string; // pour les lecteurs d’écran
+  unite?: string; // lue par les lecteurs d’écran (« Go »)
 };
 
 // Un curseur comme sur iPhone : le bouton suit le doigt en douceur, devient une goutte de verre
-// tant qu'on le tient, puis se cale sur la valeur entière la plus proche avec un ressort.
+// tant qu’on le tient, puis se cale sur la valeur entière la plus proche avec un ressort.
 export default function Curseur({ min, max, valeur, onChange, etiquette, unite = "" }: Props) {
   const rail = useRef<HTMLDivElement>(null);
-  const [tire, setTire] = useState<number | null>(null); // position libre (0 à 1) pendant qu'on tient le bouton
+  const [tire, setTire] = useState<number | null>(null); // position libre (0 à 1) pendant qu’on tient le bouton
   const etendue = Math.max(1, max - min);
   const part = tire ?? (Math.min(max, Math.max(min, valeur)) - min) / etendue;
 
@@ -90,7 +90,7 @@ export default function Curseur({ min, max, valeur, onChange, etiquette, unite =
       onPointerDown={baisse}
       onPointerMove={(e) => {
         if (tire === null) return;
-        // Le bouton de la souris a été lâché sans qu'on le voie (fenêtre quittée…) : le geste est fini.
+        // Le bouton de la souris a été lâché sans qu’on le voie (fenêtre quittée…) : le geste est fini.
         if (e.pointerType === "mouse" && (e.buttons & 1) === 0) return finir();
         suivre(depuisPointeur(e.clientX));
       }}

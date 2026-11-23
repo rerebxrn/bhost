@@ -1,13 +1,14 @@
 //! BHOST OS : la machine reste joignable par le relais, et les PC qui ont son code la pilotent.
 //!
-//! 1. La machine ouvre une connexion de contrôle : « MACHINE <clé> <code> », signe le défi, puis PING toutes les 20 s.
-//! 2. Un PC envoie « PILOTER <code> » au relais. Le relais dit à la machine « PILOTE <n> <jeton> ».
+//! 1. La machine ouvre une connexion de contrôle : « MACHINE <clé> <empreinte du code> », signe le défi, puis PING toutes les 20 s.
+//! 2. Un PC envoie « PILOTER <empreinte> <id> » au relais (le code lui-même ne passe jamais par le relais). Le relais dit à la machine « PILOTE <n> <jeton> ».
 //! 3. La machine ouvre « DONNEES <n> <jeton> » : c'est la session de ce PC. Les commandes y arrivent
 //!    en JSON (une ligne chacune, voir agent.rs) ; les réponses et toutes les nouvelles y repartent.
 //!
 //! Pas de port à ouvrir sur la box : c'est toujours la machine qui appelle le relais.
 //! Sur le réseau de la maison (ou sur un VPS), le PC peut aussi venir en direct, sur le port 4446.
-//! Dans les deux cas, la session est chiffrée (TLS 1.3, voir chiffre.rs) et commence par le code de la machine.
+//! Dans les deux cas, la session est chiffrée (TLS 1.3, voir chiffre.rs), puis le PC prouve qu'il connaît le code
+//! sans l'envoyer (SPAKE2, voir appairage.rs).
 
 use crate::hote::AppHandle;
 use crate::tunnel::{self, protocole};
@@ -24,8 +25,13 @@ const PING: Duration = Duration::from_secs(20);
 /// En direct : 5 codes faux depuis une adresse, et elle attend 15 minutes (comme sur le relais).
 const ESSAIS_MAX: u32 = 5;
 const ATTENTE_ESSAIS: Duration = Duration::from_secs(15 * 60);
-/// En direct : pas plus de PC à la fois.
+/// En direct : pas plus de PC à la fois, et pas plus de 2 par adresse.
 const DIRECTS_MAX: usize = 16;
+const DIRECTS_PAR_IP: usize = 2;
+/// Le temps pour la poignée TLS et la preuve du code : après, une connexion pas encore acceptée est coupée.
+const DELAI_ACCUEIL: Duration = Duration::from_secs(10);
+/// Par le relais : codes faux permis en 15 minutes (toutes adresses confondues : le relais cache celle du PC).
+const ESSAIS_RELAIS_MAX: u32 = 10;
 const SILENCE: Duration = Duration::from_secs(70);
 /// Une ligne de commande ne dépasse pas ça (un fichier de configuration écrit depuis BHOST, par exemple).
 const LIGNE_MAX: u64 = 32 * 1024 * 1024;
@@ -88,6 +94,7 @@ pub fn code(dossier: &Path) -> io::Result<String> {
     if let Ok(t) = std::fs::read_to_string(&fichier) {
         let t = t.trim().to_string();
         if protocole::code_valide(&t) {
+            crate::garde::proteger(&fichier);
             return Ok(t);
         }
     }
@@ -103,6 +110,7 @@ pub fn nouveau_code(dossier: &Path) -> io::Result<String> {
     let code: String = hasard.iter().map(|o| alphabet[*o as usize % alphabet.len()]).collect();
     std::fs::create_dir_all(dossier)?;
     crate::garde::ecrire_atomique(&dossier.join("machine-code.txt"), code.as_bytes()).map_err(io::Error::other)?;
+    crate::garde::proteger(&dossier.join("machine-code.txt"));
     Ok(code)
 }
 
@@ -154,13 +162,15 @@ fn une_connexion(dossier: &Path, app: &AppHandle, sessions: &Arc<Sessions>, rt: 
     let mut flux = tunnel::connecter(adresse)?;
     let _retenue = retenir(&flux);
     flux.set_read_timeout(Some(Duration::from_secs(10)))?;
-    let bonjour = protocole::ecrire_de_bhost(&DeBhost::Machine { cle: protocole::hexa(cle.verifying_key().as_bytes()), code: code.clone() });
+    // Le relais ne connaît que l'empreinte du code (appairage.rs).
+    let empreinte = crate::appairage::empreinte_code(&code);
+    let bonjour = protocole::ecrire_de_bhost(&DeBhost::Machine { cle: protocole::hexa(cle.verifying_key().as_bytes()), empreinte: empreinte.clone() });
     flux.write_all(format!("BHOST {}\n{bonjour}", protocole::VERSION).as_bytes())?;
     let mut lecteur = BufReader::new(flux.try_clone()?);
     let Some(DuRelais::Defi { defi }) = protocole::lire_du_relais(&lire_ligne(&mut lecteur)?) else {
         return Err(io::Error::other("pas de défi"));
     };
-    let signature = protocole::hexa(&cle.sign(protocole::a_signer_machine(&code, &defi).as_bytes()).to_bytes());
+    let signature = protocole::hexa(&cle.sign(protocole::a_signer_machine(&empreinte, &defi).as_bytes()).to_bytes());
     flux.write_all(protocole::ecrire_de_bhost(&DeBhost::Signe { signature }).as_bytes())?;
     match protocole::lire_du_relais(&lire_ligne(&mut lecteur)?) {
         Some(DuRelais::Ok { .. }) => {}
@@ -243,11 +253,6 @@ fn noter_code_faux(ip: std::net::IpAddr) {
     *depuis = std::time::Instant::now();
 }
 
-/// Compare deux codes sans que le temps de réponse dise où ils diffèrent.
-fn meme_code(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
-}
-
 /// La session d'un PC venu par le relais : la machine ouvre « DONNEES », puis le PC chiffre la connexion.
 fn session(n: u64, jeton: &str, dossier: &Path, app: AppHandle, sessions: Arc<Sessions>, rt: tokio::runtime::Handle) -> io::Result<()> {
     let mut flux = tunnel::connecter(tunnel::adresse_relais()?)?;
@@ -255,8 +260,10 @@ fn session(n: u64, jeton: &str, dossier: &Path, app: AppHandle, sessions: Arc<Se
     let donnees = protocole::ecrire_de_bhost(&DeBhost::Donnees { id: n, jeton: jeton.to_string() });
     flux.write_all(format!("BHOST {}\n{donnees}", protocole::VERSION).as_bytes())?;
     flux.set_read_timeout(Some(Duration::from_secs(20)))?;
+    crate::chiffre::garder_vivante(&flux);
+    let accueil = surveiller_accueil(&flux);
     let chiffree = crate::chiffre::accepter(flux, config_tls(dossier)?)?;
-    servir_pc(chiffree, dossier, None, app, sessions, rt)
+    servir_pc(chiffree, dossier, None, &accueil, app, sessions, rt)
 }
 
 /// En direct (réseau de la maison, ou VPS) : la machine attend les PC sur le port 4446.
@@ -276,51 +283,99 @@ pub fn ecouter_direct(dossier: PathBuf, app: AppHandle, sessions: Arc<Sessions>,
                 }
             }
         };
-        let ouvertes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        // Les connexions ouvertes, par adresse (un bloc /64 en IPv6).
+        let ouvertes: Arc<Mutex<std::collections::HashMap<std::net::IpAddr, usize>>> = Arc::default();
         for prise in ecoute.incoming().flatten() {
             let Ok(ip) = prise.peer_addr().map(|a| a.ip()) else { continue };
-            if bloquee(ip) || ouvertes.load(std::sync::atomic::Ordering::Relaxed) >= DIRECTS_MAX {
+            if bloquee(ip) {
                 continue;
             }
-            ouvertes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            {
+                let mut o = ouvertes.lock().unwrap();
+                if o.values().sum::<usize>() >= DIRECTS_MAX || o.get(&bloc(ip)).is_some_and(|n| *n >= DIRECTS_PAR_IP) {
+                    continue;
+                }
+                *o.entry(bloc(ip)).or_default() += 1;
+            }
             let (dossier, app, sessions, rt, ouvertes) = (dossier.clone(), app.clone(), sessions.clone(), rt.clone(), ouvertes.clone());
             std::thread::spawn(move || {
                 let _retenue = retenir(&prise);
+                crate::chiffre::garder_vivante(&prise);
+                let accueil = surveiller_accueil(&prise);
                 let resultat = prise
                     .set_read_timeout(Some(Duration::from_secs(15)))
                     .and_then(|_| config_tls(&dossier))
                     .and_then(|config| crate::chiffre::accepter(prise, config))
-                    .and_then(|c| servir_pc(c, &dossier, Some(ip), app, sessions, rt));
+                    .and_then(|c| servir_pc(c, &dossier, Some(ip), &accueil, app, sessions, rt));
                 if let Err(e) = resultat {
                     eprintln!("[bhost-agent] direct ({ip}) : {e}");
                 }
-                ouvertes.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                let mut o = ouvertes.lock().unwrap();
+                if let Some(n) = o.get_mut(&bloc(ip)) {
+                    *n -= 1;
+                    if *n == 0 {
+                        o.remove(&bloc(ip));
+                    }
+                }
             });
         }
     });
 }
 
-/// La session d'un PC, une fois chiffrée : d'abord son code, puis ses commandes ; les réponses et les nouvelles repartent.
-/// `ip` : venu en direct (les codes faux comptent) ; `None` : par le relais (qui a déjà vérifié le code).
-fn servir_pc(c: crate::chiffre::Chiffree, dossier: &Path, ip: Option<std::net::IpAddr>, app: AppHandle, sessions: Arc<Sessions>, rt: tokio::runtime::Handle) -> io::Result<()> {
+/// Coupe la connexion si elle n'est pas acceptée (TLS puis preuve du code) à temps : une connexion lente
+/// ne garde pas une place. `accepter` (le retour) dit que c'est fait.
+fn surveiller_accueil(prise: &TcpStream) -> Arc<std::sync::atomic::AtomicBool> {
+    let fait = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    if let Ok(copie) = prise.try_clone() {
+        let fait = fait.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(DELAI_ACCUEIL);
+            if !fait.load(std::sync::atomic::Ordering::Relaxed) {
+                let _ = copie.shutdown(std::net::Shutdown::Both);
+            }
+        });
+    }
+    fait
+}
+
+/// Par le relais, l'adresse du PC est cachée : les codes faux comptent pour tous (10 en 15 minutes).
+static ESSAIS_RELAIS: Mutex<Option<(std::time::Instant, u32)>> = Mutex::new(None);
+
+fn relais_bloque() -> bool {
+    ESSAIS_RELAIS.lock().unwrap().is_some_and(|(depuis, n)| n >= ESSAIS_RELAIS_MAX && depuis.elapsed() < ATTENTE_ESSAIS)
+}
+
+fn noter_faux_relais() {
+    let mut e = ESSAIS_RELAIS.lock().unwrap();
+    let (depuis, n) = e.get_or_insert((std::time::Instant::now(), 0));
+    if depuis.elapsed() >= ATTENTE_ESSAIS {
+        *n = 0;
+    }
+    *n += 1;
+    *depuis = std::time::Instant::now();
+}
+
+/// La session d'un PC, une fois chiffrée : d'abord la preuve du code, puis ses commandes ; les réponses et les nouvelles repartent.
+/// `ip` : venu en direct (les codes faux comptent par adresse) ; `None` : par le relais.
+fn servir_pc(c: crate::chiffre::Chiffree, dossier: &Path, ip: Option<std::net::IpAddr>, accueil: &std::sync::atomic::AtomicBool, app: AppHandle, sessions: Arc<Sessions>, rt: tokio::runtime::Handle) -> io::Result<()> {
     let crate::chiffre::Chiffree { canal, lecteur } = c;
     let mut lecteur = BufReader::new(lecteur);
-    let ligne = lire_ligne(&mut lecteur)?;
-    let donne = ligne.trim().strip_prefix("CODE ").unwrap_or_default().to_string();
-    if ip.is_some_and(bloquee) {
-        canal.ecrire_ligne("NON bloque")?;
-        return Ok(());
-    }
-    if !meme_code(&donne, &code(dossier)?) {
-        if let Some(ip) = ip {
-            noter_code_faux(ip);
+    let bloque = match ip {
+        Some(ip) => bloquee(ip),
+        None => relais_bloque(),
+    };
+    if !crate::appairage::cote_machine(&canal, &mut lecteur, &code(dossier)?, &id(dossier)?, bloque)? {
+        if !bloque {
+            match ip {
+                Some(ip) => noter_code_faux(ip),
+                None => noter_faux_relais(),
+            }
         }
-        canal.ecrire_ligne("NON code")?;
         // Laisse partir la réponse avant de couper.
         std::thread::sleep(Duration::from_millis(200));
         return Ok(());
     }
-    canal.ecrire_ligne(&format!("OK {}", id(dossier)?))?;
+    accueil.store(true, std::sync::atomic::Ordering::Relaxed);
     // Les commandes peuvent se suivre de loin (le PC reste branché) : plus de délai de lecture.
     lecteur.get_ref().delai(None)?;
 

@@ -12,7 +12,7 @@ type Props = {
   onFermer: () => void;
 };
 
-// La fenêtre « Icône » d'un serveur : toutes les icônes, une ligne par groupe.
+// La fenêtre « Icône » d’un serveur : toutes les icônes, une ligne par groupe.
 export default function Apparence({ serveur, onEnregistrer, onFermer }: Props) {
   const [choix, setChoix] = useState<Couleur>(couleurDe(serveur));
   const [erreur, setErreur] = useState("");
@@ -32,7 +32,7 @@ export default function Apparence({ serveur, onEnregistrer, onFermer }: Props) {
     onEnregistrer(choix)
       .then(onFermer)
       .catch((raison) => {
-        setErreur(typeof raison === "string" ? raison : "Ça n'a pas marché.");
+        setErreur(typeof raison === "string" ? raison : "Ça n’a pas marché.");
         setEnvoi(false);
       });
   };

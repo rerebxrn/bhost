@@ -1,5 +1,5 @@
-// Vrais logos des logiciels de serveur. Origine et règles d'usage : docs/logos/LICENCES.md.
-// Vanilla (règles de Mojang) et Modrinth (interdit sans permission écrite) n'en ont pas : icônes neutres.
+// Vrais logos des logiciels de serveur. Origine et règles d’usage : docs/logos/LICENCES.md.
+// Vanilla (règles de Mojang) et Modrinth (interdit sans permission écrite) n’en ont pas : icônes neutres.
 import paper from "../assets/logiciels/paper.svg";
 import purpur from "../assets/logiciels/purpur.png";
 import spigot from "../assets/logiciels/spigot.png";
@@ -21,7 +21,7 @@ export const LOGOS: Record<string, LogoLogiciel> = {
   Fabric: { src: fabric },
   Forge: { src: forge, plein: true },
   NeoForge: { src: neoforge },
-  Youer: { src: mohist }, // Youer est fait par MohistMC et n'a pas de logo à lui
+  Youer: { src: mohist }, // Youer est fait par MohistMC et n’a pas de logo à lui
   Mohist: { src: mohist },
   Arclight: { src: arclight, plein: true },
 };

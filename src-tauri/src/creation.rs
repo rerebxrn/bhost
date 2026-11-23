@@ -323,7 +323,7 @@ pub fn nom_du_jar(logiciel: &str, fichier: &Fichier) -> String {
 pub fn telecharger(flux: impl Read, fichier: &Fichier, destination: &Path, avancement: &mut dyn FnMut(u8)) -> Result<(), String> {
     let partiel = destination.with_extension("jar.part");
     let resultat = (|| {
-        let ecrire_err = |e: std::io::Error| format!("Impossible d'écrire le fichier ({e}).");
+        let ecrire_err = |e: std::io::Error| format!("Impossible d’écrire le fichier ({e}).");
         let mut sortie = fs::File::create(&partiel).map_err(ecrire_err)?;
         let (mut sha1, mut sha256, mut md5) = (Sha1::new(), Sha256::new(), Md5::new());
         let mut flux = flux;
@@ -452,7 +452,7 @@ pub fn echapper(texte: &str) -> String {
 pub fn ecrire_fichiers(dossier: &Path, nom: &str, version: &str, monde: &Monde, port: u16) -> Result<(), String> {
     let mut proprietes = vec!["# Fichier prepare par BHOST".to_string(), format!("motd={}", echapper(nom)), format!("server-port={port}")];
     proprietes.extend(valeurs_partie(version, monde).into_iter().map(|(k, v)| format!("{k}={v}")));
-    let ecrire = |fichier: &str, texte: String| fs::write(dossier.join(fichier), texte).map_err(|e| format!("Impossible d'écrire {fichier} ({e})."));
+    let ecrire = |fichier: &str, texte: String| fs::write(dossier.join(fichier), texte).map_err(|e| format!("Impossible d’écrire {fichier} ({e})."));
     ecrire("server.properties", proprietes.join("\n") + "\n")?;
     // Des listes vides : sans elles, les vieilles versions (1.8…) écrivent de longues alertes au premier lancement.
     for liste in ["ops.json", "whitelist.json", "banned-players.json", "banned-ips.json"] {

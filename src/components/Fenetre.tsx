@@ -44,7 +44,7 @@ export default function Fenetre({ titre, occupe = false, classe, onFermer, child
   );
 }
 
-// Le clavier d'une fenêtre : à l'ouverture, le focus va dedans (et revient où il était à la fermeture) ;
+// Le clavier d’une fenêtre : à l’ouverture, le focus va dedans (et revient où il était à la fermeture) ;
 // Tab reste dedans ; Échap la ferme (`fermer` null : pas maintenant). Un menu ouvert par-dessus garde son Échap.
 export function useDialogue(boite: RefObject<HTMLElement | null>, fermer: (() => void) | null) {
   const rappel = useRef(fermer);
@@ -85,7 +85,7 @@ export function useDialogue(boite: RefObject<HTMLElement | null>, fermer: (() =>
   }, []);
 }
 
-// L'avancement du long travail en cours sur un serveur (« Sauvegarde », 42 %), ou null.
+// L’avancement du long travail en cours sur un serveur (« Sauvegarde », 42 %), ou null.
 export function useTravail(id: string, actif: boolean) {
   const [travail, setTravail] = useState<{ etape: string; pourcent: number } | null>(null);
   useEffect(() => {
@@ -98,7 +98,7 @@ export function useTravail(id: string, actif: boolean) {
   return travail;
 }
 
-// La barre d'avancement d'un travail : « Sauvegarde… 42 % ».
+// La barre d’avancement d’un travail : « Sauvegarde… 42 % ».
 export function Avancement({ texte, pourcent }: { texte: string; pourcent: number | null }) {
   return (
     <div className="avance" aria-live="polite">

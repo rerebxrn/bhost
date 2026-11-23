@@ -4,9 +4,9 @@ import { FONDS_VALIDES, MODES_VALIDES, type Fond, type Mode } from "./palette";
 
 type Reglages = {
   mode: Mode; // clair, sombre ou auto (suit Windows)
-  fond: Fond; // Azur (par défaut) ou Ambre (le thème d'origine)
+  fond: Fond; // Azur (par défaut) ou Ambre (le thème d’origine)
   teinte: number; // intensité du verre, de 0 (transparent) à 1 (teinté)
-  reel: boolean; // « Réfraction réelle » : le vrai Liquid Glass au lieu d'un flou simple
+  reel: boolean; // « Réfraction réelle » : le vrai Liquid Glass au lieu d’un flou simple
 };
 
 type Theme = Reglages & {
@@ -18,12 +18,12 @@ const CLE = "bhost.theme";
 const PAR_DEFAUT: Reglages = { mode: "systeme", fond: "azur", teinte: 0.3, reel: true };
 
 // Même logique que le petit script de index.html (à changer ensemble).
-// Pour l'instant les réglages sont gardés dans le navigateur intégré.
+// Pour l’instant les réglages sont gardés dans le navigateur intégré.
 // Plus tard, ils iront dans %APPDATA%\BHOST\ via Rust.
 function lire(): Reglages {
   try {
     const garde = JSON.parse(localStorage.getItem(CLE) ?? "{}");
-    // Essais du 20/11 : Lagon et Nuit étaient des modes à part, puis le thème s'appelait « vague ».
+    // Essais du 20/11 : Lagon et Nuit étaient des modes à part, puis le thème s’appelait « vague ».
     if (garde.fond === "vague") garde.fond = "azur";
     if (garde.mode === "lagon" || garde.mode === "nuit") {
       garde.fond = "azur";
@@ -57,7 +57,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const sombre = reglages.mode === "systeme" ? systemeSombre : reglages.mode === "sombre";
 
   // Applique le thème sur la page : data-theme choisit la palette dans theme.css,
-  // et --t donne l'intensité du verre.
+  // et --t donne l’intensité du verre.
   useEffect(() => {
     const racine = document.documentElement;
     racine.dataset.theme = sombre ? "dark" : "light";
@@ -67,7 +67,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(CLE, JSON.stringify(reglages));
   }, [reglages, sombre]);
 
-  // L'icône de BHOST dans Windows suit le thème (au lancement, puis à chaque changement).
+  // L’icône de BHOST dans Windows suit le thème (au lancement, puis à chaque changement).
   useEffect(() => {
     changerIcone(`${reglages.fond}-${sombre ? "sombre" : "clair"}`).catch(() => {});
   }, [reglages.fond, sombre]);

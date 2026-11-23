@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -38,8 +38,15 @@ const MAX_SERVEURS_PAR_IP: u32 = 10;
 const MAX_NOUVEAUX_PAR_HEURE: u32 = 5;
 /// Une ligne de BHOST ne dépasse jamais ça (« BONJOUR » + nom + clé ≈ 110 caractères).
 const LIGNE_MAX: usize = 300;
-/// Connexions en même temps, tous ports confondus (sous la limite de fichiers ouverts du système).
-const CONNEXIONS_MAX: usize = 20_000;
+/// Connexions en même temps, par port (sous la limite de fichiers ouverts du système) :
+/// un port rempli ne bloque pas l'autre.
+const CONNEXIONS_MAX: usize = 10_000;
+/// Un joueur dont rien ne passe pendant ce temps est parti (Minecraft échange quelque chose toutes les 15 s).
+const INACTIF_JOUEUR: Duration = Duration::from_secs(120);
+/// Un PC qui pilote une machine peut rester calme plus longtemps.
+const INACTIF_PILOTE: Duration = Duration::from_secs(30 * 60);
+/// Un bout a fini : l'autre a encore ce temps pour finir à son tour.
+const FIN_UN_SENS: Duration = Duration::from_secs(30);
 /// Noms enregistrés au plus.
 const NOMS_MAX: usize = 200_000;
 /// « Ce nom est-il libre ? » : questions permises par adresse IP (bloc /64) en 10 minutes.
@@ -104,8 +111,9 @@ pub struct Relais {
     modifie: AtomicBool,
     /// Une seule écriture du fichier à la fois (minuterie et arrêt).
     ecriture: Mutex<()>,
-    /// Les places de connexion qui restent.
-    places: Arc<tokio::sync::Semaphore>,
+    /// Les places de connexion qui restent (joueurs, puis BHOST).
+    places_joueurs: Arc<tokio::sync::Semaphore>,
+    places_agents: Arc<tokio::sync::Semaphore>,
     agents: Mutex<HashMap<String, Agent>>,
     attentes: Mutex<HashMap<u64, Attente>>,
     joueurs_ip: Mutex<HashMap<IpAddr, u32>>,
@@ -117,7 +125,6 @@ pub struct Relais {
     essais: Mutex<HashMap<IpAddr, (Instant, u32)>>,
     /// Questions « LIBRE » par adresse IP : (depuis quand, combien).
     questions: Mutex<HashMap<IpAddr, (Instant, u32)>>,
-    compteur: AtomicU64,
 }
 
 fn maintenant() -> u64 {
@@ -190,7 +197,8 @@ impl Relais {
             registre: Mutex::new(registre),
             modifie: AtomicBool::new(false),
             ecriture: Mutex::new(()),
-            places: Arc::new(tokio::sync::Semaphore::new(CONNEXIONS_MAX)),
+            places_joueurs: Arc::new(tokio::sync::Semaphore::new(CONNEXIONS_MAX)),
+            places_agents: Arc::new(tokio::sync::Semaphore::new(CONNEXIONS_MAX)),
             agents: Mutex::default(),
             attentes: Mutex::default(),
             joueurs_ip: Mutex::default(),
@@ -200,7 +208,6 @@ impl Relais {
             machines: Mutex::default(),
             essais: Mutex::default(),
             questions: Mutex::default(),
-            compteur: AtomicU64::new(1),
         })
     }
 
@@ -313,7 +320,7 @@ fn ecrire_atomique(fichier: &std::path::Path, octets: &[u8]) -> io::Result<()> {
 }
 
 /// Accepte les connexions d'un port, dans la limite des places, et lance `servir` pour chacune.
-fn ecouter<F, Fut>(ecoute: TcpListener, rel: Arc<Relais>, servir: F)
+fn ecouter<F, Fut>(ecoute: TcpListener, rel: Arc<Relais>, places: Arc<tokio::sync::Semaphore>, servir: F)
 where
     F: Fn(Arc<Relais>, TcpStream, IpAddr) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,
@@ -329,7 +336,7 @@ where
                 }
             };
             // Relais plein : la connexion est fermée tout de suite.
-            let Ok(permis) = rel.places.clone().try_acquire_owned() else { continue };
+            let Ok(permis) = places.clone().try_acquire_owned() else { continue };
             let _ = flux.set_nodelay(true);
             let tache = servir(rel.clone(), flux, adresse.ip());
             tokio::spawn(async move {
@@ -347,10 +354,10 @@ pub async fn demarrer(r: Reglages) -> io::Result<(SocketAddr, SocketAddr, Arc<Re
     let agents = TcpListener::bind(r.agents).await?;
     let adresses = (joueurs.local_addr()?, agents.local_addr()?);
 
-    ecouter(joueurs, relais.clone(), |rel, flux, ip| async move {
+    ecouter(joueurs, relais.clone(), relais.places_joueurs.clone(), |rel, flux, ip| async move {
         let _ = joueur(&rel, flux, ip).await;
     });
-    ecouter(agents, relais.clone(), |rel, flux, ip| async move {
+    ecouter(agents, relais.clone(), relais.places_agents.clone(), |rel, flux, ip| async move {
         let _ = agent(&rel, flux, ip).await;
     });
     // Le registre est écrit chaque minute s'il a changé.
@@ -392,15 +399,16 @@ async fn joueur(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()>
             return Ok(());
         }
     };
+    // Inconnu ou éteint : la même réponse (on ne peut pas savoir quels noms existent en les essayant).
     let Some(nom) = protocole::sous_domaine(&hote, &rel.domaine) else {
-        return absent(&mut flux, lu, taille, protocole, suite, "Adresse inconnue. Demande-la à ton ami.").await;
+        return absent(&mut flux, lu, taille, protocole, suite, ETEINT).await;
     };
     // Le BHOST de ce serveur est-il là ?
     let envoi = rel.agents.lock().unwrap().get(&nom).map(|a| a.envoi.clone());
     let Some(envoi) = envoi else {
-        return absent(&mut flux, lu, taille, protocole, suite, "Ce serveur est éteint.").await;
+        return absent(&mut flux, lu, taille, protocole, suite, ETEINT).await;
     };
-    let id = rel.compteur.fetch_add(1, Ordering::Relaxed);
+    let id = numero();
     let jeton = protocole::hexa(&hasard::<16>());
     let (remise, reception) = oneshot::channel();
     rel.attentes.lock().unwrap().insert(id, Attente { jeton: jeton.clone(), nom: nom.clone(), remise });
@@ -415,8 +423,56 @@ async fn joueur(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()>
     };
     // On recolle les deux bouts : d'abord ce qu'on a déjà lu, puis tout le reste dans les deux sens.
     donnees.write_all(&lu).await?;
-    tokio::io::copy_bidirectional(&mut flux, &mut donnees).await?;
+    recoller(&mut flux, &mut donnees, INACTIF_JOUEUR).await
+}
+
+const ETEINT: &str = "Serveur éteint ou introuvable.";
+
+/// Un numéro de connexion au hasard : on ne peut pas deviner celui d'un autre.
+fn numero() -> u64 {
+    u64::from_le_bytes(hasard::<8>())
+}
+
+/// Recolle deux connexions (joueur ↔ serveur, PC ↔ machine) jusqu'à ce que l'une finisse.
+/// Si rien ne passe pendant `inactif` (dans aucun sens), on coupe. Quand un bout a fini, l'autre a encore
+/// `FIN_UN_SENS` : une connexion à moitié fermée ne garde pas sa place pour toujours.
+async fn recoller(a: &mut TcpStream, b: &mut TcpStream, inactif: Duration) -> io::Result<()> {
+    let debut = tokio::time::Instant::now();
+    let dernier = std::sync::atomic::AtomicU64::new(0);
+    let (mut ar, mut aw) = a.split();
+    let (mut br, mut bw) = b.split();
+    let aller = sens(&mut ar, &mut bw, inactif, debut, &dernier);
+    let retour = sens(&mut br, &mut aw, inactif, debut, &dernier);
+    tokio::pin!(aller, retour);
+    tokio::select! {
+        r = &mut aller => { r?; let _ = timeout(FIN_UN_SENS, &mut retour).await; }
+        r = &mut retour => { r?; let _ = timeout(FIN_UN_SENS, &mut aller).await; }
+    }
     Ok(())
+}
+
+/// Un sens de `recoller`. `dernier` : la dernière activité (en ms depuis `debut`), partagée par les deux sens.
+async fn sens<R: AsyncReadExt + Unpin, W: AsyncWriteExt + Unpin>(r: &mut R, w: &mut W, inactif: Duration, debut: tokio::time::Instant, dernier: &std::sync::atomic::AtomicU64) -> io::Result<()> {
+    let mut tampon = vec![0u8; 16 * 1024];
+    loop {
+        match timeout(Duration::from_secs(15), r.read(&mut tampon)).await {
+            Ok(Ok(0)) => {
+                let _ = w.shutdown().await;
+                return Ok(());
+            }
+            Ok(Ok(n)) => {
+                w.write_all(&tampon[..n]).await?;
+                dernier.store(debut.elapsed().as_millis() as u64, Ordering::Relaxed);
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(_) => {
+                let calme = (debut.elapsed().as_millis() as u64).saturating_sub(dernier.load(Ordering::Relaxed));
+                if calme > inactif.as_millis() as u64 {
+                    return Err(io::ErrorKind::TimedOut.into());
+                }
+            }
+        }
+    }
 }
 
 /// Le serveur n'est pas là : on répond nous-mêmes (liste des serveurs, ou écran « Déconnecté »).
@@ -486,35 +542,43 @@ async fn ecrire<E: AsyncWriteExt + Unpin>(flux: &mut E, m: &DuRelais) -> io::Res
 async fn agent(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()> {
     let Some(_place) = Place::prendre(&rel.agents_ip, ip, MAX_AGENTS_PAR_IP) else { return Ok(()) };
     let Some(premiere) = lire_ligne(&mut flux, DELAI_DEBUT).await? else { return Ok(()) };
-    if premiere.trim_end() != format!("BHOST {}", protocole::VERSION) {
+    let version = premiere.trim_end().strip_prefix("BHOST ").and_then(|v| v.parse::<u32>().ok());
+    let Some(version) = version.filter(|v| (protocole::VERSION_SERVEURS_MIN..=protocole::VERSION).contains(v)) else {
         if premiere.starts_with("BHOST ") {
             ecrire(&mut flux, &DuRelais::Non { raison: "version".into() }).await?;
         }
         return Ok(());
-    }
+    };
     let Some(ligne) = lire_ligne(&mut flux, DELAI_DEBUT).await? else { return Ok(()) };
-    match protocole::lire_de_bhost(&ligne) {
+    let demande = protocole::lire_de_bhost(&ligne);
+    // Machines dédiées : seulement la dernière version (l'ancienne envoyait le code en clair).
+    if version < protocole::VERSION && matches!(demande, Some(DeBhost::Machine { .. } | DeBhost::Lier { .. } | DeBhost::Piloter { .. })) {
+        return ecrire(&mut flux, &DuRelais::Non { raison: "version".into() }).await;
+    }
+    match demande {
         Some(DeBhost::Donnees { id, jeton }) => {
             // La connexion d'un joueur : on la remet à sa tâche, qui fait le reste.
-            // Le jeton sert une seule fois : bon ou mauvais, l'attente est retirée.
-            let attente = rel.attentes.lock().unwrap().remove(&id);
-            if let Some(a) = attente
-                && egal_temps_constant(a.jeton.as_bytes(), jeton.as_bytes())
+            // Le jeton sert une seule fois. Un mauvais jeton ne retire pas l'attente : sinon n'importe qui
+            // pourrait faire échouer les joueurs des autres.
+            let mut attentes = rel.attentes.lock().unwrap();
+            if attentes.get(&id).is_some_and(|a| egal_temps_constant(a.jeton.as_bytes(), jeton.as_bytes()))
+                && let Some(a) = attentes.remove(&id)
             {
+                drop(attentes);
                 let _ = a.remise.send(flux);
             }
             Ok(())
         }
         Some(DeBhost::Bonjour { nom, cle }) => controle(rel, flux, ip, nom, cle).await,
-        Some(DeBhost::Machine { cle, code }) => machine(rel, flux, ip, cle, code).await,
-        Some(DeBhost::Lier { code }) => {
-            let reponse = match rel.machine_du_code(&code, ip) {
+        Some(DeBhost::Machine { cle, empreinte }) => machine(rel, flux, ip, cle, empreinte).await,
+        Some(DeBhost::Lier { empreinte }) => {
+            let reponse = match rel.machine_du_code(&empreinte, ip) {
                 Ok((id, _)) => DuRelais::Liee { id },
                 Err(non) => non,
             };
             ecrire(&mut flux, &reponse).await
         }
-        Some(DeBhost::Piloter { code, id }) => piloter(rel, flux, ip, code, id).await,
+        Some(DeBhost::Piloter { empreinte, id }) => piloter(rel, flux, ip, empreinte, id).await,
         Some(DeBhost::Libre { nom, cle }) => {
             let reponse = rel.libre(&nom, &cle, ip);
             ecrire(&mut flux, &reponse).await
@@ -554,7 +618,7 @@ async fn controle(rel: &Relais, mut flux: TcpStream, ip: IpAddr, nom: String, cl
         return ecrire(&mut flux, &DuRelais::Non { raison: raison.into() }).await;
     }
     // Ce serveur est en ligne (s'il l'était déjà, l'ancienne connexion est remplacée).
-    let session = rel.compteur.fetch_add(1, Ordering::Relaxed);
+    let session = numero();
     let (envoi, mut reception) = mpsc::channel::<DuRelais>(64);
     let (fin, mut remplace) = oneshot::channel::<()>();
     rel.agents.lock().unwrap().insert(nom.clone(), Agent { session, envoi: envoi.clone(), _fin: fin });
@@ -650,7 +714,7 @@ async fn machine(rel: &Relais, mut flux: TcpStream, ip: IpAddr, cle: String, cod
         return ecrire(&mut flux, &DuRelais::Non { raison: "trop".into() }).await;
     };
     let id = protocole::id_machine(&cle);
-    let session = rel.compteur.fetch_add(1, Ordering::Relaxed);
+    let session = numero();
     let (fin, mut remplace) = oneshot::channel::<()>();
     let (envoi, mut reception) = mpsc::channel::<DuRelais>(16);
     // Deux machines avec le même code (très rare) : la 2ᵉ doit en tirer un autre.
@@ -698,10 +762,10 @@ async fn piloter(rel: &Relais, mut flux: TcpStream, ip: IpAddr, code: String, ma
         Ok(x) => x,
         Err(non) => return ecrire(&mut flux, &non).await,
     };
-    let id = rel.compteur.fetch_add(1, Ordering::Relaxed);
+    let id = numero();
     let jeton = protocole::hexa(&hasard::<16>());
     let (remise, reception) = oneshot::channel();
-    rel.attentes.lock().unwrap().insert(id, Attente { jeton: jeton.clone(), nom: format!("machine:{code}"), remise });
+    rel.attentes.lock().unwrap().insert(id, Attente { jeton: jeton.clone(), nom: format!("machine:{machine}"), remise });
     let donnees = if matches!(timeout(DELAI_DONNEES, envoi.send(DuRelais::Pilote { id, jeton })).await, Ok(Ok(()))) {
         timeout(DELAI_DONNEES, reception).await.ok().and_then(Result::ok)
     } else {
@@ -712,8 +776,7 @@ async fn piloter(rel: &Relais, mut flux: TcpStream, ip: IpAddr, code: String, ma
         return ecrire(&mut flux, &DuRelais::Non { raison: "muette".into() }).await;
     };
     ecrire(&mut flux, &DuRelais::Ok { adresse: machine }).await?;
-    tokio::io::copy_bidirectional(&mut flux, &mut donnees).await?;
-    Ok(())
+    recoller(&mut flux, &mut donnees, INACTIF_PILOTE).await
 }
 
 /// Compare deux jetons sans que le temps de réponse dise où ils diffèrent.

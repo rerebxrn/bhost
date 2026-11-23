@@ -4,7 +4,7 @@
 }
 
 .extensions > .head {
-  margin-bottom: 22px;
+  margin-bottom: var(--space-22);
 }
 
 /* Le gros bouton « + Ajouter des plugins » et ses petits frères */
@@ -12,7 +12,7 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   height: var(--h-control);
   padding: 0 12px;
   border: 0;
@@ -54,10 +54,10 @@
 .ext-retour {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
   height: 26px;
-  margin: 0 0 6px -6px;
-  padding: 0 8px 0 4px;
+  margin: 0 0 var(--space-6) -6px;
+  padding: 0 var(--space-8) 0 var(--space-4);
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -79,7 +79,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 4px 8px;
+  margin: 0 var(--space-4) var(--space-8);
   font: var(--f-titre-section);
   color: var(--text2);
 }
@@ -100,9 +100,9 @@
 .ext-ligne {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-14);
   min-height: 64px;
-  padding: 12px 12px 12px 16px;
+  padding: 12px 12px 12px var(--space-16);
   border-bottom: 1px solid var(--sep);
   cursor: pointer;
   outline: 0;
@@ -127,7 +127,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-10);
 }
 
 .ext-ligne:first-child {
@@ -200,7 +200,7 @@
 .ext-tx b {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-8);
   min-width: 0;
   font: var(--f-corps-fort);
 }
@@ -222,7 +222,7 @@
 .ext-tx > .ext-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-4);
   font: var(--f-sous-titre);
 }
 
@@ -235,8 +235,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 22px;
-  padding: 12px 12px 12px 16px;
+  margin-bottom: var(--space-22);
+  padding: 12px 12px 12px var(--space-16);
   border-radius: var(--r-surf);
   background: var(--acc-tint);
 }
@@ -251,7 +251,7 @@
 }
 
 .ext-hors {
-  margin: -6px 4px 10px;
+  margin: -6px var(--space-4) var(--space-10);
   font: var(--f-legende);
   color: var(--text2);
 }
@@ -261,7 +261,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   padding: 36px 20px;
   text-align: center;
 }
@@ -272,7 +272,7 @@
 
 .ext-vide span {
   max-width: 360px;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-10);
   font: var(--f-legende);
   color: var(--text2);
 }
@@ -280,14 +280,14 @@
 /* La fiche d'une extension */
 .g.dialog.ext-fiche {
   width: 460px;
-  padding: 22px 22px 18px;
+  padding: var(--space-22) var(--space-22) 18px;
 }
 
 .ext-fh {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
+  gap: var(--space-16);
+  margin-bottom: var(--space-14);
 }
 
 .ext-fh > div {
@@ -309,7 +309,7 @@
 }
 
 .ext-desc {
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-16);
   font: var(--f-corps);
   line-height: 1.5;
 }
@@ -324,8 +324,8 @@
 .ext-kv > div {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 10px 14px;
+  gap: var(--space-16);
+  padding: var(--space-10) var(--space-14);
   border-bottom: 1px solid var(--sep);
   font: var(--f-corps);
 }
@@ -359,7 +359,7 @@
 .ext-fb {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .ext-fb > span {
@@ -373,9 +373,9 @@
 .ext-danger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   height: 32px;
-  padding: 0 10px;
+  padding: 0 var(--space-10);
   border: 0;
   border-radius: var(--r-ctl);
   background: transparent;
@@ -407,7 +407,7 @@
 .ext-barre {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-10);
   margin-bottom: 26px;
 }
 
@@ -415,9 +415,9 @@
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   height: var(--h-control);
-  padding: 0 10px;
+  padding: 0 var(--space-10);
   border-radius: var(--r-pill);
   background: var(--surf);
   box-shadow: 0 0 0 1px var(--surf-edge);
@@ -441,7 +441,7 @@
 
 .ext-barre .choix {
   height: var(--h-control);
-  padding: 0 8px 0 12px;
+  padding: 0 var(--space-8) 0 12px;
   border-radius: var(--r-pill);
 }
 
@@ -478,8 +478,8 @@
 .ext-carte {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 16px;
+  gap: var(--space-14);
+  padding: var(--space-16);
   border-radius: var(--r-surf);
   background: var(--surf);
   box-shadow: var(--sh-surface);
@@ -487,7 +487,7 @@
 }
 
 .ext-carte .ext-tx {
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 /* Un nom trop long finit en « … » au lieu de prendre trois lignes. */
@@ -527,7 +527,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 0 6px;
+  padding: 0 var(--space-6);
   font: var(--f-corps-fort);
   color: var(--text2);
   animation: rebond 0.45s var(--ease-spring);
@@ -543,11 +543,11 @@
 
 /* Plugins | Datapacks : le sélecteur sous le titre, le bouton « Ajouter » à droite (comme dans Joueurs). */
 .ext-top {
-  margin: -8px 0 22px;
+  margin: -8px 0 var(--space-22);
 }
 
 .ext-top + .ext-hors {
-  margin: -14px 4px 18px;
+  margin: -14px var(--space-4) 18px;
 }
 
 /* Le nom d'un projet du catalogue : un lien vers sa page web (souligné au survol ; flèche dans la fiche). */

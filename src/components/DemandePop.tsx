@@ -12,7 +12,7 @@ type Props = {
   onFermer: () => void; // ✕ : la demande reste dans Joueurs › Demandes
 };
 
-// Quelqu'un vient d'essayer d'entrer sans être sur la liste blanche : un message en verre, en bas à droite.
+// Quelqu’un vient d’essayer d’entrer sans être sur la liste blanche : un message en verre, en bas à droite.
 export default function DemandePop({ nom, serveur, ouvert, onAccepter, onRefuser, onFermer }: Props) {
   const [enCours, setEnCours] = useState(false);
   const repondre = (action: () => Promise<unknown>) => () => {
@@ -29,7 +29,7 @@ export default function DemandePop({ nom, serveur, ouvert, onAccepter, onRefuser
         <p>
           <b>{nom}</b> veut rejoindre <b>{serveur}</b>.
           <br />
-          Il n'est pas sur la liste blanche.
+          Il n’est pas sur la liste blanche.
         </p>
         <div className="btns">
           <button type="button" className="ok" data-gel disabled={enCours || !ouvert} onClick={repondre(onAccepter)}>

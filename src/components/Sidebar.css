@@ -86,10 +86,11 @@
 }
 
 /* « Créer un serveur » : un lien d'action, jamais un bouton plein. */
+/* Icônes centrées sur le même axe que celles des serveurs (32 px), textes au même départ (56 px). */
 .new {
-  gap: var(--space-8);
+  gap: var(--space-16);
   height: var(--h-control);
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-10) 0 var(--space-14);
   color: var(--acc-text);
   font: var(--f-bouton);
 }
@@ -101,9 +102,9 @@
 }
 
 .side-set {
-  gap: var(--space-8);
+  gap: var(--space-16);
   height: var(--h-control);
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-10) 0 var(--space-14);
   font: var(--f-bouton);
   color: var(--text);
 }
@@ -131,14 +132,14 @@
 
 /* Le sélecteur de machine : en haut de la barre. Piste A (21/11, choix de Thomas « pour le moment ») :
    une ligne transparente comme dans la barre du Finder, gris léger au survol, sans carte blanche. */
-.sm {
+.sel-machine {
   display: flex;
   align-items: center;
   gap: var(--space-10);
   width: 100%;
   min-height: 48px;
   margin-top: var(--space-6);
-  padding: 6px 8px 6px 8px;
+  padding: var(--space-6) var(--space-8) var(--space-6) var(--space-8);
   border: 0;
   border-radius: var(--r-sel);
   background: transparent;
@@ -150,26 +151,26 @@
     background var(--dur-fast);
 }
 
-.sm:hover {
+.sel-machine:hover {
   background: var(--hover);
 }
 
-.sm:active {
+.sel-machine:active {
   transform: scale(0.98);
 }
 
-.sm.on {
+.sel-machine.on {
   background: var(--fill);
 }
 
-.sm:focus-visible {
+.sel-machine:focus-visible {
   outline: 2px solid var(--acc);
   outline-offset: 1px;
 }
 
 .sm-ico {
-  flex: 0 0 30px;
-  height: 30px;
+  flex: 0 0 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -231,7 +232,7 @@
 }
 
 .sm-item {
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .sm-item .sm-nom {
@@ -250,7 +251,7 @@
   flex-direction: column;
   gap: 9px;
   width: 100%;
-  padding: 10px 10px 9px;
+  padding: var(--space-10) var(--space-10) 9px;
   border: 0;
   border-radius: var(--r-sel);
   background: transparent;
@@ -268,7 +269,7 @@
 .sm-jauge-t {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-8);
   font: var(--f-sous-titre);
   color: var(--text2);
 }
@@ -305,7 +306,7 @@
 .sm-ligne {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-8);
   font: var(--f-sous-titre);
   color: var(--text2);
 }

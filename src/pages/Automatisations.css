@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-4);
 }
 
 .au-resume {
@@ -22,7 +22,7 @@
   align-items: center;
   gap: 12px;
   min-height: 60px;
-  padding-right: 14px;
+  padding-right: var(--space-14);
   border-bottom: 1px solid var(--sep);
   transition: background-color var(--dur-fast);
 }
@@ -42,7 +42,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 0 9px 16px;
+  padding: 9px 0 9px var(--space-16);
   border: 0;
   background: transparent;
   color: var(--text);
@@ -101,7 +101,7 @@
   justify-content: space-between;
   gap: 12px;
   min-height: 38px;
-  padding: 0 14px;
+  padding: 0 var(--space-14);
   border-bottom: 1px solid var(--sep);
 }
 
@@ -124,7 +124,7 @@
 }
 
 .au-foot {
-  margin: 14px 4px 0;
+  margin: var(--space-14) var(--space-4) 0;
   font: var(--f-legende);
   color: var(--text2);
 }
@@ -132,22 +132,22 @@
 /* La fenêtre */
 .g.dialog.au-dlg {
   width: 460px;
-  padding: 18px 18px 14px;
+  padding: 18px 18px var(--space-14);
 }
 
 .au-dlg h4 {
-  margin: 0 0 2px;
+  margin: 0 0 var(--space-2);
 }
 
 .au-dlg .au-phrase {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-6);
   font: var(--f-corps);
   color: var(--text2);
   line-height: 1.4;
 }
 
 .au-sec {
-  margin: 14px 2px 6px;
+  margin: var(--space-14) var(--space-2) var(--space-6);
   font: var(--f-legende);
   font-weight: 600;
   color: var(--text2);
@@ -165,7 +165,7 @@
   justify-content: space-between;
   gap: 12px;
   min-height: 40px;
-  padding: 6px 8px 6px 12px;
+  padding: var(--space-6) var(--space-8) var(--space-6) 12px;
   border-bottom: 1px solid var(--sep);
   font: var(--f-corps);
 }
@@ -177,8 +177,8 @@
 .au-r.col {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
-  padding: 8px 10px 10px 12px;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-10) var(--space-10) 12px;
 }
 
 .au-r.col > span {
@@ -202,14 +202,14 @@
 
 .au-note {
   margin: 0;
-  padding: 0 12px 10px;
+  padding: 0 12px var(--space-10);
   font: var(--f-legende);
   color: var(--text2);
 }
 
 .au-days {
   display: flex;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
 .au-day {
@@ -238,13 +238,13 @@
 }
 
 .au-dlg .au-hint {
-  margin: 6px 4px 0;
+  margin: var(--space-6) var(--space-4) 0;
   font: var(--f-legende);
   color: var(--text2);
 }
 
 .au-err {
-  margin: 10px 0 0;
+  margin: var(--space-10) 0 0;
 }
 
 .dlg-btns.au-btns {

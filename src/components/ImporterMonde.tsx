@@ -45,7 +45,7 @@ export default function ImporterMonde({ serveur, onFini, onFermer }: Props) {
     importerMonde(serveur.id, choix.chemin, actuel)
       .then((mondes) => onFini(mondes, choix.nom, actuel))
       .catch((e) => {
-        setErreur(typeof e === "string" ? e : "L'import a échoué.");
+        setErreur(typeof e === "string" ? e : "L’import a échoué.");
         setEnvoi(false);
       });
   };

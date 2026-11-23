@@ -85,7 +85,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-10);
 }
 
 .md-objet figcaption,
@@ -145,11 +145,11 @@
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .md-menu span {
-  padding: 7px 10px;
+  padding: 7px var(--space-10);
   border-radius: var(--r-ctl);
   background: var(--field);
   font: var(--f-corps);
@@ -157,7 +157,7 @@
 }
 
 .md-menu .md-carte-titre {
-  padding: 0 0 4px;
+  padding: 0 0 var(--space-4);
   background: none;
   font: var(--f-titre-section);
   text-align: center;
@@ -171,18 +171,18 @@
 
 .md-install {
   width: 270px;
-  padding: 20px 22px 22px;
+  padding: 20px var(--space-22) var(--space-22);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   text-align: center;
 }
 
 .md-install .pl-tuile {
   width: 52px;
   height: 52px;
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-6);
 }
 
 .md-install b {
@@ -197,7 +197,7 @@
 .md-barre {
   width: 100%;
   height: 6px;
-  margin-top: 10px;
+  margin-top: var(--space-10);
   border-radius: var(--r-pill);
   background: var(--track);
   overflow: hidden;
@@ -228,7 +228,7 @@
 }
 
 .md-code-carte {
-  padding: 14px 16px 14px 20px;
+  padding: var(--space-14) var(--space-16) var(--space-14) 20px;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -237,7 +237,7 @@
 .md-code-carte > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2);
 }
 
 .md-code-carte svg {
@@ -269,7 +269,7 @@
   counter-increment: md;
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-10);
   font: var(--f-corps);
   line-height: 22px;
 }
@@ -290,16 +290,16 @@
 .md-touches {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .md-touches span {
   height: 26px;
-  padding: 0 10px;
+  padding: 0 var(--space-10);
   border-radius: var(--r-pill);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-4);
   background: var(--fill);
   font: var(--f-legende);
   color: var(--text2);
@@ -424,7 +424,7 @@
 .md-progres {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2);
   margin-top: var(--space-8);
 }
 

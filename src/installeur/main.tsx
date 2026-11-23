@@ -1,4 +1,4 @@
-// BHOST Setup : même thème que l'appli (Azur par défaut, clair/sombre comme Windows).
+// BHOST Setup : même thème que l’appli (Azur par défaut, clair/sombre comme Windows).
 import "../theme/theme.css";
 import "../theme/glass.css";
 import React from "react";

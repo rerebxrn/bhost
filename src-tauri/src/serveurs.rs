@@ -25,7 +25,9 @@ pub struct Serveur {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub couleur: Option<String>,
     /// Le Java à utiliser quand la version ne le dit pas (snapshots). Absent : selon la version.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Écrit « javaSnapshot » (« java » côté interface, c'est l'avancement d'un téléchargement de Java) ;
+    /// les anciens fichiers avec « java » se lisent encore.
+    #[serde(default, rename = "javaSnapshot", alias = "java", skip_serializing_if = "Option::is_none")]
     pub java: Option<u32>,
     /// Paramètres › Avancé › Version de Java : absent = automatique ; « 8 », « 17 », « 21 », « 25 » ;
     /// sinon le chemin d'un java.exe choisi par l'utilisateur.
@@ -320,7 +322,7 @@ pub fn modifier_proprietes(dossier: &Path, valeurs: &[(&str, String)]) -> Result
     lignes.extend(restantes.into_iter().map(|(k, v)| format!("{k}={v}")));
     let texte = lignes.join(fin) + fin;
     let octets = if latin1 { texte.chars().map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?')).collect() } else { texte.into_bytes() };
-    crate::garde::ecrire_atomique(&fichier, &octets).map_err(|e| format!("Impossible d'écrire server.properties. {e}"))
+    crate::garde::ecrire_atomique(&fichier, &octets).map_err(|e| format!("Impossible d’écrire server.properties. {e}"))
 }
 
 /// Donne un autre port au serveur (copie d'un serveur).
@@ -339,7 +341,7 @@ fn majuscule(nom: &str) -> String {
 /// Regarde un dossier et dit quel serveur il contient.
 pub fn detecter(dossier: &Path) -> Result<Serveur, String> {
     if !dossier.is_dir() {
-        return Err("Ce dossier n'existe pas.".into());
+        return Err("Ce dossier n’existe pas.".into());
     }
     let liste = fichiers(dossier);
 
@@ -405,12 +407,16 @@ pub fn ajouter(liste: &mut Vec<Serveur>, mut serveur: Serveur) -> Result<Serveur
     if liste.iter().any(|s| meme_dossier(&s.dossier, &serveur.dossier)) {
         return Err("Ce serveur est déjà dans BHOST.".into());
     }
-    // Un identifiant court et unique : s1, s2, s3…
-    let mut n = liste.len() + 1;
-    while liste.iter().any(|s| s.id == format!("s{n}")) {
-        n += 1;
-    }
-    serveur.id = format!("s{n}");
+    // Un identifiant tiré au hasard (« s3fa91c0d ») : jamais le même que celui d'un serveur supprimé,
+    // ni que celui d'un serveur d'une machine dédiée (les anciens « s1 », « s2 »… restent valables).
+    serveur.id = loop {
+        let mut o = [0u8; 4];
+        let _ = getrandom::fill(&mut o);
+        let id = format!("s{:08x}", u32::from_le_bytes(o));
+        if !liste.iter().any(|s| s.id == id) {
+            break id;
+        }
+    };
     liste.push(serveur.clone());
     Ok(serveur)
 }
@@ -426,7 +432,7 @@ pub fn charger(fichier: &Path) -> Vec<Serveur> {
 /// Écrit la liste sur le disque.
 pub fn enregistrer(fichier: &Path, liste: &[Serveur]) -> Result<(), String> {
     let texte = serde_json::to_string_pretty(liste).map_err(|e| e.to_string())?;
-    crate::garde::ecrire_atomique(fichier, texte.as_bytes()).map_err(|_| "Impossible d'enregistrer la liste des serveurs.".to_string())
+    crate::garde::ecrire_atomique(fichier, texte.as_bytes()).map_err(|_| "Impossible d’enregistrer la liste des serveurs.".to_string())
 }
 
 /// Le logiciel s'appelait Cubo : ses données étaient dans `%APPDATA%\\Cubo`.
@@ -618,7 +624,7 @@ mod tests {
         let mut liste = charger(&fichier);
         assert!(liste.is_empty());
         let s = ajouter(&mut liste, detecter(&d.0).unwrap()).unwrap();
-        assert_eq!(s.id, "s1");
+        assert!(s.id.len() == 9 && s.id.starts_with('s'), "id : {}", s.id);
         // Le même dossier une deuxième fois : refusé, même avec une autre casse.
         let mut double = detecter(&d.0).unwrap();
         double.dossier = double.dossier.to_uppercase() + "/";

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   IconAdjustmentsHorizontal,
@@ -30,6 +30,7 @@ import ChoixIcone from "../components/ChoixIcone";
 import { image } from "../theme/icones";
 import {
   changerDossierServeurs,
+  chercherModpacks,
   choisirDossier,
   creerServeur,
   ecouterCreation,
@@ -37,14 +38,16 @@ import {
   infosCreation,
   versionsMinecraft,
   type InfosCreation,
+  type Projet,
   type VersionMc,
 } from "../api";
+import { compte, Tuile } from "./Extensions";
 import { nombre, ramMaxMachine, type Logiciel as NomLogiciel, type Machine, type Serveur } from "../types";
 import "./NouveauServeur.css";
 
 type Icone = ComponentType<{ size?: number; stroke?: number; "aria-hidden"?: boolean }>;
 
-// Les logiciels, comme dans la maquette. « pret » : BHOST sait déjà l'installer.
+// Les logiciels, comme dans la maquette. « pret » : BHOST sait déjà l’installer.
 type Logiciel = { id: string; nom: string; desc: string; couleur: string; Icone: Icone; ram: number; pret?: boolean; recommande?: boolean };
 const LOGICIELS: Record<string, Logiciel[]> = {
   "Avec plugins": [
@@ -62,11 +65,11 @@ const LOGICIELS: Record<string, Logiciel[]> = {
     { id: "Arclight", nom: "Arclight", desc: "NeoForge ou Forge + plugins.", couleur: "#6B6150", Icone: IconStack2, ram: 6, pret: true },
     { id: "Mohist", nom: "Mohist", desc: "Forge + plugins.", couleur: "#7A5C48", Icone: IconStack2, ram: 6, pret: true },
   ],
-  "Pack tout prêt": [{ id: "Modpack", nom: "Modpack", desc: "Un pack Modrinth en un clic.", couleur: "#2E5FA8", Icone: IconPackage, ram: 8 }],
+  "Pack tout prêt": [{ id: "Modpack", nom: "Modpack", desc: "Un pack Modrinth en un clic.", couleur: "#2E5FA8", Icone: IconPackage, ram: 8, pret: true }],
   "Sans ajout": [{ id: "Vanilla", nom: "Vanilla", desc: "Le jeu officiel, sans ajout.", couleur: "#5E7A45", Icone: IconCube, ram: 3, pret: true }],
 };
 const TOUS = Object.values(LOGICIELS).flat();
-// Ces logiciels s'installent avec leur installateur officiel (plus long qu'un simple téléchargement).
+// Ces logiciels s’installent avec leur installateur officiel (plus long qu’un simple téléchargement).
 const INSTALLATEUR = ["Fabric", "Forge", "NeoForge"];
 // Ces logiciels installent leurs bibliothèques au premier démarrage (quelques minutes).
 const HYBRIDES = ["Youer", "Arclight", "Mohist"];
@@ -88,18 +91,19 @@ type Etape = "dossier" | "logiciel" | "version" | "monde" | "resume";
 const NOMS_ETAPES: Record<Etape, string> = { dossier: "Dossier", logiciel: "Logiciel", version: "Version", monde: "Monde", resume: "Résumé" };
 
 type Props = {
-  onCree: (s: Serveur) => void; // serveur créé ou importé : on l'ouvre
-  onAnnuler?: () => void; // absent s'il n'y a encore aucun serveur
+  onCree: (s: Serveur) => void; // serveur créé ou importé : on l’ouvre
+  onAnnuler?: () => void; // absent s’il n’y a encore aucun serveur
   machine?: Machine; // la machine dédiée choisie à gauche ; absente = ce PC
 };
 
-// L'assistant « Créer un serveur », comme dans la maquette.
+// L’assistant « Créer un serveur », comme dans la maquette.
 export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
   const [infos, setInfos] = useState<InfosCreation | null>(null);
   const [etape, setEtape] = useState<Etape>("logiciel");
+  const [defile, setDefile] = useState(false); // la page a défilé : effet de bord sous les étapes
   const [logiciel, setLogiciel] = useState("Paper");
   const [snapshots, setSnapshots] = useState(false);
-  const [versions, setVersions] = useState<Record<string, VersionMc[] | string>>({}); // liste, ou phrase d'erreur
+  const [versions, setVersions] = useState<Record<string, VersionMc[] | string>>({}); // liste, ou phrase d’erreur
   const [version, setVersion] = useState<string | null>(null);
   const [filtre, setFiltre] = useState("");
   const [couleur, setCouleur] = useState<Couleur | null>(null); // null : selon le logiciel
@@ -107,12 +111,19 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
   const [mode, setMode] = useState("survie");
   const [difficulte, setDifficulte] = useState("normale");
   const [joueurs, setJoueurs] = useState(10);
-  const [ram, setRam] = useState(4);
+  const [ramVoulue, setRam] = useState(4);
   const [stockage, setStockage] = useState(20); // machine dédiée : stockage max, en Go
   const [eula, setEula] = useState(false);
   const [amis, setAmis] = useState(true); // Ouvert à tes amis (oui par défaut)
   const [erreur, setErreur] = useState("");
-  // Pendant la création : l'avancement de chaque tâche, puis le résultat.
+  // Modpack : la recherche dans Modrinth, ses résultats (ou une phrase d’erreur), et le pack choisi.
+  const [textePack, setTextePack] = useState("");
+  const [packs, setPacks] = useState<{ liste: Projet[]; suite: boolean; page: number } | string | undefined>(undefined);
+  const [pack, setPack] = useState<Projet | null>(null);
+  const [plusDePacks, setPlusDePacks] = useState(false);
+  const [essaiPacks, setEssaiPacks] = useState(0); // « Réessayer » après une erreur
+  const demandePacks = useRef(0);
+  // Pendant la création : l’avancement de chaque tâche, puis le résultat.
   const [creation, setCreation] = useState<{ taches: number[]; erreur?: string; fini?: boolean } | null>(null);
 
   // Au départ : le dossier des serveurs, la place libre, la mémoire du PC.
@@ -125,11 +136,12 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
       .catch(() => null);
   useEffect(() => {
     relireInfos().then((i) => {
-      if (i?.premier) setEtape("dossier");
+      if (i?.premier && !machine) setEtape("dossier");
     });
   }, []);
 
-  const etapes: Etape[] = infos?.premier ? ["dossier", "logiciel", "version", "monde", "resume"] : ["logiciel", "version", "monde", "resume"];
+  // Le dossier des serveurs est celui de ce PC : rien à choisir pour une machine dédiée.
+  const etapes: Etape[] = infos?.premier && !machine ? ["dossier", "logiciel", "version", "monde", "resume"] : ["logiciel", "version", "monde", "resume"];
   const rang = etapes.indexOf(etape);
   const choisi = TOUS.find((l) => l.id === logiciel) ?? TOUS[0];
 
@@ -150,27 +162,58 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
     if (etape === "version" && liste === undefined) charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etape, cle]);
-  // Une version choisie qui n'est plus dans la liste (autre logiciel) : on prend la dernière stable.
+  // Une version choisie qui n’est plus dans la liste (autre logiciel) : on prend la dernière stable.
   useEffect(() => {
     if (!Array.isArray(liste)) return;
     if (!version || !liste.some((v) => v.id === version)) setVersion((liste.find((v) => !v.instable) ?? liste[0])?.id ?? null);
   }, [liste, version]);
   const versionChoisie = Array.isArray(liste) ? liste.find((v) => v.id === version) : undefined;
+  const estPack = logiciel === "Modpack";
+
+  // Modpack : on cherche quand le mot change (un peu après la dernière lettre). Seule la dernière réponse compte.
+  useEffect(() => {
+    if (!estPack || etape !== "version") return;
+    const numero = ++demandePacks.current;
+    const minuterie = window.setTimeout(() => {
+      chercherModpacks(textePack, 0).then(
+        (r) => numero === demandePacks.current && setPacks({ liste: r.projets, suite: r.suite, page: 0 }),
+        (e) => numero === demandePacks.current && setPacks(typeof e === "string" ? e : "Pas de connexion. Réessaie."),
+      );
+    }, textePack ? 300 : 0);
+    return () => window.clearTimeout(minuterie);
+  }, [estPack, etape, textePack, essaiPacks]);
+  const afficherPlusDePacks = () => {
+    if (typeof packs !== "object" || plusDePacks) return;
+    const numero = demandePacks.current;
+    setPlusDePacks(true);
+    chercherModpacks(textePack, packs.page + 1)
+      .then(
+        (r) => numero === demandePacks.current && setPacks({ liste: [...packs.liste, ...r.projets.filter((p) => !packs.liste.some((x) => x.id === p.id))], suite: r.suite, page: packs.page + 1 }),
+        () => {},
+      )
+      .finally(() => setPlusDePacks(false));
+  };
+  const choisirPack = (p: Projet) => {
+    setPack(p);
+    if (!nom.trim()) setNom(p.nom.slice(0, 40));
+  };
   const derniere = Array.isArray(liste) ? liste.find((v) => !v.instable)?.id : undefined;
   const cherche = filtre.trim().toLowerCase();
   const visibles = Array.isArray(liste) ? liste.filter((v) => v.id.toLowerCase().startsWith(cherche)) : [];
   const cube = couleur ?? couleurDe({ couleur: undefined, logiciel: logiciel as NomLogiciel });
 
-  // Sur une machine dédiée : jusqu'à sa RAM, moins 768 Mo pour le système et 15 % (512 Mo au moins) pour Java
-  // (ressources.rs › ram_max_go : un serveur seul réglé au maximum peut toujours démarrer). Rien n'est réservé tant qu'il est éteint.
+  // Sur une machine dédiée : jusqu’à sa RAM, moins 768 Mo pour le système et 15 % (512 Mo au moins) pour Java
+  // (ressources.rs › ram_max_go : un serveur seul réglé au maximum peut toujours démarrer). Rien n’est réservé tant qu’il est éteint.
   const ramMax = machine?.memoire
     ? ramMaxMachine(machine.memoire.totalGo)
     : Math.max(2, Math.min(16, Math.floor((infos?.memoireGo ?? 8) - 2)));
+  // Jamais plus que ce que la machine (ou ce PC) peut donner, même sans avoir touché au logiciel.
+  const ram = Math.max(1, Math.min(ramVoulue, ramMax));
   const libreGo = machine?.disque ? Math.floor(machine.disque.totalGo - machine.disque.utiliseGo) : 0;
   const stockageMax = Math.max(5, Math.min(500, libreGo));
   const nomPropre = nom.trim();
   const peutContinuer =
-    etape === "version" ? !!versionChoisie : etape === "monde" ? nomPropre.length > 0 && eula : etape === "logiciel" ? !!choisi.pret : true;
+    etape === "version" ? (estPack ? !!pack : !!versionChoisie) : etape === "monde" ? nomPropre.length > 0 && eula : etape === "logiciel" ? !!choisi.pret : true;
 
   const aller = (e: Etape) => {
     setErreur("");
@@ -184,7 +227,7 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
     try {
       onCree(await importerServeur(dossier));
     } catch (e) {
-      setErreur(typeof e === "string" ? e : "L'import a échoué. Réessaie.");
+      setErreur(typeof e === "string" ? e : "L’import a échoué. Réessaie.");
     }
   };
 
@@ -196,7 +239,7 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
       .catch((e) => setErreur(typeof e === "string" ? e : "Ce dossier ne convient pas."));
   };
 
-  // La création elle-même : Rust donne l'avancement de chaque tâche.
+  // La création elle-même : Rust donne l’avancement de chaque tâche.
   useEffect(
     () =>
       ecouterCreation((tache, pourcent) =>
@@ -207,9 +250,9 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
     [],
   );
   const creer = () => {
-    if (!versionChoisie) return;
+    if (estPack ? !pack : !versionChoisie) return;
     setCreation({ taches: [0, 0, 0] });
-    creerServeur({ nom: nomPropre, logiciel, version: versionChoisie.id, ramGo: ram, eula, mode, difficulte, joueursMax: joueurs, couleur: cube, ouvertAmis: amis, machine: machine?.id, stockageGo: machine ? Math.min(stockage, stockageMax) : undefined })
+    creerServeur({ nom: nomPropre, logiciel, version: estPack ? "" : (versionChoisie?.id ?? ""), modpack: estPack ? pack?.id : undefined, ramGo: ram, eula, mode, difficulte, joueursMax: joueurs, couleur: cube, ouvertAmis: amis, machine: machine?.id, stockageGo: machine ? Math.min(stockage, stockageMax) : undefined })
       .then((s) => {
         setCreation({ taches: [100, 100, 100], fini: true });
         window.setTimeout(() => onCree(s), 900);
@@ -218,7 +261,11 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
   };
 
   const java = versionChoisie?.java;
-  const taches = [
+  const taches = estPack ? [
+    "Vérifier Java",
+    "Installer le chargeur de mods (1 à 3 min)",
+    `Télécharger les mods et préparer « ${nomPropre || "Nouveau serveur"} »`,
+  ] : [
     java ? `Installer ${logiciel === "Spigot" ? "le JDK" : "Java"} ${java} (si besoin)` : "Vérifier Java",
     logiciel === "Spigot"
       ? `Fabriquer Spigot ${version ?? ""} (5 à 15 min)`
@@ -234,7 +281,7 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
   const TITRES: Record<Etape, [string, string]> = {
     dossier: ["Où ranger tes serveurs ?", ""],
     logiciel: ["Quel logiciel ?", ""],
-    version: ["Quelle version de Minecraft ?", ""],
+    version: estPack ? ["Quel modpack ?", ""] : ["Quelle version de Minecraft ?", ""],
     monde: ["Ton monde", ""],
     resume: ["Tout est prêt ?", ""],
   };
@@ -242,15 +289,16 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
   const pourcentTotal = creation ? Math.round(creation.taches.reduce((a, b) => a + b, 0) / creation.taches.length) : 0;
 
   const onglets = useMemo(
-    () => etapes.map((e, i) => ({ id: e, nom: NOMS_ETAPES[e], off: enCreation || i > rang })),
-    [etapes.join(), rang, enCreation],
+    () => etapes.map((e, i) => ({ id: e, nom: e === "version" && estPack ? "Modpack" : NOMS_ETAPES[e], off: enCreation || i > rang })),
+    [etapes.join(), rang, enCreation, estPack],
   );
 
   return (
     <>
       <Tabs onglets={onglets} actif={etape} onChoisir={(e) => etapes.indexOf(e) < rang && aller(e)} etiquette="Étapes de création" />
 
-      <div className="scroll">
+      <div className={"edgebar" + (defile ? " on" : "")} aria-hidden />
+      <div className="scroll" onScroll={(e) => setDefile(e.currentTarget.scrollTop > 4)}>
         <div className="page wz" key={enCreation ? "creation" : etape}>
           <div className="wz-head">
             <span className="wz-kick">{enCreation ? "Installation" : `Étape ${rang + 1} sur ${etapes.length}`}</span>
@@ -356,12 +404,68 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
                   {groupe === "Mods et plugins ensemble" && <p className="wz-note">Moins stables.</p>}
                 </div>
               ))}
-              <button type="button" className="imp" onClick={importer}>
-                <IconFolder size={16} stroke={2} aria-hidden />
-                <b>Importer un serveur existant</b>
-                <IconArrowRight size={15} stroke={2} aria-hidden />
-              </button>
+              {!machine && (
+                <button type="button" className="imp" onClick={importer}>
+                  <IconFolder size={16} stroke={2} aria-hidden />
+                  <b>Importer un serveur existant</b>
+                  <IconArrowRight size={15} stroke={2} aria-hidden />
+                </button>
+              )}
             </div>
+          ) : etape === "version" && estPack ? (
+            <>
+              <label className="vsearch">
+                <IconSearch size={15} stroke={2} aria-hidden />
+                <input type="search" value={textePack} placeholder="Rechercher un modpack" spellCheck={false} onChange={(e) => setTextePack(e.target.value)} />
+              </label>
+              {packs === undefined ? (
+                <div className="wz-load">
+                  <span className="spin" aria-hidden />
+                  Recherche des modpacks…
+                </div>
+              ) : typeof packs === "string" ? (
+                <div className="wz-load">
+                  <span>{packs}</span>
+                  <button type="button" className="btn" onClick={() => {
+                      setPacks(undefined);
+                      setEssaiPacks((n) => n + 1);
+                    }}>
+                    Réessayer
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <section className="surf versions packs" role="radiogroup" aria-label="Modpack">
+                    {packs.liste.length === 0 && <div className="vvide">Aucun modpack « {textePack.trim()} »</div>}
+                    {packs.liste.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={p.id === pack?.id}
+                        className={"vrow pack" + (p.id === pack?.id ? " sel" : "")}
+                        onClick={() => choisirPack(p)}
+                      >
+                        <span className="radio" />
+                        <Tuile nom={p.nom} couleur={p.couleur} icone={p.icone} taille={36} />
+                        <span className="pack-tx">
+                          <b>{p.nom}</b>
+                          <span>{p.description}</span>
+                        </span>
+                        <span className="j">{compte(p.telechargements)}</span>
+                      </button>
+                    ))}
+                  </section>
+                  {packs.suite && (
+                    <div className="pack-plus">
+                      <button type="button" className="btn" disabled={plusDePacks} onClick={afficherPlusDePacks}>
+                        {plusDePacks ? "Chargement…" : "Afficher plus"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           ) : etape === "version" ? (
             <>
               {logiciel === "Vanilla" && (
@@ -500,7 +604,7 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
                     <span className={"t2" + (ram < choisi.ram ? " warn" : "")}>
                       {ram < choisi.ram ? "Un peu juste. " : ""}
                       {machine?.memoire && ramMax <= 1
-                        ? `${machine.nom} n'a que ${nombre(Math.round(machine.memoire.totalGo * 10) / 10)} Go : 1 Go au plus. 8 Go conseillés.`
+                        ? `${machine.nom} n’a que ${nombre(Math.round(machine.memoire.totalGo * 10) / 10)} Go : 1 Go au plus. 8 Go conseillés.`
                         : machine?.memoire
                         ? `${machine.nom} a ${nombre(Math.round(machine.memoire.totalGo))} Go. Réservée seulement quand il est allumé.`
                         : `${infos ? `Ton PC a ${nombre(Math.round(infos.memoireGo))} Go. ` : ""}Conseillé : ${choisi.ram} Go.`}
@@ -546,7 +650,7 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
               <section className={"surf eula" + (eula ? "" : " todo")}>
                 <label className="chk">
                   <input type="checkbox" checked={eula} onChange={(e) => setEula(e.target.checked)} />
-                  <span>J'accepte le contrat de licence de Minecraft (EULA)</span>
+                  <span>J’accepte le contrat de licence de Minecraft (EULA)</span>
                 </label>
                 <button type="button" className="lien" onClick={() => openUrl("https://www.minecraft.net/eula").catch(() => {})}>
                   Lire le contrat
@@ -561,8 +665,8 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
                   <div>
                     <b>{nomPropre}</b>
                     <span>
-                      {choisi.nom} {version}
-                      {java ? ` · Java ${java}` : ""}
+                      {estPack ? `Modpack ${pack?.nom ?? ""}` : `${choisi.nom} ${version}`}
+                      {java && !estPack ? ` · Java ${java}` : ""}
                     </span>
                   </div>
                 </div>
@@ -613,7 +717,7 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
       {/* La capsule du bas : Annuler, Retour, Continuer. */}
       {(!enCreation || creation.erreur) && (
         <div className="dock">
-          {/* « Annuler » est à part : il ne fait pas avancer l'assistant. */}
+          {/* « Annuler » est à part : il ne fait pas avancer l’assistant. */}
           {onAnnuler && !creation?.erreur && (
             <div className="g wz-nav" data-lens="bar">
               <button type="button" data-gel className="ab" onClick={onAnnuler}>
@@ -621,7 +725,7 @@ export default function NouveauServeur({ onCree, onAnnuler, machine }: Props) {
               </button>
             </div>
           )}
-          <div className="g wz-nav" data-lens="bar" role="group" aria-label="Navigation de l'assistant">
+          <div className="g wz-nav" data-lens="bar" role="group" aria-label="Navigation de l’assistant">
             {creation?.erreur ? (
               <>
                 <button type="button" data-gel className="ab" onClick={() => setCreation(null)}>

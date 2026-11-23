@@ -4,7 +4,7 @@
   display: inline-flex;
   align-items: center;
   height: var(--h-control);
-  padding: 2px;
+  padding: var(--space-2);
   border-radius: var(--r-pill);
   background: var(--fill);
   touch-action: none; /* on peut tirer la pastille au doigt */
@@ -92,7 +92,7 @@
 
 /* Petit compteur après le nom (« Bannis 2 ») */
 .segc .cnt {
-  margin-left: 6px;
+  margin-left: var(--space-6);
   font-size: 11px;
   font-weight: 500;
   opacity: 0.65;

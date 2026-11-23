@@ -1,5 +1,5 @@
 // Les icônes de serveur (dessinées par docs/logo/icones.py, en PNG 192 px dans src/assets/icones : sans grille entre les pixels).
-// Rangées par groupe, dans l'ordre de la fenêtre « Icône… ».
+// Rangées par groupe, dans l’ordre de la fenêtre « Icône… ».
 
 const fichiers = import.meta.glob("../assets/icones/*.png", { eager: true, query: "?url", import: "default" }) as Record<string, string>;
 
@@ -53,7 +53,7 @@ export const GROUPES: Groupe[] = [
       { cle: "cadeau-rouge", nom: "Cadeau rouge" },
       { cle: "cadeau-bleu", nom: "Cadeau bleu" },
       { cle: "cadeau-vert", nom: "Cadeau de Noël" },
-      { cle: "gateau", nom: "Gâteau d'anniversaire" },
+      { cle: "gateau", nom: "Gâteau d’anniversaire" },
       { cle: "gateau-chocolat", nom: "Gâteau au chocolat" },
     ],
   },
@@ -80,7 +80,7 @@ export const GROUPES: Groupe[] = [
   {
     nom: "Nature",
     icones: [
-      { cle: "herbe", nom: "Bloc d'herbe" },
+      { cle: "herbe", nom: "Bloc d’herbe" },
       { cle: "hiver", nom: "Hiver" },
       { cle: "aquarium", nom: "Aquarium" },
       { cle: "grenouille", nom: "Grenouille" },

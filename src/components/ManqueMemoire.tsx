@@ -6,7 +6,7 @@ import "./Menus.css";
 import "./CodeMachine.css";
 
 type Props = {
-  nom: string; // le serveur qu'on voulait démarrer
+  nom: string; // le serveur qu’on voulait démarrer
   manque: Manque;
   onArreterEtDemarrer: (id: string) => Promise<void>; // arrête ce serveur-là, puis démarre le nôtre
   onFermer: () => void;
@@ -15,7 +15,7 @@ type Props = {
 const go = (mo: number) => `${nombre(mo / 1024)} Go`;
 
 // Machine dédiée : pas assez de RAM libre pour démarrer ce serveur.
-// On montre les serveurs allumés, et on propose d'en arrêter un.
+// On montre les serveurs allumés, et on propose d’en arrêter un.
 export default function ManqueMemoire({ nom, manque, onArreterEtDemarrer, onFermer }: Props) {
   const boite = useRef<HTMLDivElement>(null);
   const [choix, setChoix] = useState(() => manque.allumes.find((s) => s.ramMo >= manque.manqueMo)?.id ?? manque.allumes[0]?.id ?? "");

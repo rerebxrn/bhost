@@ -75,6 +75,7 @@ pub(crate) fn cle(dossier: &Path) -> io::Result<SigningKey> {
         Ok(t) => {
             let t = t.trim_start_matches('\u{feff}').trim();
             let octets = protocole::depuis_hexa(t).and_then(|o| <[u8; 32]>::try_from(o).ok()).ok_or_else(|| io::Error::other("relais-cle.txt abîmé"))?;
+            crate::garde::proteger(&fichier);
             Ok(SigningKey::from_bytes(&octets))
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -84,6 +85,7 @@ pub(crate) fn cle(dossier: &Path) -> io::Result<SigningKey> {
             let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&fichier)?;
             f.write_all(protocole::hexa(&graine).as_bytes())?;
             f.sync_all()?;
+            crate::garde::proteger(&fichier);
             Ok(SigningKey::from_bytes(&graine))
         }
         // Fichier bloqué un instant (antivirus…) : on réessaiera, sans rien écraser.
@@ -168,6 +170,25 @@ impl Tunnels {
         }
     }
 
+    /// Un serveur supprimé (ou retiré) : son adresse est rendue au relais, pour qu'un futur serveur
+    /// ne la reprenne jamais par erreur (les joueurs qui la connaissent arriveraient ailleurs).
+    pub fn oublier(&self, id: &str) {
+        if let Some(t) = self.liste.lock().unwrap().remove(id) {
+            t.arreter();
+        }
+        let Some(dossier) = self.dossier.get().cloned() else { return };
+        let mut n = noms(&dossier);
+        let Some(nom) = n.remove(id) else { return };
+        if let Ok(json) = serde_json::to_vec_pretty(&n) {
+            let _ = crate::garde::ecrire_atomique(&dossier.join("relais.json"), &json);
+        }
+        std::thread::spawn(move || {
+            if let Ok(c) = cle(&dossier) {
+                let _ = lacher(&c, &nom);
+            }
+        });
+    }
+
     /// Garde seulement ces serveurs.
     pub fn garder(&self, ids: &[&str]) {
         let mut liste = self.liste.lock().unwrap();
@@ -224,13 +245,13 @@ impl Tunnels {
     /// Change l'adresse d'un serveur (« survie » → survie.bhost.app). Le relais reprend tout de suite ;
     /// l'ancien nom est rendu (les autres pourront le prendre).
     pub fn changer_adresse(&self, id: &str, mot: &str) -> Result<(), &'static str> {
-        let dossier = self.dossier.get().ok_or("Le relais n'est pas prêt.")?.clone();
+        let dossier = self.dossier.get().ok_or("Le relais n’est pas prêt.")?.clone();
         match self.adresse_libre(id, mot) {
             Libre::Actuelle => return Ok(()),
             Libre::Libre => {}
             Libre::Pris(_) => return Err("Déjà pris."),
             Libre::Invalide => return Err("Lettres, chiffres et tirets (3 à 32)."),
-            Libre::Trop => return Err("Trop d'essais. Réessaie dans 10 minutes."),
+            Libre::Trop => return Err("Trop d’essais. Réessaie dans 10 minutes."),
             Libre::Injoignable => return Err("Le relais ne répond pas. Réessaie."),
         }
         let ancien = noms(&dossier).get(id).cloned();
@@ -608,7 +629,7 @@ mod tests {
         tunnels.regler(dossier.clone(), envoi);
         tunnels.vouloir("s1", "Survie", port);
         let adresse = loop {
-            changements.recv_timeout(Duration::from_secs(10)).expect("le relais n'a pas répondu");
+            changements.recv_timeout(Duration::from_secs(10)).expect("le relais n’a pas répondu");
             if let Some(Etat::EnLigne(a)) = tunnels.etat("s1") {
                 break a;
             }
@@ -643,7 +664,7 @@ mod tests {
         autres.regler(dossier2.clone(), envoi2);
         autres.vouloir("t1", "Survie", port);
         let attendre = |t: &Tunnels, c: &std::sync::mpsc::Receiver<bool>, id: &str, voulu: &str| loop {
-            c.recv_timeout(Duration::from_secs(10)).expect("le relais n'a pas répondu");
+            c.recv_timeout(Duration::from_secs(10)).expect("le relais n’a pas répondu");
             if t.etat(id) == Some(Etat::EnLigne(voulu.to_string())) {
                 break;
             }
@@ -667,7 +688,7 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(500));
         }
-        assert!(rendu, "l'ancien nom n'a pas été rendu");
+        assert!(rendu, "l’ancien nom n’a pas été rendu");
         autres.tout_arreter();
         let _ = std::fs::remove_dir_all(&dossier2);
         let adresse = "creatif.bhost.test".to_string();

@@ -10,7 +10,7 @@ type Props = {
   onErreur: (texte: string) => void;
 };
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 const liste = (noms: string[]) => (noms.length > 1 ? `${noms.slice(0, -1).join(", ")} et ${noms[noms.length - 1]}` : noms[0]);
 
 // Le serveur ne démarre plus : son monde attend un datapack qui a été retiré (Terralith…).
@@ -52,7 +52,7 @@ export default function MondeCasse({ id, manquants, onInfo, onErreur }: Props) {
       <div>
         <b>Le monde ne se charge plus</b>
         <span>
-          Il lui manque {liste(noms)}, qui a créé son terrain.
+          Il lui manque {liste(noms)}, {noms.length > 1 ? "qui ont créé" : "qui a créé"} son terrain.
         </span>
       </div>
       <button type="button" className="monde-casse-bt" disabled={occupe} onClick={remettre}>

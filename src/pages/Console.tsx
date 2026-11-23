@@ -18,14 +18,14 @@ function lire(brut: string): Ligne {
   return { heure: m[1], niveau, texte: m[3] };
 }
 
-// La console d'un serveur, en direct.
+// La console d’un serveur, en direct.
 export default function Console({ id }: { id: string }) {
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const journal = useRef<HTMLDivElement>(null);
-  const enBas = useRef(true); // on suit le bas tant que l'utilisateur ne remonte pas
+  const enBas = useRef(true); // on suit le bas tant que l’utilisateur ne remonte pas
 
-  // À l'ouverture : on s'abonne d'abord aux nouvelles lignes, puis on demande les anciennes.
-  // Les numéros de ligne évitent d'en perdre une ou d'en afficher une deux fois.
+  // À l’ouverture : on s’abonne d’abord aux nouvelles lignes, puis on demande les anciennes.
+  // Les numéros de ligne évitent d’en perdre une ou d’en afficher une deux fois.
   useEffect(() => {
     let ferme = false;
     let dernier: number | null = null; // numéro de la dernière ligne affichée
@@ -50,6 +50,12 @@ export default function Console({ id }: { id: string }) {
         const suite = attente.filter((a) => a.n > passe.dernier);
         dernier = suite.length ? suite[suite.length - 1].n : passe.dernier;
         setLignes([...passe.lignes.map(lire), ...suite.map((a) => a.ligne)].slice(-LIGNES_MAX));
+      })
+      // Le passé n’a pas pu être lu (machine lente…) : on montre au moins ce qui arrive maintenant.
+      .catch(() => {
+        if (ferme) return;
+        dernier = attente.length ? attente[attente.length - 1].n : 0;
+        setLignes(attente.map((a) => a.ligne).slice(-LIGNES_MAX));
       });
 
     return () => {
@@ -58,7 +64,7 @@ export default function Console({ id }: { id: string }) {
     };
   }, [id]);
 
-  // Après chaque nouvelle ligne : on redescend en bas, sauf si l'utilisateur lit plus haut.
+  // Après chaque nouvelle ligne : on redescend en bas, sauf si l’utilisateur lit plus haut.
   useLayoutEffect(() => {
     const el = journal.current;
     if (el && enBas.current) el.scrollTop = el.scrollHeight;
@@ -80,7 +86,7 @@ export default function Console({ id }: { id: string }) {
           enBas.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
         }}
       >
-        {lignes.length === 0 && <div className="con-empty">Rien pour l'instant. Démarre le serveur.</div>}
+        {lignes.length === 0 && <div className="con-empty">Rien pour l’instant. Démarre le serveur.</div>}
         {lignes.map((l, i) => (
           <div key={i} className={l.niveau === "CMD" ? "lv-CMD" : undefined}>
             {l.heure && <span className="t">{l.heure} </span>}

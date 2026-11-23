@@ -46,7 +46,7 @@ const PRIORITES: { id: Priorite; nom: string }[] = [
   { id: "haute", nom: "Haute" },
 ];
 const AIDE_PRIORITE: Record<Priorite, string> = {
-  basse: "Tes jeux passent d'abord.",
+  basse: "Tes jeux passent d’abord.",
   normale: "Partagé avec tes autres programmes.",
   haute: "Le serveur passe avant tes jeux.",
 };
@@ -58,7 +58,7 @@ const DIFFICULTES = [
 ];
 const JAVAS = ["8", "17", "21", "25"];
 
-// Les règles du jeu, dans l'ordre de la maquette (les clés viennent de regles.rs).
+// Les règles du jeu, dans l’ordre de la maquette (les clés viennent de regles.rs).
 const NOMS_REGLES: Record<string, string> = {
   garder: "Garder l’inventaire à la mort",
   jour: "Cycle jour et nuit",
@@ -85,13 +85,13 @@ type Props = {
 function texteAmis(serveur: Serveur, acces?: Acces): string {
   if (!serveur.ouvertAmis) return "Tes amis rejoignent par Internet.";
   if (acces?.etat === "ouvert") return `Adresse : ${acces.adresse}`;
-  if (acces?.etat === "erreur") return acces.message ?? "Ça n'a pas marché.";
+  if (acces?.etat === "erreur") return acces.message ?? "Ça n’a pas marché.";
   return "Ouverture de ta box…";
 }
 
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché. Réessaie.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché. Réessaie.");
 
-// L'onglet Paramètres d'un serveur : Général, Performances, Partie, Règles du jeu, Mondes, Avancé, Zone sensible.
+// L’onglet Paramètres d’un serveur : Général, Performances, Partie, Règles du jeu, Mondes, Avancé, Zone sensible.
 // Chaque changement est enregistré tout de suite.
 export default function Parametres({ serveur, acces, onChange, onRenommer, onRetirer, onSupprimer, onErreur, onInfo }: Props) {
   const [infos, setInfos] = useState<Infos | null>(null);
@@ -108,12 +108,23 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
   const [archive, setArchive] = useState(false); // « Télécharger en .zip » en cours
   const travail = useTravail(serveur.id, archive);
   const enLigne = serveur.statut === "en-ligne";
+  // Ce qui n’a pas pu être lu : on le dit au lieu de laisser « Lecture… ».
+  const [illisible, setIllisible] = useState({ infos: false, mondes: false });
+  const lecture = (rate: boolean) => (
+    <div className="row">
+      <span className="t2">{rate ? "Impossible de lire pour l’instant." : "Lecture…"}</span>
+    </div>
+  );
 
   useEffect(() => {
     setRegles(null);
     setMondes(null);
     reglesServeur(serveur.id).then(setRegles, () => setRegles([]));
-    mondesServeur(serveur.id).then(setMondes, (e) => onErreur(phrase(e)));
+    setIllisible((r) => ({ ...r, mondes: false }));
+    mondesServeur(serveur.id).then(setMondes, (e) => {
+      setIllisible((r) => ({ ...r, mondes: true }));
+      onErreur(phrase(e));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serveur.id, serveur.version]);
 
@@ -144,19 +155,27 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
     );
   };
 
-  // Joueurs Bedrock : relu aussi quand le serveur démarre ou s'arrête (« Au prochain démarrage » s'efface).
+  // Joueurs Bedrock : relu aussi quand le serveur démarre ou s’arrête (« Au prochain démarrage » s’efface).
   useEffect(() => {
     bedrockServeur(serveur.id).then(setBedrock, () => setBedrock(null));
   }, [serveur.id, serveur.version, serveur.statut]);
 
   useEffect(() => {
-    parametresServeur(serveur.id).then(setInfos, (e) => onErreur(phrase(e)));
-    // On ne relit qu'en changeant de serveur : ensuite, chaque réponse de Rust met à jour l'aperçu.
+    setIllisible((r) => ({ ...r, infos: false }));
+    parametresServeur(serveur.id).then(setInfos, (e) => {
+      setIllisible((r) => ({ ...r, infos: true }));
+      onErreur(phrase(e));
+    });
+    // On ne relit qu’en changeant de serveur : ensuite, chaque réponse de Rust met à jour l’aperçu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serveur.id]);
 
   // Les réglages gardés par BHOST : on renvoie tout, avec le changement.
+  // Toujours le serveur à jour : un curseur qui se calme après un autre changement ne remet pas l’ancien.
+  const dernier = useRef(serveur);
+  dernier.current = serveur;
   const regler = (change: Partial<ReglagesServeur>) => {
+    const serveur = dernier.current;
     const reglages: ReglagesServeur = {
       ramMo: serveur.ramMo,
       demarrerAuto: !!serveur.demarrerAuto,
@@ -175,12 +194,13 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
     );
   };
 
-  // La mémoire : on attend que le curseur se calme avant d'enregistrer.
+  // La mémoire : on attend que le curseur se calme avant d’enregistrer.
   const attenteRam = useRef(0);
   const changerRam = (go: number) => {
     setRam(go);
     window.clearTimeout(attenteRam.current);
-    attenteRam.current = window.setTimeout(() => regler({ ramMo: go * 1024 }), 400);
+    const id = serveur.id;
+    attenteRam.current = window.setTimeout(() => dernier.current.id === id && regler({ ramMo: go * 1024 }), 400);
   };
 
   // Machine dédiée : le stockage max, enregistré quand le curseur se calme.
@@ -189,7 +209,8 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
   const changerStockage = (go: number) => {
     setStockage(go);
     window.clearTimeout(attenteStockage.current);
-    attenteStockage.current = window.setTimeout(() => regler({ disqueMaxMo: go * 1024 }), 400);
+    const id = serveur.id;
+    attenteStockage.current = window.setTimeout(() => dernier.current.id === id && regler({ disqueMaxMo: go * 1024 }), 400);
   };
 
   const changerPartie = (change: Partial<Partie>) => {
@@ -224,7 +245,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
     else regler({ javaChoix: id });
   };
 
-  // Une règle : on l'affiche tout de suite, Rust confirme (ou on revient en arrière).
+  // Une règle : on l’affiche tout de suite, Rust confirme (ou on revient en arrière).
   const changerRegle = (cle: string, valeur: number) => {
     const avant = regles;
     setRegles((l) => l?.map((r) => (r.cle === cle ? { ...r, valeur } : r)) ?? l);
@@ -284,7 +305,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
         : bedrock.redemarrer
           ? "Au prochain démarrage"
           : "Consoles et téléphones";
-  // L'adresse pour eux : celle de la box (avec le port Bedrock), sinon le port seul.
+  // L’adresse pour eux : celle de la box (avec le port Bedrock), sinon le port seul.
   const adresseBedrock = !bedrock ? "" : acces?.bedrock ?? (serveur.ouvertAmis && acces?.etat !== "erreur" && !acces?.bedrockMessage ? "Ouverture…" : `Port ${bedrock.port}`);
   const aideBedrock = !serveur.ouvertAmis
     ? "Active « Ouvert à tes amis » pour Internet."
@@ -321,7 +342,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
             type="button"
             className="btn"
             disabled={allume || !versionPossible}
-            title={!versionPossible ? "Bientôt" : allume ? "Arrête-le d'abord" : undefined}
+            title={!versionPossible ? "Bientôt" : allume ? "Arrête-le d’abord" : undefined}
             onClick={() => setFenetre("version")}
           >
             Changer de version…
@@ -433,18 +454,14 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
             </div>
           </>
         ) : (
-          <div className="row">
-            <span className="t2">Lecture…</span>
-          </div>
+          lecture(illisible.infos)
         )}
       </section>
 
       <div className="grp-t">Règles du jeu</div>
       <section className="surf">
-        {regles === null ? (
-          <div className="row">
-            <span className="t2">Lecture…</span>
-          </div>
+        {regles === null || regles.length === 0 ? (
+          lecture(regles !== null)
         ) : (
           <>
             {regles
@@ -495,7 +512,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
             <div className="row">
               <div className="lbl">
                 <span>Montré aux joueurs à leur arrivée</span>
-                <span className="t2">Ils doivent l'accepter pour jouer. Vide : pas de code de conduite.</span>
+                <span className="t2">Ils doivent l’accepter pour jouer. Vide : pas de code de conduite.</span>
               </div>
             </div>
             <div className="ps-conduite">
@@ -504,7 +521,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
                 aria-label="Code de conduite"
                 rows={5}
                 maxLength={4000}
-                placeholder={"Sois respectueux avec tout le monde.\nPas de triche, pas de grief.\nPas de pub pour d'autres serveurs."}
+                placeholder={"Sois respectueux avec tout le monde.\nPas de triche, pas de grief.\nPas de pub pour d’autres serveurs."}
                 value={conduite ?? ""}
                 disabled={conduite === null}
                 onChange={(e) => setConduite(e.target.value)}
@@ -519,9 +536,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
       <div className="grp-t">Mondes</div>
       <section className="surf">
         {mondes === null ? (
-          <div className="row">
-            <span className="t2">Lecture…</span>
-          </div>
+          lecture(illisible.mondes)
         ) : (
           mondes.map((m) => (
             <div className={"wrow" + (m.actuel ? " cur" : "")} key={m.dossier}>
@@ -535,20 +550,26 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
                 </b>
                 <span>{[m.version, m.taille > 0 ? poids(m.taille) : null, joue(m.joue)].filter(Boolean).join(" · ")}</span>
               </div>
-              <button type="button" className="icb" aria-label="Télécharger en .zip" title="Télécharger en .zip" disabled={archive || m.taille === 0} onClick={() => telecharger(m)}>
+              <button type="button" className="icb" aria-label="Télécharger en .zip" title={serveur.machine ? "Seulement pour les serveurs de ce PC" : "Télécharger en .zip"} disabled={archive || m.taille === 0 || !!serveur.machine} onClick={() => telecharger(m)}>
                 <IconDownload size={15} stroke={2} aria-hidden />
               </button>
               <button
                 type="button"
                 className="icb"
                 aria-label="Réinitialiser"
-                title={m.actuel && allume ? "Arrête-le d'abord" : "Réinitialiser"}
+                title={m.actuel && allume ? "Arrête-le d’abord" : "Réinitialiser"}
                 disabled={m.taille === 0 || (m.actuel && allume)}
                 onClick={() => setFenetre({ reinit: m })}
               >
                 <IconRefresh size={15} stroke={2} aria-hidden />
               </button>
-              {!m.actuel && (
+              {m.actuel ? (
+                // La place des boutons des autres mondes : les icônes restent en colonne.
+                <span className="w-place" aria-hidden>
+                  <span className="icb" />
+                  <span className="btn">Utiliser</span>
+                </span>
+              ) : (
                 <>
                   <button
                     type="button"
@@ -677,14 +698,14 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
       <section className="surf">
         <div className="row">
           <span>Retirer de BHOST</span>
-          <button type="button" className="btn" disabled={allume} title={allume ? "Arrête-le d'abord" : "Le dossier reste sur ton PC"} onClick={onRetirer}>
+          <button type="button" className="btn" disabled={allume} title={allume ? "Arrête-le d’abord" : serveur.machine ? "Le dossier reste sur la machine" : "Le dossier reste sur ton PC"} onClick={onRetirer}>
             <IconUnlink size={14} stroke={2} aria-hidden />
             Retirer…
           </button>
         </div>
         <div className="row">
           <span>Supprimer le serveur</span>
-          <button type="button" className="btn danger" disabled={allume} title={allume ? "Arrête-le d'abord" : undefined} onClick={onSupprimer}>
+          <button type="button" className="btn danger" disabled={allume} title={allume ? "Arrête-le d’abord" : undefined} onClick={onSupprimer}>
             <IconTrash size={14} stroke={2} aria-hidden />
             Supprimer…
           </button>

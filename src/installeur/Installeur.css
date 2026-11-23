@@ -79,6 +79,16 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--space-22);
+  overflow: clip;
+}
+
+/* Un long message d'erreur (chemin Windows) passe à la ligne au lieu de sortir de la plaque. */
+.ins-panneau .pl-tete {
+  max-width: 100%;
+}
+
+.ins-panneau .pl-tete p {
+  overflow-wrap: anywhere;
 }
 
 /* Prêt : la coche verte posée sur le coin de la tuile. */
@@ -94,6 +104,10 @@ body {
   color: var(--st-online);
   background: var(--pl-tuile);
   border-radius: 50%;
+}
+
+.ins-ok.rate svg:last-child {
+  color: var(--danger);
 }
 
 .ins-dossier {

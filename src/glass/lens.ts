@@ -8,7 +8,7 @@
 
 type Reglage = { bezel: number; scale: number; blur: number; blurT: number; spec: number; sat: number; ca: number };
 
-// Un réglage par genre d'élément : barre flottante, petit bouton, panneau.
+// Un réglage par genre d’élément : barre flottante, petit bouton, panneau.
 const LENS: Record<string, Reglage> = {
   bar: { bezel: 18, scale: 34, blur: 0.4, blurT: 7, spec: 0.95, sat: 1.9, ca: 0.09 },
   btn: { bezel: 10, scale: 18, blur: 0.4, blurT: 4, spec: 0.9, sat: 1.8, ca: 0.07 },
@@ -19,7 +19,7 @@ const NS = "http://www.w3.org/2000/svg";
 const ATTENTE = 140; // ms sans changement de taille avant de recalculer
 const SURFACE_MAX = 1_600_000; // au-delà (en pixels), on garde le flou simple
 
-// De combien le verre dévie la lumière, du bord (0) vers l'intérieur (1).
+// De combien le verre dévie la lumière, du bord (0) vers l’intérieur (1).
 function courbe(): Float32Array {
   const N = 256;
   const f = (t: number) => Math.pow(1 - Math.pow(1 - t, 4), 0.25);
@@ -38,7 +38,7 @@ function courbe(): Float32Array {
 }
 const COURBE = courbe();
 
-// Dessine les deux cartes (déplacement et reflets) d'un rectangle arrondi L × H de rayon R.
+// Dessine les deux cartes (déplacement et reflets) d’un rectangle arrondi L × H de rayon R.
 function cartes(L: number, H: number, R: number, bezel: number) {
   const cd = document.createElement("canvas");
   const cs = document.createElement("canvas");
@@ -50,7 +50,7 @@ function cartes(L: number, H: number, R: number, bezel: number) {
   const S = xs.createImageData(L, H);
   const hw = L / 2;
   const hh = H / 2;
-  const Lx = -0.55; // la lumière vient d'en haut à gauche
+  const Lx = -0.55; // la lumière vient d’en haut à gauche
   const Ly = -0.83;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < L; x++) {
@@ -59,7 +59,7 @@ function cartes(L: number, H: number, R: number, bezel: number) {
       const qx = Math.abs(px) - (hw - R);
       const qy = Math.abs(py) - (hh - R);
       let d: number; // distance au bord
-      let nx: number; // direction vers l'extérieur
+      let nx: number; // direction vers l’extérieur
       let ny: number;
       if (qx > 0 && qy > 0) {
         const l = Math.hypot(qx, qy) || 1;
@@ -128,7 +128,7 @@ function filtre(id: string, L: number, H: number, R: number, P: Reglage, t: numb
   f.append(
     balise("feGaussianBlur", { in: "SourceGraphic", stdDeviation: (P.blur + t * P.blurT).toFixed(2), result: "bl" }),
     image(c.deplacement, "map"),
-    // Le rouge, le vert et le bleu sont déviés un peu différemment : c'est l'irisation du bord.
+    // Le rouge, le vert et le bleu sont déviés un peu différemment : c’est l’irisation du bord.
     deplacer(P.scale, "dr"),
     deplacer(P.scale * (1 - P.ca), "dg"),
     deplacer(P.scale * (1 - 2 * P.ca), "db"),
@@ -144,7 +144,7 @@ function filtre(id: string, L: number, H: number, R: number, P: Reglage, t: numb
   return f;
 }
 
-// Met le moteur en route sur toute la page. Renvoie de quoi l'arrêter et le rafraîchir.
+// Met le moteur en route sur toute la page. Renvoie de quoi l’arrêter et le rafraîchir.
 export function demarrerVerre(racine: HTMLElement) {
   const svg = balise("svg", { width: 0, height: 0, "aria-hidden": "true" }) as SVGSVGElement;
   svg.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
@@ -152,7 +152,7 @@ export function demarrerVerre(racine: HTMLElement) {
   svg.append(defs);
   document.body.append(svg);
 
-  // Un filtre par taille. On compte combien d'éléments s'en servent, pour le jeter ensuite.
+  // Un filtre par taille. On compte combien d’éléments s’en servent, pour le jeter ensuite.
   const filtres = new Map<string, { id: string; f: Element; n: number }>();
   const suivis = new Set<HTMLElement>();
   const minuteries = new WeakMap<HTMLElement, number>();
@@ -234,8 +234,8 @@ export function demarrerVerre(racine: HTMLElement) {
     });
   };
 
-  // Quand des éléments arrivent ou partent (changement de page, menu qui s'ouvre…),
-  // ou qu'une classe change (verre sombre au-dessus de la console) : on revérifie, une fois par image.
+  // Quand des éléments arrivent ou partent (changement de page, menu qui s’ouvre…),
+  // ou qu’une classe change (verre sombre au-dessus de la console) : on revérifie, une fois par image.
   let prevu = 0;
   const changements = new MutationObserver(() => {
     if (prevu) return;
@@ -258,7 +258,7 @@ export function demarrerVerre(racine: HTMLElement) {
   parcourir();
 
   return {
-    // À appeler quand l'intensité du verre ou le thème change.
+    // À appeler quand l’intensité du verre ou le thème change.
     rafraichir: () => suivis.forEach((el) => prevoir(el, 0)),
     arreter: () => {
       cancelAnimationFrame(prevu);

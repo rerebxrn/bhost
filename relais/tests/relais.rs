@@ -120,7 +120,7 @@ async fn serveur_eteint_dans_la_liste_et_a_la_connexion() {
     ping.extend(1234u64.to_be_bytes());
     envoi.extend(&ping);
     j.write_all(&envoi).await.unwrap();
-    let attendu = protocole::statut_absent(769, "Ce serveur est éteint.");
+    let attendu = protocole::statut_absent(769, "Serveur éteint ou introuvable.");
     let mut recu = vec![0u8; attendu.len() + ping.len()];
     timeout(Duration::from_secs(5), j.read_exact(&mut recu)).await.unwrap().unwrap();
     assert_eq!(&recu[..attendu.len()], &attendu[..]);
@@ -130,13 +130,13 @@ async fn serveur_eteint_dans_la_liste_et_a_la_connexion() {
     j.write_all(&poignee("personne.bhost.test", 2)).await.unwrap();
     let mut recu = Vec::new();
     timeout(Duration::from_secs(5), j.read_to_end(&mut recu)).await.unwrap().unwrap();
-    assert_eq!(recu, protocole::refus_connexion("Ce serveur est éteint."));
+    assert_eq!(recu, protocole::refus_connexion("Serveur éteint ou introuvable."));
     // Une adresse qui n'est pas à nous.
     let mut j = TcpStream::connect(joueurs).await.unwrap();
     j.write_all(&poignee("82.64.1.2", 2)).await.unwrap();
     let mut recu = Vec::new();
     timeout(Duration::from_secs(5), j.read_to_end(&mut recu)).await.unwrap().unwrap();
-    assert!(String::from_utf8_lossy(&recu).contains("Adresse inconnue"));
+    assert!(String::from_utf8_lossy(&recu).contains("introuvable"));
     // Pas du Minecraft : on coupe sans rien dire.
     let mut j = TcpStream::connect(joueurs).await.unwrap();
     j.write_all(b"GET / HTTP/1.1\r\n\r\n").await.unwrap();
@@ -201,12 +201,19 @@ async fn un_mauvais_jeton_ne_vole_pas_un_joueur() {
     assert!(recu.is_empty(), "le voleur n'a rien reçu");
 }
 
-/// Une fausse machine dédiée (BHOST OS) : elle se présente avec son code et reste en ligne.
+/// L'empreinte d'un code, pour les essais (BHOST la calcule avec scrypt : le relais ne voit que 64 caractères hexa).
+fn e(code: &str) -> String {
+    protocole::hexa(code.as_bytes()).chars().cycle().take(64).collect()
+}
+
+/// Une fausse machine dédiée (BHOST OS) : elle se présente avec l'empreinte de son code et reste en ligne.
 async fn machine(agents: SocketAddr, code: &str, graine: u8) -> (DuRelais, BufReader<TcpStream>) {
+    let code = e(code);
+    let code = code.as_str();
     let cle = SigningKey::from_bytes(&[graine; 32]);
     let mut f = BufReader::new(TcpStream::connect(agents).await.unwrap());
-    let m = protocole::ecrire_de_bhost(&DeBhost::Machine { cle: protocole::hexa(cle.verifying_key().as_bytes()), code: code.into() });
-    f.get_mut().write_all(format!("BHOST 1\n{m}").as_bytes()).await.unwrap();
+    let m = protocole::ecrire_de_bhost(&DeBhost::Machine { cle: protocole::hexa(cle.verifying_key().as_bytes()), empreinte: code.into() });
+    f.get_mut().write_all(format!("BHOST 2\n{m}").as_bytes()).await.unwrap();
     let mut ligne = String::new();
     f.read_line(&mut ligne).await.unwrap();
     let Some(DuRelais::Defi { defi }) = protocole::lire_du_relais(&ligne) else { panic!("pas de défi : {ligne}") };
@@ -220,7 +227,7 @@ async fn machine(agents: SocketAddr, code: &str, graine: u8) -> (DuRelais, BufRe
 /// Un PC tape un code : la réponse du relais.
 async fn lier(agents: SocketAddr, code: &str) -> DuRelais {
     let mut f = BufReader::new(TcpStream::connect(agents).await.unwrap());
-    f.get_mut().write_all(format!("BHOST 1\nLIER {code}\n").as_bytes()).await.unwrap();
+    f.get_mut().write_all(format!("BHOST 2\nLIER {}\n", e(code)).as_bytes()).await.unwrap();
     let mut ligne = String::new();
     timeout(Duration::from_secs(5), f.read_line(&mut ligne)).await.unwrap().unwrap();
     protocole::lire_du_relais(&ligne).expect("réponse illisible")
@@ -278,7 +285,7 @@ async fn un_pc_pilote_la_machine_par_son_code() {
     });
     // Le PC : PILOTER, puis il parle à la machine à travers le relais.
     let mut pc = BufReader::new(TcpStream::connect(agents).await.unwrap());
-    pc.get_mut().write_all(format!("BHOST 1\nPILOTER PQRS2345 {id}\n").as_bytes()).await.unwrap();
+    pc.get_mut().write_all(format!("BHOST 2\nPILOTER {} {id}\n", e("PQRS2345")).as_bytes()).await.unwrap();
     let mut ligne = String::new();
     timeout(Duration::from_secs(5), pc.read_line(&mut ligne)).await.unwrap().unwrap();
     assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Ok { adresse: id.clone() }));
@@ -288,14 +295,14 @@ async fn un_pc_pilote_la_machine_par_son_code() {
     assert_eq!(ligne, "{\"CMD\":\"LISTER\"}\n");
     // Un mauvais code ne pilote rien.
     let mut autre = BufReader::new(TcpStream::connect(agents).await.unwrap());
-    autre.get_mut().write_all(format!("BHOST 1\nPILOTER ZZZZ2345 {id}\n").as_bytes()).await.unwrap();
+    autre.get_mut().write_all(format!("BHOST 2\nPILOTER {} {id}\n", e("ZZZZ2345")).as_bytes()).await.unwrap();
     ligne.clear();
     timeout(Duration::from_secs(5), autre.read_line(&mut ligne)).await.unwrap().unwrap();
     assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Non { raison: "code".into() }));
     // Une machine éteinte (id inconnu du relais) : « absente », sans compter d'essai.
     for _ in 0..6 {
         let mut x = BufReader::new(TcpStream::connect(agents).await.unwrap());
-        x.get_mut().write_all(b"BHOST 1\nPILOTER ZZZZ2345 00000000000000ff\n").await.unwrap();
+        x.get_mut().write_all(format!("BHOST 2\nPILOTER {} 00000000000000ff\n", e("ZZZZ2345")).as_bytes()).await.unwrap();
         ligne.clear();
         timeout(Duration::from_secs(5), x.read_line(&mut ligne)).await.unwrap().unwrap();
         assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Non { raison: "absente".into() }));
@@ -350,4 +357,14 @@ async fn nom_libre_puis_rendu() {
     assert_eq!(lacher(&cle, false).await, DuRelais::Non { raison: "refus".into() });
     assert_eq!(lacher(&cle, true).await, DuRelais::Ok { adresse: "survie".into() });
     assert!(matches!(demander(agents, &libre("survie", &b)).await.0, DuRelais::Ok { .. }));
+}
+
+#[tokio::test]
+async fn ancienne_version_sans_machines() {
+    let (_, agents) = relais().await;
+    let mut f = BufReader::new(TcpStream::connect(agents).await.unwrap());
+    f.get_mut().write_all(format!("BHOST 1\nLIER {}\n", e("K7M2Q9XR")).as_bytes()).await.unwrap();
+    let mut ligne = String::new();
+    timeout(Duration::from_secs(5), f.read_line(&mut ligne)).await.unwrap().unwrap();
+    assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Non { raison: "version".into() }));
 }

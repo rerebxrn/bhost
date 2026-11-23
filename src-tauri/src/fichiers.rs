@@ -52,7 +52,7 @@ pub struct Element {
 /// Le contenu d'un dossier : les dossiers d'abord, puis les fichiers, par nom.
 pub fn lister(racine: &Path, relatif: &str) -> Result<Vec<Element>, String> {
     let dossier = chemin_sur(racine, relatif)?;
-    let entrees = fs::read_dir(&dossier).map_err(|_| "Ce dossier n'existe plus.".to_string())?;
+    let entrees = fs::read_dir(&dossier).map_err(|_| "Ce dossier n’existe plus.".to_string())?;
     let mut liste: Vec<Element> = entrees
         .flatten()
         .filter_map(|e| {
@@ -95,9 +95,9 @@ fn extension(chemin: &Path) -> String {
 /// Lit un fichier du serveur pour l'afficher.
 pub fn lire(racine: &Path, relatif: &str) -> Result<Fichier, String> {
     let chemin = chemin_sur(racine, relatif)?;
-    let meta = fs::metadata(&chemin).map_err(|_| "Ce fichier n'existe plus.".to_string())?;
+    let meta = fs::metadata(&chemin).map_err(|_| "Ce fichier n’existe plus.".to_string())?;
     if meta.is_dir() {
-        return Err("C'est un dossier.".into());
+        return Err("C’est un dossier.".into());
     }
     let (taille, modifie) = (meta.len(), millisecondes(&meta));
     let ext = extension(&chemin);
@@ -140,10 +140,10 @@ pub fn ecrire(racine: &Path, relatif: &str, texte: &str) -> Result<(), String> {
     let octets: Vec<u8> = if latin1 { texte.chars().map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?')).collect() } else { texte.into_bytes() };
     // On écrit à côté, puis on remplace : un fichier n'est jamais à moitié écrit.
     let provisoire = chemin.with_extension("bhost-tmp");
-    fs::write(&provisoire, octets).map_err(|e| format!("Impossible d'enregistrer ({e})."))?;
+    fs::write(&provisoire, octets).map_err(|e| format!("Impossible d’enregistrer ({e})."))?;
     fs::rename(&provisoire, &chemin).map_err(|e| {
         let _ = fs::remove_file(&provisoire);
-        format!("Impossible d'enregistrer ({e}).")
+        format!("Impossible d’enregistrer ({e}).")
     })
 }
 
@@ -165,7 +165,7 @@ fn nom_libre(dossier: &Path, nom: &str) -> PathBuf {
 pub fn importer(racine: &Path, relatif: &str, sources: &[PathBuf]) -> Result<usize, String> {
     let dossier = chemin_sur(racine, relatif)?;
     if !dossier.is_dir() {
-        return Err("Ce dossier n'existe plus.".into());
+        return Err("Ce dossier n’existe plus.".into());
     }
     let racine_vraie = racine.canonicalize().unwrap_or_else(|_| racine.to_path_buf());
     let mut copies = 0;
@@ -246,7 +246,7 @@ pub fn icone(source: &Path, racine: &Path) -> Result<(), String> {
     let mut ecriture = encodeur.write_header().map_err(|e| e.to_string())?;
     ecriture.write_image_data(&sortie).map_err(|e| e.to_string())?;
     ecriture.finish().map_err(|e| e.to_string())?;
-    crate::garde::ecrire_atomique(&racine.join("server-icon.png"), &png_sortie).map_err(|e| format!("Impossible d'écrire l'icône. {e}"))
+    crate::garde::ecrire_atomique(&racine.join("server-icon.png"), &png_sortie).map_err(|e| format!("Impossible d’écrire l’icône. {e}"))
 }
 
 #[cfg(test)]

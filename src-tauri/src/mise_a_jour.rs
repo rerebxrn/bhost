@@ -12,10 +12,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-/// Le dépôt GitHub des versions : « compte/dépôt ».
-const DEPOT: &str = "rerebxrn/bhost";
-/// La clé publique de signature (contenu du fichier .pub de `tauri signer generate`).
-const CLE_PUBLIQUE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc4OUE1NzJCOUJBN0E5QjMKUldTenFhZWJLMWVhZVBvV0ppS0Q4K3JrRTAyRHR5QmFDVklBU1dZUEtyYVJBcyswNm9ja3F0aS8K";
+use crate::signature::{CLE_PUBLIQUE, DEPOT};
 
 /// Où lire la dernière version.
 fn adresse() -> Option<String> {
@@ -45,7 +42,7 @@ fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
     app.updater_builder()
         .endpoints(vec![adresse])
         .and_then(|b| b.pubkey(CLE_PUBLIQUE).timeout(std::time::Duration::from_secs(30)).build())
-        .map_err(|_| "La recherche n'a pas pu démarrer.".to_string())
+        .map_err(|_| "La recherche n’a pas pu démarrer.".to_string())
 }
 
 #[cfg_attr(feature = "bureau", tauri::command)]
@@ -70,7 +67,7 @@ pub async fn chercher_mise_a_jour(app: AppHandle) -> Result<VueMaj, String> {
 #[cfg_attr(feature = "bureau", tauri::command)]
 pub async fn installer_mise_a_jour(app: AppHandle) -> Result<(), String> {
     let Some(maj) = app.state::<EtatMaj>().trouvee.lock().unwrap().clone() else {
-        return Err("Recherche d'abord la mise à jour.".into());
+        return Err("Recherche d’abord la mise à jour.".into());
     };
     let (mut recu, mut dernier) = (0u64, u8::MAX);
     let envoi = app.clone();
@@ -100,7 +97,7 @@ pub async fn installer_mise_a_jour(app: AppHandle) -> Result<(), String> {
     .await
     .map_err(|_| "Les serveurs ne se sont pas arrêtés.".to_string())?;
     // Sur Windows, install lance l'installeur et ferme BHOST : on ne revient pas ici si tout va bien.
-    maj.install(octets).map_err(|_| "L'installation n'a pas pu démarrer.".to_string())
+    maj.install(octets).map_err(|_| "L’installation n’a pas pu démarrer.".to_string())
 }
 
 #[cfg(test)]

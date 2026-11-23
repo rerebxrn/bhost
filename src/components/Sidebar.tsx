@@ -10,11 +10,11 @@ import "./Sidebar.css";
 type Props = {
   serveurs: Serveur[]; // seulement ceux de la machine choisie
   machines: Machine[]; // machines dédiées reliées (vide : pas de sélecteur)
-  machineActive: string; // « ici » (ce PC) ou l'id d'une machine dédiée
-  idActif: string | null; // null quand on n'est pas sur un serveur
+  machineActive: string; // « ici » (ce PC) ou l’id d’une machine dédiée
+  idActif: string | null; // null quand on n’est pas sur un serveur
   nouveauOuvert: boolean;
   reglagesOuverts: boolean;
-  machineOuverte: boolean; // la page « Machine » (vue d'ensemble) est affichée
+  machineOuverte: boolean; // la page « Machine » (vue d’ensemble) est affichée
   onMachine: (id: string) => void;
   onAjouterMachine: () => void;
   onVueMachine: () => void;
@@ -33,7 +33,7 @@ const ETATS: Record<Machine["etat"], string> = {
 // La barre de gauche montre une machine à la fois.
 // Sans machine dédiée : rien ne change (« Mes serveurs », comme avant).
 // Avec une machine dédiée : un sélecteur en haut ; pour une machine dédiée, son état (stockage, température…).
-// Ce PC n'affiche ni température ni stockage.
+// Ce PC n’affiche ni température ni stockage.
 export default function Sidebar(p: Props) {
   const machine = p.machines.find((m) => m.id === p.machineActive);
   const horsLigne = !!machine && machine.etat !== "en-ligne";
@@ -165,7 +165,7 @@ function Selecteur({
       <button
         ref={bouton}
         type="button"
-        className={"sm" + (ouvert ? " on" : "")}
+        className={"sel-machine" + (ouvert ? " on" : "")}
         aria-haspopup="menu"
         aria-expanded={ouvert}
         onClick={() => setOuvert(!ouvert)}
@@ -217,7 +217,7 @@ function Selecteur({
   );
 }
 
-// ---------- L'état d'une machine dédiée : stockage, mémoire, température ----------
+// ---------- L’état d’une machine dédiée : stockage, mémoire, température ----------
 
 const pct = (u: number, t: number) => (t > 0 ? Math.min(100, Math.round((u / t) * 100)) : 0);
 const go = (n: number) => (n >= 1000 ? `${nombre(n / 1000)} To` : `${Math.round(n)} Go`);

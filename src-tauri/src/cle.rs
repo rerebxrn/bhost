@@ -322,7 +322,7 @@ fn ecrire(travail: &Travail, noter: &dyn Fn(&str)) -> Result<(), String> {
     let disque = disque_de(travail.disque)?;
     // Jamais le disque de Windows, ni un disque interne : seulement une clé (USB) ou une carte SD.
     if disque.systeme || !["USB", "SD", "MMC"].iter().any(|b| disque.bus.eq_ignore_ascii_case(b)) {
-        return Err("Ce lecteur n'est pas une clé USB : BHOST ne l'efface pas.".into());
+        return Err("Ce lecteur n’est pas une clé USB : BHOST ne l’efface pas.".into());
     }
     let bloc = travail.wifi.as_deref().map(|w| w.as_bytes().to_vec());
     if let Some(b) = &bloc {
@@ -337,12 +337,12 @@ fn ecrire(travail: &Travail, noter: &dyn Fn(&str)) -> Result<(), String> {
     let efface = commande("diskpart").arg("/s").arg(&script).output();
     let _ = std::fs::remove_file(&script);
     if !efface.is_ok_and(|s| s.status.success()) {
-        return Err("Impossible d'effacer la clé. Ferme les fenêtres qui l'utilisent, puis réessaie.".into());
+        return Err("Impossible d’effacer la clé. Ferme les fenêtres qui l’utilisent, puis réessaie.".into());
     }
     let chemin = format!(r"\\.\PhysicalDrive{}", disque.numero);
-    let mut cle = std::fs::OpenOptions::new().read(true).write(true).open(&chemin).map_err(|e| format!("Impossible d'ouvrir la clé ({e})."))?;
+    let mut cle = std::fs::OpenOptions::new().read(true).write(true).open(&chemin).map_err(|e| format!("Impossible d’ouvrir la clé ({e})."))?;
     let wifi = travail.wifi_position.zip(bloc.as_deref());
-    copier(&travail.iso, &mut cle, wifi, |p| noter(&p.to_string())).map_err(|e| format!("L'écriture s'est arrêtée ({e}). Essaie une autre clé."))?;
+    copier(&travail.iso, &mut cle, wifi, |p| noter(&p.to_string())).map_err(|e| format!("L’écriture s’est arrêtée ({e}). Essaie une autre clé."))?;
     // Vider les tampons de Windows : certaines clés ne le permettent pas (l'écriture est déjà faite).
     let _ = cle.sync_all();
     drop(cle);
@@ -351,7 +351,7 @@ fn ecrire(travail: &Travail, noter: &dyn Fn(&str)) -> Result<(), String> {
     let bonne = verifier(&travail.iso, &mut relue, wifi, |p| noter(&format!("v{p}"))).map_err(|e| format!("Impossible de relire la clé ({e})."))?;
     drop(relue);
     if !bonne {
-        return Err("La clé ne garde pas ce qu'on écrit dessus. Essaie une autre clé.".into());
+        return Err("La clé ne garde pas ce qu’on écrit dessus. Essaie une autre clé.".into());
     }
     // Windows relit la clé (ses partitions BHOST OS sont de type Linux : il ne lui donne pas de lettre).
     let script = std::env::temp_dir().join(format!("bhost-diskpart-{}.txt", std::process::id()));
@@ -372,7 +372,7 @@ fn iso_telechargee(dossier: &Path) -> PathBuf {
 /// Télécharge la dernière ISO (et vérifie son empreinte). `progres` reçoit le pourcentage.
 fn telecharger(agent: &ureq::Agent, dossier: &Path, progres: &dyn Fn(u8)) -> Result<PathBuf, String> {
     use sha2::{Digest, Sha256};
-    let hors_ligne = "BHOST OS n'est pas encore en ligne. Choisis un fichier ISO.".to_string();
+    let hors_ligne = "BHOST OS n’est pas encore en ligne. Choisis un fichier ISO.".to_string();
     let attendue = crate::reseau::telecharger(agent, EMPREINTE_URL).ok().flatten().ok_or_else(|| hors_ligne.clone())?;
     let attendue = String::from_utf8_lossy(&attendue).split_whitespace().next().unwrap_or_default().to_ascii_lowercase();
     let destination = iso_telechargee(dossier);
@@ -397,7 +397,7 @@ fn telecharger(agent: &ureq::Agent, dossier: &Path, progres: &dyn Fn(u8)) -> Res
     let mut tampon = vec![0u8; 1 << 20];
     let mut recu = 0u64;
     loop {
-        let n = lecteur.read(&mut tampon).map_err(|_| "Le téléchargement s'est arrêté. Réessaie.".to_string())?;
+        let n = lecteur.read(&mut tampon).map_err(|_| "Le téléchargement s’est arrêté. Réessaie.".to_string())?;
         if n == 0 {
             break;
         }
@@ -457,7 +457,7 @@ fn ecrire_cle_maintenant(app: &crate::hote::AppHandle, agent: &ureq::Agent, doss
         let _ = app.emit("cle", Avancement { etape, pct });
     };
     if !cfg!(windows) {
-        return Err("Seulement sous Windows pour l'instant.".into());
+        return Err("Seulement sous Windows pour l’instant.".into());
     }
     let wifi_nom = wifi_nom.trim();
     let bloc = if wifi_nom.is_empty() { None } else { Some(bloc_wifi(wifi_nom, wifi_motdepasse)?) };
@@ -514,7 +514,7 @@ fn ecrire_cle_maintenant(app: &crate::hote::AppHandle, agent: &ureq::Agent, doss
     let r = resultat.trim();
     if r.is_empty() || r.trim_start_matches('v').parse::<u8>().is_ok() {
         // Permission refusée (fenêtre de Windows), ou copie arrêtée en route.
-        return Err(if fin.success() { "L'écriture ne s'est pas terminée. Réessaie.".into() } else { "Il faut accepter la fenêtre de Windows pour écrire la clé.".into() });
+        return Err(if fin.success() { "L’écriture ne s’est pas terminée. Réessaie.".into() } else { "Il faut accepter la fenêtre de Windows pour écrire la clé.".into() });
     }
     Err(resultat.trim().to_string())
 }

@@ -126,7 +126,7 @@
 .head {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-6);
 }
 
 .meta {
@@ -342,6 +342,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-6);
+}
+
+/* « Copier » : une capsule, comme la pastille et le champ à côté. */
+.addr .btn {
+  border-radius: var(--r-pill);
 }
 
 .addr label {
@@ -560,6 +565,15 @@
   bottom: calc(var(--h-dock) + 40px);
 }
 
+/* Pages sans capsule d'actions (Réglages, page Machine) : le message se pose en bas. */
+.toast.sans-dock {
+  bottom: 28px;
+}
+
+.toast.erreur svg {
+  color: var(--danger);
+}
+
 .toast > * {
   position: relative;
   z-index: 3;
@@ -585,6 +599,11 @@
   justify-content: space-between;
   gap: var(--space-10);
   min-width: 0;
+  overflow: hidden;
+}
+
+.cell > div {
+  min-width: 0;
 }
 
 .cell + .cell {
@@ -605,7 +624,7 @@
 
 /* Accueil › Ticks par seconde : « Pourquoi ça lag ? » (spark), à la place de « sur 20 ». */
 .cell .v .cell-lag {
-  margin-left: 6px;
+  margin-left: var(--space-6);
   padding: 0;
   border: 0;
   background: none;
@@ -633,7 +652,8 @@
 }
 
 .spark {
-  flex: 0 0 64px;
+  flex: 0 1 64px;
+  min-width: 0;
   width: 64px;
   height: 24px;
   color: var(--acc);
@@ -730,6 +750,42 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+/* Cinq cases : moins de place pour chaque courbe. */
+@container (max-width: 1000px) {
+  .strip.cinq .spark {
+    display: none;
+  }
+}
+
+/* Fenêtre étroite : « Pourquoi ? » au lieu de « Pourquoi ça lag ? », et le stockage en chiffres seulement. */
+.lag-court {
+  display: none;
+}
+
+@container (max-width: 900px) {
+  .strip.cinq .lag-long {
+    display: none;
+  }
+
+  .strip.cinq .lag-court {
+    display: inline;
+  }
+
+  .strip.cinq .cell-barre {
+    display: none;
+  }
+}
+
+@container (max-width: 700px) {
+  .lag-long {
+    display: none;
+  }
+
+  .lag-court {
+    display: inline;
+  }
+}
+
 .cell.cell-disque {
   align-items: center;
 }
@@ -737,5 +793,5 @@
 .cell-barre {
   flex: 0 1 64px;
   min-width: 36px;
-  margin-top: 14px;
+  margin-top: var(--space-14);
 }

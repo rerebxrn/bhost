@@ -143,12 +143,12 @@ const CHERCHER_BOX: Duration = Duration::from_secs(4);
 const GARDER_BOX: Duration = Duration::from_secs(10 * 60);
 const PORT_MINECRAFT: u16 = 25565;
 
-pub const PAS_DE_BOX: &str = "Ta box ne répond pas. Active l'UPnP dans ses réglages.";
-pub const REFUS: &str = "Ta box refuse d'ouvrir le port. Active l'UPnP dans ses réglages.";
-pub const PARTAGEE: &str = "Ta box partage son adresse avec d'autres (CGNAT). Pas possible pour l'instant.";
-pub const DOUBLE: &str = "Deux box à la suite : la première bloque. Pas possible pour l'instant.";
-pub const SERVER_IP: &str = "Le réglage server-ip bloque l'accès. Vide-le dans Fichiers.";
-pub const PANNE: &str = "Ta box n'a pas répondu. Nouvel essai dans 1 min.";
+pub const PAS_DE_BOX: &str = "Ta box ne répond pas. Active l’UPnP dans ses réglages.";
+pub const REFUS: &str = "Ta box refuse d’ouvrir le port. Active l’UPnP dans ses réglages.";
+pub const PARTAGEE: &str = "Ta box partage son adresse avec d’autres (CGNAT). Pas possible pour l’instant.";
+pub const DOUBLE: &str = "Deux box à la suite : la première bloque. Pas possible pour l’instant.";
+pub const SERVER_IP: &str = "Le réglage server-ip bloque l’accès. Vide-le dans Fichiers.";
+pub const PANNE: &str = "Ta box n’a pas répondu. Nouvel essai dans 1 min.";
 pub const BEDROCK_RELAIS: &str = "Pas encore possible par le relais BHOST.";
 
 /// Ce qu'est l'adresse que la box a sur Internet.

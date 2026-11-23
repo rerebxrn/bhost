@@ -3,8 +3,8 @@
 /* Le petit bouton plein « Inviter » (accueil, onglet Joueurs). */
 .pill-acc {
   flex: none;
-  height: 26px;
-  padding: 0 10px;
+  height: var(--h-control);
+  padding: 0 var(--space-10);
   border: 0;
   border-radius: var(--r-pill);
   background: var(--acc);
@@ -78,9 +78,9 @@
 .inv-h {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-10);
   height: 52px;
-  padding: 0 10px 0 18px;
+  padding: 0 var(--space-10) 0 18px;
   font: var(--f-titre-3);
   color: var(--text);
 }
@@ -111,13 +111,13 @@
 }
 
 .inv-intro {
-  margin: -6px 18px 4px;
+  margin: -6px 18px var(--space-4);
   font: var(--f-legende);
   color: var(--text2);
 }
 
 .inv-sec2 {
-  margin: 12px 18px 6px;
+  margin: 12px 18px var(--space-6);
   font: var(--f-legende);
   font-weight: 600;
   color: var(--text2);
@@ -127,10 +127,10 @@
 .inv-box {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 0 14px;
+  gap: var(--space-10);
+  margin: 0 var(--space-14);
   min-height: 44px;
-  padding: 6px 6px 6px 12px;
+  padding: var(--space-6) var(--space-6) var(--space-6) 12px;
   border-radius: 12px;
   background: rgba(var(--g-rgb), 0.5);
   box-shadow: inset 0 0 0 1px var(--sep);
@@ -183,17 +183,17 @@
 /* Ajouter à la liste blanche */
 .inv-wl {
   display: flex;
-  gap: 8px;
-  margin: 0 14px;
+  gap: var(--space-8);
+  margin: 0 var(--space-14);
 }
 
 .inv-wl label {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   height: 30px;
-  padding: 0 10px;
+  padding: 0 var(--space-10);
   border-radius: var(--r-ctl);
   background: rgba(var(--g-rgb), 0.55);
   box-shadow: inset 0 0 0 1px var(--sep);
@@ -241,7 +241,7 @@
   z-index: 9;
   width: 336px;
   border-radius: var(--r-panel);
-  padding: 14px 14px 14px 16px;
+  padding: var(--space-14) var(--space-14) var(--space-14) var(--space-16);
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -282,7 +282,7 @@
 }
 
 .req p {
-  margin: 2px 22px 10px 0;
+  margin: var(--space-2) var(--space-22) var(--space-10) 0;
   font: var(--f-corps);
   line-height: 1.4;
   color: var(--text);
@@ -290,12 +290,12 @@
 
 .req .btns {
   display: flex;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .req .btns button {
   height: 34px;
-  padding: 0 16px;
+  padding: 0 var(--space-16);
   border: 0;
   border-radius: var(--r-pill);
   font: var(--f-corps-fort);

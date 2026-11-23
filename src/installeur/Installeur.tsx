@@ -1,12 +1,12 @@
-// BHOST Setup : l'installeur de BHOST (setup/). La fenêtre n'est que la plaque de verre du premier lancement.
-// Bienvenue → Dossier → Installation → Prêt. Derrière, l'installeur Windows de BHOST tourne sans fenêtre :
+// BHOST Setup : l’installeur de BHOST (setup/). La fenêtre n’est que la plaque de verre du premier lancement.
+// Bienvenue → Dossier → Installation → Prêt. Derrière, l’installeur Windows de BHOST tourne sans fenêtre :
 // les mises à jour et la désinstallation (Paramètres de Windows) marchent comme avant.
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
-import { IconArrowRight, IconChevronLeft, IconCircleCheckFilled } from "@tabler/icons-react";
+import { IconAlertCircleFilled, IconArrowRight, IconChevronLeft, IconCircleCheckFilled } from "@tabler/icons-react";
 import { Tuile } from "../pages/PremierLancement";
 import "../App.css";
 import "../components/TitleBar.css";
@@ -32,7 +32,7 @@ export default function Installeur() {
   useEffect(() => {
     invoke<Infos>("infos").then(setInfos).catch(() => {});
     const avancement = listen<number>("avancement", (e) => setPct(e.payload));
-    // Pendant l'installation, on ne ferme pas (Alt+F4 compris).
+    // Pendant l’installation, on ne ferme pas (Alt+F4 compris).
     const fermeture = fenetre.onCloseRequested((e) => {
       if (enCours.current) e.preventDefault();
     });
@@ -113,10 +113,10 @@ export default function Installeur() {
 
       <section className="ins-panneau params" key={etape} data-tauri-drag-region>
         <header className="pl-tete pl-entree" data-tauri-drag-region>
-          {etape === "pret" ? (
-            <span className="ins-ok" aria-hidden>
+          {etape === "pret" || etape === "erreur" ? (
+            <span className={"ins-ok" + (etape === "erreur" ? " rate" : "")} aria-hidden>
               <Tuile />
-              <IconCircleCheckFilled size={24} />
+              {etape === "erreur" ? <IconAlertCircleFilled size={24} /> : <IconCircleCheckFilled size={24} />}
             </span>
           ) : (
             <Tuile />

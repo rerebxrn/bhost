@@ -197,7 +197,20 @@ impl Veilleur {
                         // Délais courts : un visiteur qui ne dit rien ne bloque pas l'écoute longtemps.
                         let _ = flux.set_read_timeout(Some(Duration::from_secs(2)));
                         let _ = flux.set_write_timeout(Some(Duration::from_secs(2)));
-                        if let Ok(Visite::Connexion(pseudo)) = accueillir(&mut flux, &infos) {
+                        // 5 s en tout par visiteur : un octet toutes les 1,9 s ne garde pas l'écoute pour lui.
+                        let fini = Arc::new(AtomicBool::new(false));
+                        if let Ok(copie) = flux.try_clone() {
+                            let fini = fini.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(Duration::from_secs(5));
+                                if !fini.load(Ordering::SeqCst) {
+                                    let _ = copie.shutdown(std::net::Shutdown::Both);
+                                }
+                            });
+                        }
+                        let visite = accueillir(&mut flux, &infos);
+                        fini.store(true, Ordering::SeqCst);
+                        if let Ok(Visite::Connexion(pseudo)) = visite {
                             qui = Some(pseudo);
                             break;
                         }
@@ -307,7 +320,7 @@ mod tests {
 
     #[test]
     fn s_arrete_et_libere_le_port() {
-        let veilleur = Veilleur::lancer(0, infos(), |_| panic!("personne n'est entré")).unwrap();
+        let veilleur = Veilleur::lancer(0, infos(), |_| panic!("personne n’est entré")).unwrap();
         let port = veilleur.port;
         veilleur.arreter();
         assert!(TcpListener::bind(("0.0.0.0", port)).is_ok());

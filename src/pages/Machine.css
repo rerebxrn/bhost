@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-top: 4px;
+  margin-top: var(--space-4);
   font: var(--f-sous-titre);
   color: var(--text);
 }
@@ -15,13 +15,13 @@
 
 .surf.strip.ma-strip {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 8px;
+  margin-bottom: var(--space-8);
 }
 
 .ma-strip .cell-disque .sm-barre {
   flex: 0 1 64px;
   min-width: 36px;
-  margin-top: 14px;
+  margin-top: var(--space-14);
 }
 
 .ma-strip .v.ma-tiede {
@@ -47,7 +47,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: var(--space-6);
   width: 150px;
 }
 

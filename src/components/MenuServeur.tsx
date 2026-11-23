@@ -10,7 +10,7 @@ type Props = {
   onOuvrir: () => void;
   onRenommer: () => void;
   onApparence: () => void;
-  onDossier: () => void;
+  onDossier?: () => void; // absent : serveur d’une machine dédiée (son dossier n’est pas sur ce PC)
   onDupliquer: () => void;
   onRetirer: () => void;
   onSupprimer: () => void;
@@ -24,7 +24,7 @@ export default function MenuServeur({ x, y, nom, onFermer, onOuvrir, onRenommer,
   const menu = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState({ x, y });
 
-  // S'il dépasse en bas ou à droite, on le décale pour qu'il reste dans la fenêtre.
+  // S’il dépasse en bas ou à droite, on le décale pour qu’il reste dans la fenêtre.
   useLayoutEffect(() => {
     const el = menu.current;
     if (!el) return;
@@ -46,7 +46,7 @@ export default function MenuServeur({ x, y, nom, onFermer, onOuvrir, onRenommer,
     };
   }, [onFermer]);
 
-  // Clavier : Échap ferme, les flèches passent d'un choix à l'autre.
+  // Clavier : Échap ferme, les flèches passent d’un choix à l’autre.
   const touche = (e: KeyboardEvent) => {
     if (e.key === "Escape") return onFermer();
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -69,7 +69,7 @@ export default function MenuServeur({ x, y, nom, onFermer, onOuvrir, onRenommer,
         onContextMenu={(e) => {
           e.preventDefault();
           onFermer();
-          // Clic droit sur un autre serveur : son menu s'ouvre tout de suite (pas besoin d'un 2e clic).
+          // Clic droit sur un autre serveur : son menu s’ouvre tout de suite (pas besoin d’un 2e clic).
           const { clientX, clientY } = e;
           const sous = document.elementsFromPoint(clientX, clientY).find((el) => !el.classList.contains("ctx-catch") && !menu.current?.contains(el));
           const serveur = sous?.closest(".srv");
@@ -102,23 +102,25 @@ export default function MenuServeur({ x, y, nom, onFermer, onOuvrir, onRenommer,
           role="menuitem"
           className="pm-item"
           disabled={allume}
-          title={allume ? "Arrête-le d'abord" : undefined}
+          title={allume ? "Arrête-le d’abord" : undefined}
           onClick={choisir(onDupliquer)}
         >
           <IconCopy size={16} stroke={2} aria-hidden />
           Dupliquer
         </button>
-        <button type="button" role="menuitem" className="pm-item" onClick={choisir(onDossier)}>
-          <IconFolder size={16} stroke={2} aria-hidden />
-          Ouvrir le dossier
-        </button>
+        {onDossier && (
+          <button type="button" role="menuitem" className="pm-item" onClick={choisir(onDossier)}>
+            <IconFolder size={16} stroke={2} aria-hidden />
+            Ouvrir le dossier
+          </button>
+        )}
         <div className="pm-sep" role="separator" />
         <button
           type="button"
           role="menuitem"
           className="pm-item"
           disabled={allume}
-          title={allume ? "Arrête-le d'abord" : undefined}
+          title={allume ? "Arrête-le d’abord" : undefined}
           onClick={choisir(onRetirer)}
         >
           <IconUnlink size={16} stroke={2} aria-hidden />
@@ -129,7 +131,7 @@ export default function MenuServeur({ x, y, nom, onFermer, onOuvrir, onRenommer,
           role="menuitem"
           className="pm-item danger"
           disabled={allume}
-          title={allume ? "Arrête-le d'abord" : undefined}
+          title={allume ? "Arrête-le d’abord" : undefined}
           onClick={choisir(onSupprimer)}
         >
           <IconTrash size={16} stroke={2} aria-hidden />

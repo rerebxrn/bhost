@@ -76,6 +76,12 @@ cable_branche() {
 	return 1
 }
 
+# Un texte sur `n` caractères (pas octets : « Cafe » et « Café » prennent la même place), coupé ou complété.
+cadrer() {
+	local t=${1:0:$2}
+	printf '%s%*s' "$t" $(($2 - ${#t})) ''
+}
+
 ipv4() { [[ $1 =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] && ((BASH_REMATCH[1] <= 255 && BASH_REMATCH[2] <= 255 && BASH_REMATCH[3] <= 255 && BASH_REMATCH[4] <= 255)); }
 
 # Câble branché mais pas d'adresse (pas de DHCP : souvent un VPS ou un réseau d'entreprise) : l'IP fixe, à la main.
@@ -166,13 +172,33 @@ reseau() {
 			ssid=${ssid//\\:/:}
 			verrou=""
 			[ -n "$securite" ] && [ "$securite" != "--" ] && verrou=" ·  protégé"
-			args+=("$((i + 1))" "$(printf '%-32.32s %3s %%%s' "$ssid" "$signal" "$verrou")")
+			args+=("$((i + 1))" "$(cadrer "$ssid" 32) $(printf '%3s %%%s' "$signal" "$verrou")")
 		done
-		args+=("r" "Actualiser la liste" "c" "J'ai branché un câble")
+		args+=("r" "Actualiser la liste" "m" "Réseau caché" "c" "J'ai branché un câble" "s" "Continuer sans réseau")
 		choix=$(demander --title "Choisis ton Wi-Fi" --nocancel --menu "La machine a besoin d'Internet pour être pilotée depuis BHOST." 22 72 12 "${args[@]}") || continue
 		case "$choix" in
 			r) continue ;;
-			c) nm-online -q -t 10 >/dev/null 2>&1; continue ;;
+			s) note "réseau : aucun"; return ;;
+			c)
+				nm-online -q -t 10 >/dev/null 2>&1
+				if ! en_ligne && carte=$(cable_branche); then
+					nm-online -q -t 10 >/dev/null 2>&1
+					en_ligne || ip_fixe "$carte"
+				fi
+				continue
+				;;
+			m)
+				ssid=$(demander --title "Réseau caché" --cancel-button "Retour" --inputbox "Nom du Wi-Fi" 10 64) || continue
+				[ -n "$ssid" ] || continue
+				mdp=$(demander --title "$ssid" --cancel-button "Retour" --passwordbox "Mot de passe (vide s'il n'y en a pas)" 10 64) || continue
+				if [ -n "$mdp" ]; then
+					nmcli device wifi connect "$ssid" password "$mdp" hidden yes >/dev/null 2>&1
+				else
+					nmcli device wifi connect "$ssid" hidden yes >/dev/null 2>&1
+				fi
+				en_ligne || dire "$ssid" "Connexion impossible. Vérifie le nom et le mot de passe."
+				continue
+				;;
 		esac
 		IFS=: read -r signal securite ssid <<<"${reseaux[choix - 1]}"
 		ssid=${ssid//\\:/:}
@@ -254,7 +280,8 @@ installer() {
 		unsquashfs -f -d "$CIBLE" -percentage "$MEDIA/bhost/systeme.squashfs" 2>/dev/null |
 			awk '/^[0-9]+$/ { print int(8 + $1 * 0.77); fflush() }'
 		[ -x "$CIBLE/usr/local/bin/bhost-agent" ] || exit 15
-		k=$(ls "$CIBLE/usr/lib/modules" | head -1)
+		# Le noyau le plus récent (celui de la clé : construire.sh prend le même).
+		k=$(ls "$CIBLE/usr/lib/modules" | sort -V | tail -1)
 		cp "$MEDIA/boot/vmlinuz" "$CIBLE/boot/vmlinuz-$k" || exit 16
 		cp "$MEDIA/boot/initrd" "$CIBLE/boot/initrd.img-$k" || exit 16
 		ln -sf "vmlinuz-$k" "$CIBLE/boot/vmlinuz"
@@ -278,6 +305,11 @@ installer() {
 		[ -d /sys/firmware/efi/efivars ] && mount --bind /sys/firmware/efi/efivars "$CIBLE/sys/firmware/efi/efivars"
 		chroot "$CIBLE" grub-install --target=i386-pc "$DISQUE" >&2 || exit 17
 		chroot "$CIBLE" grub-install --target=x86_64-efi --efi-directory=/boot/efi --uefi-secure-boot --removable --no-nvram >&2 || exit 17
+		# Le GRUB signé (Secure Boot) cherche son menu dans /boot/grub de la partition EFI : un petit relais
+		# vers le vrai menu, sur la partition du système (sans lui : invite « grub> » une fois la clé retirée).
+		mkdir -p "$CIBLE/boot/efi/boot/grub" "$CIBLE/boot/efi/EFI/BOOT"
+		printf 'search.fs_uuid %s root\nset prefix=($root)/boot/grub\nconfigfile $prefix/grub.cfg\n' "$(blkid -s UUID -o value "$racine")" |
+			tee "$CIBLE/boot/efi/boot/grub/grub.cfg" >"$CIBLE/boot/efi/EFI/BOOT/grub.cfg"
 		echo 95
 		chroot "$CIBLE" update-grub >&2 || exit 18
 		date -Iseconds >"$CIBLE/boot/bhost-installe"
@@ -291,11 +323,25 @@ installer() {
 	[ "$code" -eq 0 ] || echec "L'installation s'est arrêtée (étape $code)."
 }
 
+# Le mot de passe du Wi-Fi ne reste pas sur la clé : sa zone (bhost/wifi.txt, 4 096 octets) est remise à vide.
+effacer_wifi_cle() {
+	local disque position
+	[ -f "$MEDIA/bhost/wifi.txt" ] && grep -q '^nom=.' "$MEDIA/bhost/wifi.txt" || return 0
+	disque=$(disque_de_la_cle | head -1)
+	[ -n "$disque" ] && [ -b "/dev/$disque" ] || return 0
+	position=$(grep -obUa '# BHOST-WIFI v1' "/dev/$disque" 2>/dev/null | head -1 | cut -d: -f1)
+	[ -n "$position" ] || return 0
+	{ printf '# BHOST-WIFI v1\nnom=\nmotdepasse=\n'; head -c 4063 /dev/zero | tr '\0' '\n'; } |
+		dd of="/dev/$disque" bs=4096 seek="$position" oflag=seek_bytes conv=notrunc status=none 2>/dev/null && sync
+	note "Wi-Fi effacé de la clé"
+}
+
 # ---------- C'est parti ----------
 note "début"
 reseau
 choisir_disque
 installer
+effacer_wifi_cle
 note "fin"
 
 # Éjecter le DVD (machine virtuelle) ; une clé USB, il faut la retirer.

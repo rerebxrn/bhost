@@ -59,7 +59,7 @@ export default function ChangerVersion({ serveur, onFini, onFermer }: Props) {
     changerVersion(serveur.id, logiciel, version)
       .then(onFini)
       .catch((e) => {
-        setErreur(typeof e === "string" ? e : "Ça n'a pas marché.");
+        setErreur(typeof e === "string" ? e : "Ça n’a pas marché.");
         setEnvoi(false);
       });
   };

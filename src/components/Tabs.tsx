@@ -5,15 +5,15 @@ type Props<T extends string> = {
   onglets: { id: T; nom: string; off?: boolean }[]; // off : onglet grisé (étape pas encore atteinte)
   actif: T;
   onChoisir: (id: T) => void;
-  etiquette?: string; // pour les lecteurs d'écran
+  etiquette?: string; // pour les lecteurs d’écran
 };
 
 type Tirage = { x0: number; dernier: number; quand: number; bouge: boolean; x: number };
 
-// Les onglets d'un serveur (et les étapes de l'assistant) : une capsule de verre qui flotte en haut du contenu.
-// La « goutte » (le fond de l'onglet actif) glisse d'un onglet à l'autre.
-// On peut aussi l'attraper et la tirer : elle s'étire selon la vitesse,
-// puis s'aimante à l'onglet le plus proche.
+// Les onglets d’un serveur (et les étapes de l’assistant) : une capsule de verre qui flotte en haut du contenu.
+// La « goutte » (le fond de l’onglet actif) glisse d’un onglet à l’autre.
+// On peut aussi l’attraper et la tirer : elle s’étire selon la vitesse,
+// puis s’aimante à l’onglet le plus proche.
 export default function Tabs<T extends string>({ onglets, actif, onChoisir, etiquette = "Sections du serveur" }: Props<T>) {
   const rangee = useRef<HTMLDivElement>(null);
   const goutteEl = useRef<HTMLSpanElement>(null);
@@ -21,7 +21,7 @@ export default function Tabs<T extends string>({ onglets, actif, onChoisir, etiq
   const [goutte, setGoutte] = useState({ x: 0, largeur: 0 });
   const noms = onglets.map((o) => o.nom).join("|");
 
-  // On mesure l'onglet actif pour poser la goutte dessus.
+  // On mesure l’onglet actif pour poser la goutte dessus.
   // On remesure si la barre change de taille (police chargée, fenêtre redimensionnée).
   useLayoutEffect(() => {
     const el = rangee.current;
@@ -72,7 +72,7 @@ export default function Tabs<T extends string>({ onglets, actif, onChoisir, etiq
     const g = goutteEl.current;
     tirage.current = null;
     if (!t || !t.bouge || !el || !g) return;
-    // On cherche l'onglet dont le centre est le plus proche du centre de la goutte.
+    // On cherche l’onglet dont le centre est le plus proche du centre de la goutte.
     const centre = t.x + goutte.largeur / 2;
     let choix = actif;
     let ecart = Infinity;

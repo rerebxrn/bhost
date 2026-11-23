@@ -28,7 +28,7 @@ export default function Reinitialiser({ id, monde, onFini, onFermer }: Props) {
     reinitialiserMonde(id, monde.dossier, meme)
       .then(onFini)
       .catch((e) => {
-        setErreur(typeof e === "string" ? e : "Ça n'a pas marché.");
+        setErreur(typeof e === "string" ? e : "Ça n’a pas marché.");
         setEnvoi(false);
       });
   };

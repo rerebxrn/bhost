@@ -347,7 +347,12 @@ fn vue(app: &AppHandle, c: &Contexte) -> VueExtensions {
             let alerte = v.and_then(|v| {
                 if !version.is_empty() && !v.jeux.is_empty() && !v.jeux.iter().any(|j| j == version) {
                     Some(format!("Pas prévu pour {version}."))
-                } else if !v.loaders.is_empty() && !v.loaders.iter().any(|l| loaders.contains(&l.as_str())) {
+                } else if !v.loaders.is_empty()
+                    && !v.loaders.iter().any(|l| loaders.contains(&l.as_str()))
+                    // Le catalogue ne rend qu'une version par fichier : un fichier pour plusieurs logiciels
+                    // (ViaVersion) peut être rangé sous un autre. Ce que dit le fichier lui-même compte aussi.
+                    && !local.charge.iter().any(|l| loaders.contains(&l.as_str()))
+                {
                     Some(format!("Pas prévu pour {logiciel}."))
                 } else {
                     None
@@ -460,7 +465,7 @@ fn change(app: &AppHandle, id: &str) {
 
 /// Un fichier qui existe vraiment dans le dossier (le nom vient de l'interface).
 fn trouver(c: &Contexte, fichier: &str) -> Result<Fichier, String> {
-    ext::lister(&c.dossier, c.genre).into_iter().find(|f| f.nom == fichier).ok_or_else(|| "Ce fichier n'existe plus.".to_string())
+    ext::lister(&c.dossier, c.genre).into_iter().find(|f| f.nom == fichier).ok_or_else(|| "Ce fichier n’existe plus.".to_string())
 }
 
 #[cfg_attr(feature = "bureau", tauri::command)]
@@ -522,9 +527,9 @@ fn telecharger_version(app: &AppHandle, v: &VersionMr) -> Result<Vec<u8>, String
 
 /// Écrit un fichier téléchargé dans le dossier. Renvoie son nom.
 fn poser(c: &Contexte, v: &VersionMr, octets: &[u8], coupe: bool) -> Result<String, String> {
-    std::fs::create_dir_all(&c.dossier).map_err(|_| "Le dossier n'a pas pu être créé.".to_string())?;
+    std::fs::create_dir_all(&c.dossier).map_err(|_| "Le dossier n’a pas pu être créé.".to_string())?;
     let nom = if coupe { format!("{}.disabled", v.fichier.nom) } else { v.fichier.nom.clone() };
-    std::fs::write(c.dossier.join(&nom), octets).map_err(|_| "Windows refuse d'écrire le fichier.".to_string())?;
+    std::fs::write(c.dossier.join(&nom), octets).map_err(|_| "Windows refuse d’écrire le fichier.".to_string())?;
     Ok(nom)
 }
 
@@ -731,7 +736,7 @@ pub async fn desinstaller_extension(app: AppHandle, id: String, fichier: String,
         let c = contexte(&app, &id, genre.as_deref())?;
         let f = trouver(&c, &fichier)?;
         avant_de_retirer(&app, &c, &f, forcer.unwrap_or(false))?;
-        crate::corbeille::jeter(&c.dossier.join(&f.nom)).map_err(|_| "Windows refuse : arrête le serveur d'abord.".to_string())?;
+        crate::corbeille::jeter(&c.dossier.join(&f.nom)).map_err(|_| "Fichier occupé : arrête le serveur d’abord.".to_string())?;
         {
             let etat = app.state::<Etat>();
             let mut liens = etat.catalogue.liens.lock().unwrap();
@@ -797,8 +802,8 @@ fn telecharger_geysermc(app: &AppHandle, c: &Contexte, projet: &str) -> Result<S
     if obtenu != sha {
         return Err("Le fichier téléchargé est abîmé. Réessaie.".into());
     }
-    std::fs::create_dir_all(&c.dossier).map_err(|_| "Le dossier n'a pas pu être créé.".to_string())?;
-    std::fs::write(c.dossier.join(&nom), &octets).map_err(|_| "Windows refuse d'écrire le fichier.".to_string())?;
+    std::fs::create_dir_all(&c.dossier).map_err(|_| "Le dossier n’a pas pu être créé.".to_string())?;
+    std::fs::write(c.dossier.join(&nom), &octets).map_err(|_| "Windows refuse d’écrire le fichier.".to_string())?;
     Ok(nom)
 }
 
@@ -848,7 +853,7 @@ pub async fn regler_bedrock(app: AppHandle, id: String, actif: bool) -> Result<V
                         let mut via = contexte(&app, &id, Some(genre.id()))?;
                         via.loaders = Some(vec!["paper"]);
                         if installer(&app, &via, crate::bedrock::VIAVERSION).is_err() {
-                            note = Some("ViaVersion n'a pas pu être installé : les joueurs Bedrock ne pourront peut-être pas entrer.".to_string());
+                            note = Some("ViaVersion n’a pas pu être installé : les joueurs Bedrock ne pourront peut-être pas entrer.".to_string());
                         }
                     }
                 }
@@ -991,7 +996,7 @@ fn mettre_a_jour(app: &AppHandle, c: &Contexte, fichiers: &[String]) -> (Vec<Str
                 if std::fs::remove_file(c.dossier.join(&f.nom)).is_err() {
                     // L'ancien est bloqué (serveur allumé) : on retire le nouveau pour ne pas avoir les deux.
                     let _ = std::fs::remove_file(c.dossier.join(&nouveau));
-                    return Err("Windows refuse : arrête le serveur d'abord.".into());
+                    return Err("Windows refuse : arrête le serveur d’abord.".into());
                 }
                 let etat = app.state::<Etat>();
                 let mut liens = etat.catalogue.liens.lock().unwrap();

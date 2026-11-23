@@ -193,7 +193,7 @@ pub fn nom_actif(nom: &str) -> &str {
 pub fn basculer(dossier: &Path, nom: &str, actif: bool) -> Result<String, String> {
     let nouveau = if actif { nom_actif(nom).to_string() } else { format!("{}{COUPE}", nom_actif(nom)) };
     if nouveau != nom {
-        fs::rename(dossier.join(nom), dossier.join(&nouveau)).map_err(|_| "Windows refuse : arrête le serveur d'abord.".to_string())?;
+        fs::rename(dossier.join(nom), dossier.join(&nouveau)).map_err(|_| "Windows refuse : arrête le serveur d’abord.".to_string())?;
     }
     Ok(nouveau)
 }
@@ -210,6 +210,9 @@ pub struct InfosLocales {
     pub nom: Option<String>,
     pub version: Option<String>,
     pub description: Option<String>,
+    /// Les logiciels que le fichier dit savoir faire tourner (« paper », « fabric »…), d'après ce qu'il contient.
+    /// Un même fichier peut en avoir plusieurs (ViaVersion : plugin.yml et fabric.mod.json).
+    pub charge: Vec<String>,
 }
 
 /// La valeur d'une clé de premier niveau dans un YAML simple (plugin.yml) : « name: WorldEdit ».
@@ -286,6 +289,24 @@ pub fn infos_locales(chemin: &Path) -> InfosLocales {
 /// Lit le nom, la version et la description écrits dans une archive (.jar ou .zip).
 fn infos_archive(f: impl Read + std::io::Seek) -> InfosLocales {
     let Ok(mut archive) = zip::ZipArchive::new(f) else { return InfosLocales::default() };
+    let mut charge = Vec::new();
+    for (fichier, logiciels) in [
+        ("plugin.yml", &["bukkit", "spigot", "paper", "purpur", "folia"][..]),
+        ("paper-plugin.yml", &["paper", "purpur", "folia"][..]),
+        ("fabric.mod.json", &["fabric", "quilt"][..]),
+        ("quilt.mod.json", &["quilt"][..]),
+        ("META-INF/mods.toml", &["forge"][..]),
+        ("META-INF/neoforge.mods.toml", &["neoforge"][..]),
+    ] {
+        if archive.index_for_name(fichier).is_some() {
+            charge.extend(logiciels.iter().map(|l| l.to_string()));
+        }
+    }
+    let infos = infos_archive_texte(&mut archive);
+    InfosLocales { charge, ..infos }
+}
+
+fn infos_archive_texte<R: Read + std::io::Seek>(archive: &mut zip::ZipArchive<R>) -> InfosLocales {
     let mut lire = |nom: &str| -> Option<String> {
         let mut entree = archive.by_name(nom).ok()?;
         let mut texte = String::new();
@@ -293,15 +314,15 @@ fn infos_archive(f: impl Read + std::io::Seek) -> InfosLocales {
         Some(texte)
     };
     if let Some(t) = lire("plugin.yml").or_else(|| lire("paper-plugin.yml")) {
-        return InfosLocales { id: yaml(&t, "name"), nom: yaml(&t, "name"), version: yaml(&t, "version"), description: yaml(&t, "description") };
+        return InfosLocales { id: yaml(&t, "name"), nom: yaml(&t, "name"), version: yaml(&t, "version"), description: yaml(&t, "description"), ..Default::default() };
     }
     if let Some(t) = lire("fabric.mod.json") {
         let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
         let champ = |c: &str| v.get(c).and_then(|x| x.as_str()).and_then(propre);
-        return InfosLocales { id: champ("id"), nom: champ("name"), version: champ("version"), description: champ("description") };
+        return InfosLocales { id: champ("id"), nom: champ("name"), version: champ("version"), description: champ("description"), ..Default::default() };
     }
     if let Some(t) = lire("META-INF/neoforge.mods.toml").or_else(|| lire("META-INF/mods.toml")) {
-        return InfosLocales { id: toml(&t, "modId"), nom: toml(&t, "displayName"), version: toml(&t, "version"), description: toml(&t, "description") };
+        return InfosLocales { id: toml(&t, "modId"), nom: toml(&t, "displayName"), version: toml(&t, "version"), description: toml(&t, "description"), ..Default::default() };
     }
     if let Some(t) = lire("pack.mcmeta") {
         return infos_mcmeta(&t);
@@ -1096,7 +1117,7 @@ mod tests {
         let i = infos_locales(&d.join("WorldEdit.jar"));
         assert_eq!(
             i,
-            InfosLocales { id: Some("WorldEdit".into()), nom: Some("WorldEdit".into()), version: Some("7.3.9".into()), description: Some("Construire vite".into()) }
+            InfosLocales { id: Some("WorldEdit".into()), nom: Some("WorldEdit".into()), version: Some("7.3.9".into()), description: Some("Construire vite".into()), charge: ["bukkit", "spigot", "paper", "purpur", "folia"].map(String::from).to_vec() }
         );
         assert_eq!(sha1_fichier(&d.join("notes.txt")).as_deref(), Some("11f6ad8ec52a2984abaafd7c3b516503785c2072"));
         let _ = fs::remove_dir_all(&d);

@@ -8,6 +8,7 @@ mod acces;
 #[cfg(not(feature = "bureau"))]
 pub mod agent;
 mod chiffre;
+mod appairage;
 #[cfg(not(feature = "bureau"))]
 pub mod pilotage;
 mod hote;
@@ -27,6 +28,10 @@ mod extensions;
 mod fiche;
 mod fichiers;
 mod garde;
+mod modpack;
+mod signature;
+#[cfg(not(feature = "bureau"))]
+mod maj_agent;
 #[cfg(feature = "bureau")]
 mod icone;
 mod icone_jeu;
@@ -579,13 +584,13 @@ fn java_d_un_programme(programme: &Path) -> Option<u32> {
 pub(crate) fn lancer_serveur(app: &AppHandle, id: &str) -> Result<(), String> {
     let etat = app.state::<Etat>();
     let Some(serveur) = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned() else {
-        return Err("Ce serveur n'existe plus.".into());
+        return Err("Ce serveur n’existe plus.".into());
     };
     if etat.vivants.lock().unwrap().contains_key(id) {
         return Err("Ce serveur tourne déjà.".into());
     }
     if etat.travaux.lock().unwrap().contains(id) {
-        return Err("Attends la fin de l'opération en cours.".into());
+        return Err("Attends la fin de l’opération en cours.".into());
     }
     // Machine dédiée : pas de démarrage si le stockage max est atteint (la carte d'avant reste).
     stockage::verifier_demarrage(&etat, &serveur)?;
@@ -596,7 +601,7 @@ pub(crate) fn lancer_serveur(app: &AppHandle, id: &str) -> Result<(), String> {
     let version = match choix_java(&serveur) {
         ChoixJava::Fichier(programme) => {
             if !Path::new(&programme).is_file() {
-                return Err("Le Java choisi n'existe plus. Change-le dans Paramètres.".into());
+                return Err("Le Java choisi n’existe plus. Change-le dans Paramètres.".into());
             }
             return demarrer_avec(app, id, &serveur, &programme);
         }
@@ -627,7 +632,7 @@ pub(crate) fn lancer_serveur(app: &AppHandle, id: &str) -> Result<(), String> {
             }
             Err(erreur) => {
                 // Pas de Java de BHOST : on tente quand même celui du PC.
-                dire_ligne(&app, &id, &format!("[BHOST!] Java {version} n'a pas pu être installé : {erreur}"));
+                dire_ligne(&app, &id, &format!("[BHOST!] Java {version} n’a pas pu être installé : {erreur}"));
                 dire_ligne(&app, &id, "[BHOST] Essai avec le Java de ton PC.");
                 "java".to_string()
             }
@@ -823,7 +828,7 @@ fn installer_java_serveur(app: AppHandle, id: String, version: u32) -> Result<()
     {
         let etat = app.state::<Etat>();
         let mut liste = etat.liste.lock().unwrap();
-        let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+        let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
         if java_auto(serveur) != Some(version) {
             serveur.java_choix = Some(version.to_string());
             serveurs::enregistrer(&etat.fichier, &liste)?;
@@ -936,7 +941,7 @@ fn lire_reglages(etat: &Etat) -> ReglagesBhost {
 
 fn ecrire_reglages(etat: &Etat, reglages: &ReglagesBhost) -> Result<(), String> {
     let texte = serde_json::to_vec_pretty(reglages).map_err(|e| e.to_string())?;
-    garde::ecrire_atomique(&etat.dossier.join("reglages.json"), &texte).map_err(|_| "Impossible d'enregistrer le réglage.".to_string())
+    garde::ecrire_atomique(&etat.dossier.join("reglages.json"), &texte).map_err(|_| "Impossible d’enregistrer le réglage.".to_string())
 }
 
 fn dossier_serveurs(etat: &Etat) -> PathBuf {
@@ -990,7 +995,7 @@ fn infos_creation(etat: State<Etat>) -> InfosCreation {
 #[cfg_attr(feature = "bureau", tauri::command)]
 fn changer_dossier_serveurs(dossier: String, etat: State<Etat>) -> Result<(), String> {
     if !Path::new(&dossier).is_dir() {
-        return Err("Ce dossier n'existe pas.".into());
+        return Err("Ce dossier n’existe pas.".into());
     }
     let mut reglages = lire_reglages(&etat);
     reglages.dossier_serveurs = Some(dossier);
@@ -1129,8 +1134,8 @@ async fn regler_bhost(app: AppHandle, changement: ChangementReglages) -> Result<
 fn ouvrir_dossier_serveurs(app: AppHandle, etat: State<Etat>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let dossier = dossier_serveurs(&etat);
-    std::fs::create_dir_all(&dossier).map_err(|_| "Le dossier n'a pas pu être créé.".to_string())?;
-    app.opener().open_path(dossier.to_string_lossy(), None::<&str>).map_err(|_| "Le dossier n'a pas pu s'ouvrir.".to_string())
+    std::fs::create_dir_all(&dossier).map_err(|_| "Le dossier n’a pas pu être créé.".to_string())?;
+    app.opener().open_path(dossier.to_string_lossy(), None::<&str>).map_err(|_| "Le dossier n’a pas pu s’ouvrir.".to_string())
 }
 
 /// Les versions d'avant la 1.7.6 gardent les opérateurs dans ops.txt (un pseudo par ligne).
@@ -1214,6 +1219,9 @@ struct DemandeCreation {
     /// Sur une machine dédiée : son stockage max, en Go.
     #[serde(default)]
     stockage_go: Option<u32>,
+    /// Logiciel « Modpack » : le projet Modrinth du pack.
+    #[serde(default)]
+    modpack: Option<String>,
     #[serde(flatten)]
     monde: creation::Monde,
 }
@@ -1243,7 +1251,11 @@ fn creer(app: &AppHandle, demande: DemandeCreation) -> Result<ServeurVu, String>
     if !demande.eula {
         return Err("Il faut accepter le contrat de Minecraft.".into());
     }
-    if !creation::LOGICIELS.contains(&demande.logiciel.as_str()) && !installeur::LOGICIELS.contains(&demande.logiciel.as_str()) && demande.logiciel != "Spigot" {
+    let pack = demande.modpack.as_deref().filter(|_| demande.logiciel == "Modpack");
+    if pack.is_some_and(|p| !modpack::projet_valide(p)) || (demande.logiciel == "Modpack" && pack.is_none()) {
+        return Err("Modpack introuvable.".into());
+    }
+    if pack.is_none() && !creation::LOGICIELS.contains(&demande.logiciel.as_str()) && !installeur::LOGICIELS.contains(&demande.logiciel.as_str()) && demande.logiciel != "Spigot" {
         return Err("Logiciel pas encore pris en charge.".into());
     }
     if demande.couleur.as_deref().is_some_and(|c| !serveurs::icone_valide(c)) {
@@ -1257,21 +1269,37 @@ fn creer(app: &AppHandle, demande: DemandeCreation) -> Result<ServeurVu, String>
     // 1. Un dossier neuf. 2. Java et le serveur (téléchargé, ou installé par son installateur).
     let dossier = creation::creer_dossier(&dossier_serveurs(&etat), &nom)?;
     let resultat = (|| {
-        let (jar, java_snapshot) = installer_logiciel(app, &demande.logiciel, &demande.version, &dossier, None, &mut |tache, p| dire(tache, p))?;
+        // Un modpack : son .mrpack d'abord (il dit quel chargeur installer), puis le chargeur, puis ses mods et réglages.
+        let (logiciel, version, jar, java_snapshot) = match pack {
+            Some(projet) => {
+                let (archive, index) = telecharger_modpack(app, projet)?;
+                let mut archive = archive;
+                let (jar, java) = installer_logiciel_pour(app, &index.logiciel, &index.minecraft, &dossier, None, Some(&index.chargeur), &mut |tache, p| dire(tache, p))?;
+                modpack::poser_reglages(&mut archive, &dossier)?;
+                let agent = etat.reseau.clone();
+                let telecharger = |adresse: &str| reseau::telecharger_gros(&agent, adresse, modpack::TAILLE_FICHIER).map_err(|_| "Le téléchargement a échoué. Réessaie.".to_string());
+                modpack::poser_fichiers(&index, &dossier, &telecharger, &mut |p| dire(2, (u16::from(p) * 90 / 100) as u8))?;
+                (index.logiciel, index.minecraft, jar, java)
+            }
+            None => {
+                let (jar, java) = installer_logiciel(app, &demande.logiciel, &demande.version, &dossier, None, &mut |tache, p| dire(tache, p))?;
+                (demande.logiciel.clone(), demande.version.clone(), jar, java)
+            }
+        };
 
         // 3. Le monde : eula.txt et server.properties, puis le serveur entre dans la liste de BHOST.
         let pris: Vec<u16> = etat.liste.lock().unwrap().iter().map(|s| serveurs::port(Path::new(&s.dossier))).collect();
-        creation::ecrire_fichiers(&dossier, &nom, &demande.version, &demande.monde, creation::port_libre(&pris))?;
-        pseudo_op(app, &dossier, &demande.version);
-        let icone = demande.couleur.clone().unwrap_or_else(|| icone_jeu::par_defaut(&demande.logiciel).to_string());
+        creation::ecrire_fichiers(&dossier, &nom, &version, &demande.monde, creation::port_libre(&pris))?;
+        pseudo_op(app, &dossier, &version);
+        let icone = demande.couleur.clone().unwrap_or_else(|| icone_jeu::par_defaut(&logiciel).to_string());
         let _ = icone_jeu::poser(&dossier, &icone, false);
         let serveur = Serveur {
             id: String::new(),
             nom: nom.clone(),
             dossier: dossier.to_string_lossy().into_owned(),
             jar,
-            logiciel: demande.logiciel.clone(),
-            version: demande.version.clone(),
+            logiciel,
+            version,
             ram_mo: demande.ram_go.clamp(1, 64) * 1024,
             couleur: demande.couleur.clone(),
             java: java_snapshot,
@@ -1301,6 +1329,19 @@ fn creer(app: &AppHandle, demande: DemandeCreation) -> Result<ServeurVu, String>
 /// Renvoie ce qu'il faut lancer, et le Java à retenir pour une snapshot (sa version ne le dit pas).
 /// `jar_actuel` : en changeant de version, le fichier lancé jusqu'ici (Arclight garde son moteur de mods).
 fn installer_logiciel(app: &AppHandle, logiciel: &str, version: &str, dossier: &Path, jar_actuel: Option<&str>, avance: &mut dyn FnMut(u8, u8)) -> Result<(String, Option<u32>), String> {
+    installer_logiciel_pour(app, logiciel, version, dossier, jar_actuel, None, avance)
+}
+
+/// Comme `installer_logiciel`, avec la version précise du chargeur de mods (`chargeur`, demandée par un modpack).
+fn installer_logiciel_pour(
+    app: &AppHandle,
+    logiciel: &str,
+    version: &str,
+    dossier: &Path,
+    jar_actuel: Option<&str>,
+    chargeur: Option<&str>,
+    avance: &mut dyn FnMut(u8, u8),
+) -> Result<(String, Option<u32>), String> {
     let agent = app.state::<Etat>().reseau.clone();
     let lire = |adresse: &str| reseau::telecharger(&agent, adresse).map_err(|_| "Pas de connexion. Réessaie.".to_string())?.ok_or_else(|| "Introuvable.".to_string());
     if creation::LOGICIELS.contains(&logiciel) {
@@ -1308,7 +1349,7 @@ fn installer_logiciel(app: &AppHandle, logiciel: &str, version: &str, dossier: &
         let fichier = creation::trouver_fichier_pour(logiciel, version, moteur, &lire)?;
         let java = java::requise(version).or(fichier.java);
         if let Some(j) = java {
-            java_pret(app, j, false, &mut |p| avance(0, p)).map_err(|e| format!("Java {j} n'a pas pu être installé : {e}"))?;
+            java_pret(app, j, false, &mut |p| avance(0, p)).map_err(|e| format!("Java {j} n’a pas pu être installé : {e}"))?;
         }
         avance(0, 100);
         let flux = reseau::ouvrir(&agent, &fichier.adresse)?;
@@ -1323,14 +1364,14 @@ fn installer_logiciel(app: &AppHandle, logiciel: &str, version: &str, dossier: &
     if !installeur::LOGICIELS.contains(&logiciel) {
         return Err("Logiciel pas encore pris en charge.".into());
     }
-    let installation = installeur::trouver(logiciel, version, &lire)?;
+    let installation = installeur::trouver_pour(logiciel, version, chargeur, &lire)?;
     // Fabric garde une copie de travail du jeu (.fabric) : à jeter quand la version change (sinon erreurs au démarrage).
     if logiciel == "Fabric" {
         let _ = std::fs::remove_dir_all(dossier.join(".fabric"));
     }
     // L'installateur tourne avec le Java de cette version de Minecraft (25 pour une snapshot récente).
     let j = java::requise(version).or_else(|| java::requise(version.split('-').next().unwrap_or(""))).unwrap_or(25);
-    let programme = java_pret(app, j, false, &mut |p| avance(0, p)).map_err(|e| format!("Java {j} n'a pas pu être installé : {e}"))?;
+    let programme = java_pret(app, j, false, &mut |p| avance(0, p)).map_err(|e| format!("Java {j} n’a pas pu être installé : {e}"))?;
     avance(0, 100);
     let installateur = "bhost-installateur.jar";
     let flux = reseau::ouvrir(&agent, &installation.fichier.adresse)?;
@@ -1347,6 +1388,42 @@ fn installer_logiciel(app: &AppHandle, logiciel: &str, version: &str, dossier: &
     Ok((lancement, Some(j).filter(|_| java::requise(version).is_none())))
 }
 
+/// Télécharge le .mrpack de la version à installer d'un modpack (la dernière stable), vérifie son empreinte et l'ouvre.
+fn telecharger_modpack(app: &AppHandle, projet: &str) -> Result<(zip::ZipArchive<std::io::Cursor<Vec<u8>>>, modpack::Index), String> {
+    let agent = app.state::<Etat>().reseau.clone();
+    let hors_ligne = |_| "Pas de connexion. Réessaie.".to_string();
+    let versions = reseau::telecharger(&agent, &modpack::adresse_versions(projet)).map_err(hors_ligne)?.unwrap_or_default();
+    let v = modpack::choisir_version(&versions).ok_or("Ce modpack n’a pas de version pour un serveur.")?;
+    let octets = reseau::telecharger_gros(&agent, &v.url, modpack::TAILLE_PACK).map_err(hors_ligne)?;
+    if !modpack::verifier(&octets, &v.sha512) {
+        return Err("Modpack abîmé pendant le téléchargement. Réessaie.".into());
+    }
+    modpack::ouvrir(std::io::Cursor::new(octets))
+}
+
+/// Une page de modpacks (Créer un serveur › Modpack).
+#[derive(Serialize)]
+struct PageModpacks {
+    projets: Vec<extensions::Projet>,
+    /// Il reste des résultats après cette page.
+    suite: bool,
+}
+
+/// Créer un serveur › Modpack : les packs qui tournent sur un serveur, les plus téléchargés d'abord (ou les plus proches du mot cherché).
+#[cfg_attr(feature = "bureau", tauri::command)]
+async fn chercher_modpacks(app: AppHandle, texte: String, page: Option<u64>) -> Result<PageModpacks, String> {
+    a_part(move || {
+        let texte: String = texte.chars().take(100).collect();
+        let decalage = page.unwrap_or(0).min(200) * modpack::PAGE;
+        let agent = app.state::<Etat>().reseau.clone();
+        let reponse = reseau::telecharger(&agent, &modpack::adresse_recherche(&texte, decalage)).map_err(|_| "Pas de connexion. Réessaie.".to_string())?.unwrap_or_default();
+        let (projets, total) = modpack::lire_recherche(&reponse)?;
+        let suite = decalage + (projets.len() as u64) < total && projets.len() as u64 == modpack::PAGE;
+        Ok(PageModpacks { projets, suite })
+    })
+    .await
+}
+
 /// Fabrique Spigot avec BuildTools (dossier de travail gardé dans %APPDATA%\BHOST\buildtools), directement en server.jar.
 fn fabriquer_spigot(app: &AppHandle, version: &str, dossier: &Path, avance: &mut dyn FnMut(u8, u8)) -> Result<(String, Option<u32>), String> {
     if version.is_empty() || !version.chars().all(|c| c.is_ascii_digit() || c == '.') {
@@ -1355,7 +1432,7 @@ fn fabriquer_spigot(app: &AppHandle, version: &str, dossier: &Path, avance: &mut
     let etat = app.state::<Etat>();
     // BuildTools tourne avec le Java de cette version de Minecraft, en JDK : il compile Spigot.
     let j = java::requise(version).unwrap_or(25);
-    let programme = java_pret(app, j, true, &mut |p| avance(0, p)).map_err(|e| format!("Java {j} n'a pas pu être installé : {e}"))?;
+    let programme = java_pret(app, j, true, &mut |p| avance(0, p)).map_err(|e| format!("Java {j} n’a pas pu être installé : {e}"))?;
     avance(0, 100);
     let _une_a_la_fois = etat.buildtools.lock().unwrap();
     let atelier = etat.dossier.join("buildtools");
@@ -1402,7 +1479,7 @@ fn fabriquer_spigot(app: &AppHandle, version: &str, dossier: &Path, avance: &mut
         },
     )?;
     if !dossier.join("server.jar").is_file() {
-        return Err("BuildTools n'a pas donné de serveur. Détails : bhost-installation.log.".into());
+        return Err("BuildTools n’a pas donné de serveur. Détails : bhost-installation.log.".into());
     }
     let _ = std::fs::remove_file(journal);
     avance(1, 100);
@@ -1420,7 +1497,7 @@ fn renommer_serveur(id: String, nom: String, etat: State<Etat>) -> Result<Serveu
         return Err("40 lettres au plus.".into());
     }
     let mut liste = etat.liste.lock().unwrap();
-    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
     serveur.nom = nom.to_string();
     let copie = serveur.clone();
     serveurs::enregistrer(&etat.fichier, &liste)?;
@@ -1464,7 +1541,7 @@ fn parametres(serveur: &Serveur) -> Parametres {
 
 #[cfg_attr(feature = "bureau", tauri::command)]
 fn parametres_serveur(id: String, etat: State<Etat>) -> Result<Parametres, String> {
-    let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n'existe plus.")?;
+    let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n’existe plus.")?;
     Ok(parametres(&serveur))
 }
 
@@ -1491,14 +1568,14 @@ fn regler_serveur(id: String, reglages: ReglagesServeur, etat: State<Etat>) -> R
     if let Some(choix) = &reglages.java_choix {
         let numero_ok = choix.parse::<u32>().is_ok_and(|n| [8, 17, 21, 25].contains(&n));
         if !numero_ok && !Path::new(choix).is_file() {
-            return Err("Ce fichier Java n'existe pas.".into());
+            return Err("Ce fichier Java n’existe pas.".into());
         }
     }
     if reglages.arguments.chars().count() > 500 || reglages.arguments.contains(['\n', '\r']) {
         return Err("Arguments trop longs.".into());
     }
     let mut liste = etat.liste.lock().unwrap();
-    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
     serveur.ram_mo = reglages.ram_mo.clamp(512, 256 * 1024);
     serveur.demarrer_auto = reglages.demarrer_auto;
     serveur.java_choix = reglages.java_choix;
@@ -1522,7 +1599,7 @@ fn regler_serveur(id: String, reglages: ReglagesServeur, etat: State<Etat>) -> R
 /// Si le serveur tourne, la difficulté change tout de suite ; le reste au prochain démarrage.
 #[cfg_attr(feature = "bureau", tauri::command)]
 fn regler_partie(app: AppHandle, id: String, partie: creation::Monde, etat: State<Etat>) -> Result<ServeurVu, String> {
-    let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n'existe plus.")?;
+    let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n’existe plus.")?;
     let avant = creation::lire_partie(&serveurs::lire_proprietes(Path::new(&serveur.dossier)));
     serveurs::modifier_proprietes(Path::new(&serveur.dossier), &creation::valeurs_partie(&serveur.version, &partie))?;
     let apres = creation::lire_partie(&serveurs::lire_proprietes(Path::new(&serveur.dossier)));
@@ -1551,19 +1628,19 @@ struct NouvelleCopie<'a> {
 /// Copie un serveur arrêté dans un nouveau dossier (dossier des serveurs de BHOST), avec un autre port.
 #[cfg_attr(feature = "bureau", tauri::command)]
 async fn dupliquer_serveur(app: AppHandle, id: String) -> Result<ServeurVu, String> {
-    crate::hote::async_runtime::spawn_blocking(move || dupliquer(&app, &id)).await.map_err(|_| "Ça n'a pas marché.".to_string())?
+    crate::hote::async_runtime::spawn_blocking(move || dupliquer(&app, &id)).await.map_err(|_| "Ça n’a pas marché.".to_string())?
 }
 
 fn dupliquer(app: &AppHandle, id: &str) -> Result<ServeurVu, String> {
     let etat = app.state::<Etat>();
     arrete(&etat, id)?;
     if etat.travaux.lock().unwrap().contains(id) {
-        return Err("Attends la fin de l'opération en cours.".into());
+        return Err("Attends la fin de l’opération en cours.".into());
     }
-    let source = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n'existe plus.")?;
+    let source = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n’existe plus.")?;
     let dossier_source = PathBuf::from(&source.dossier);
     if !dossier_source.is_dir() {
-        return Err("Son dossier n'existe plus.".into());
+        return Err("Son dossier n’existe plus.".into());
     }
     if !etat.copies.lock().unwrap().insert(id.to_string()) {
         return Err("Copie déjà en cours.".into());
@@ -1601,7 +1678,7 @@ fn couleur_serveur(id: String, couleur: String, etat: State<Etat>) -> Result<Ser
         return Err("Icône inconnue.".into());
     }
     let mut liste = etat.liste.lock().unwrap();
-    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
     serveur.couleur = Some(couleur.clone());
     let copie = serveur.clone();
     serveurs::enregistrer(&etat.fichier, &liste)?;
@@ -1617,19 +1694,21 @@ async fn supprimer_serveur(app: AppHandle, id: String) -> Result<(), String> {
     // Mettre un gros monde à la Corbeille prend du temps : on le fait à part, pour ne pas figer BHOST.
     crate::hote::async_runtime::spawn_blocking(move || {
         supprimer(&app.state::<Etat>(), &id, true)?;
+        app.state::<Etat>().acces.tunnels.oublier(&id);
         automatique::oublier(&app, &id);
         oublier_demandes(&app, &id);
         catalogue::oublier(&app, &id);
         Ok(())
     })
     .await
-    .map_err(|_| "Ça n'a pas marché.".to_string())?
+    .map_err(|_| "Ça n’a pas marché.".to_string())?
 }
 
 /// Retire un serveur de BHOST sans toucher à son dossier (on peut le réimporter plus tard).
 #[cfg_attr(feature = "bureau", tauri::command)]
 fn retirer_serveur(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), String> {
     supprimer(&etat, &id, false)?;
+    etat.acces.tunnels.oublier(&id);
     automatique::oublier(&app, &id);
     oublier_demandes(&app, &id);
     catalogue::oublier(&app, &id);
@@ -1649,9 +1728,9 @@ fn oublier_demandes(app: &AppHandle, id: &str) {
 fn supprimer(etat: &Etat, id: &str, jeter: bool) -> Result<(), String> {
     arrete(etat, id)?;
     if etat.travaux.lock().unwrap().contains(id) {
-        return Err("Attends la fin de l'opération en cours.".into());
+        return Err("Attends la fin de l’opération en cours.".into());
     }
-    let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n'existe plus.")?;
+    let serveur = etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or("Ce serveur n’existe plus.")?;
     let dossier = Path::new(&serveur.dossier);
     if jeter && dossier.exists() {
         if !serveurs::dossier_de_serveur(&serveur) {
@@ -1677,11 +1756,11 @@ fn supprimer(etat: &Etat, id: &str, jeter: bool) -> Result<(), String> {
 #[cfg_attr(feature = "bureau", tauri::command)]
 fn ouvrir_dossier(app: AppHandle, id: String, etat: State<Etat>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let dossier = etat.liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| s.dossier.clone()).ok_or("Ce serveur n'existe plus.")?;
+    let dossier = etat.liste.lock().unwrap().iter().find(|s| s.id == id).map(|s| s.dossier.clone()).ok_or("Ce serveur n’existe plus.")?;
     if !Path::new(&dossier).is_dir() {
-        return Err("Ce dossier n'existe plus.".into());
+        return Err("Ce dossier n’existe plus.".into());
     }
-    app.opener().open_path(dossier, None::<&str>).map_err(|_| "Le dossier n'a pas pu s'ouvrir.".to_string())
+    app.opener().open_path(dossier, None::<&str>).map_err(|_| "Le dossier n’a pas pu s’ouvrir.".to_string())
 }
 
 /// La tête d'un joueur (son visage, 8 × 8 pixels), prête à afficher. Rien si Mojang ne le connaît pas.
@@ -1772,7 +1851,7 @@ fn regler_sauvegardes(id: String, reglages: serveurs::ReglagesSauvegarde, etat: 
         return Err("Fréquence inconnue.".into());
     }
     let mut liste = etat.liste.lock().unwrap();
-    let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+    let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
     s.sauvegarde = serveurs::ReglagesSauvegarde { garder: reglages.garder.clamp(2, 50), ..reglages };
     let copie = s.clone();
     serveurs::enregistrer(&etat.fichier, &liste)?;
@@ -1796,7 +1875,7 @@ async fn sauvegarder_maintenant(app: AppHandle, id: String) -> Result<Sauvegarde
 /// Le chemin d'une sauvegarde du serveur, si elle existe.
 fn sauvegarde_existante(etat: &Etat, serveur: &Serveur, fichier: &str) -> Result<PathBuf, String> {
     let chemin = dossier_sauvegardes(etat, serveur).join(fichier);
-    if sauvegarde::nom_valide(fichier) && chemin.is_file() { Ok(chemin) } else { Err("Cette sauvegarde n'existe plus.".into()) }
+    if sauvegarde::nom_valide(fichier) && chemin.is_file() { Ok(chemin) } else { Err("Cette sauvegarde n’existe plus.".into()) }
 }
 
 /// Épingle une sauvegarde (jamais effacée par le nettoyage automatique), ou la désépingle.
@@ -1806,7 +1885,7 @@ async fn epingler_sauvegarde(app: AppHandle, id: String, fichier: String, epingl
         let etat = app.state::<Etat>();
         sauvegarde_existante(&etat, &serveur_de(&etat, &id)?, &fichier)?;
         let mut liste = etat.liste.lock().unwrap();
-        let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+        let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
         s.epinglees.retain(|f| *f != fichier);
         if epinglee {
             s.epinglees.push(fichier);
@@ -1882,7 +1961,7 @@ async fn restaurer_sauvegarde(app: AppHandle, id: String, fichier: String, tout:
         for m in &morceaux {
             let d = racine.join(m);
             if d.is_dir() {
-                std::fs::remove_dir_all(&d).map_err(|_| "Le monde n'a pas pu être effacé. Un fichier est peut-être ouvert.".to_string())?;
+                std::fs::remove_dir_all(&d).map_err(|_| "Le monde n’a pas pu être effacé. Un fichier est peut-être ouvert.".to_string())?;
             }
         }
         let filtre = if tout { None } else { Some(morceaux.as_slice()) };
@@ -1892,7 +1971,7 @@ async fn restaurer_sauvegarde(app: AppHandle, id: String, fichier: String, tout:
         }
         // 3. Tout le serveur : il reprend aussi le logiciel de la sauvegarde.
         let mut liste = etat.liste.lock().unwrap();
-        let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+        let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
         if tout && !meta.jar.is_empty() && !meta.logiciel.is_empty() {
             s.logiciel = meta.logiciel;
             s.version = meta.version;
@@ -1913,7 +1992,7 @@ fn ouvrir_sauvegardes(app: AppHandle, id: String, etat: State<Etat>) -> Result<(
     use tauri_plugin_opener::OpenerExt;
     let dossier = dossier_sauvegardes(&etat, &serveur_de(&etat, &id)?);
     std::fs::create_dir_all(&dossier).map_err(|e| e.to_string())?;
-    app.opener().open_path(dossier.to_string_lossy(), None::<&str>).map_err(|_| "Le dossier n'a pas pu s'ouvrir.".to_string())
+    app.opener().open_path(dossier.to_string_lossy(), None::<&str>).map_err(|_| "Le dossier n’a pas pu s’ouvrir.".to_string())
 }
 
 /// Toutes les minutes : les serveurs allumés dont la dernière sauvegarde automatique est trop vieille en ont une nouvelle.
@@ -2004,7 +2083,7 @@ fn montrer_fichier(app: AppHandle, id: String, chemin: String, etat: State<Etat>
     use tauri_plugin_opener::OpenerExt;
     let complet = fichiers::chemin_sur(Path::new(&serveur_de(&etat, &id)?.dossier), &chemin)?;
     let resultat = if complet.is_dir() { app.opener().open_path(complet.to_string_lossy(), None::<&str>) } else { app.opener().reveal_item_in_dir(&complet) };
-    resultat.map_err(|_| "L'Explorateur n'a pas pu s'ouvrir.".to_string())
+    resultat.map_err(|_| "L’Explorateur n’a pas pu s’ouvrir.".to_string())
 }
 
 /// Les réglages de server.properties (vue « Réglages faciles »).
@@ -2150,7 +2229,7 @@ fn uuid_joueur(app: &AppHandle, serveur: &Serveur, nom: &str, demander: bool) ->
     let telecharger = |adresse: &str| reseau::telecharger(&agent, adresse);
     match tetes::identifiant_du_pseudo(&telecharger, nom) {
         Ok(Some(u)) => listes::avec_tirets(&u).map(Some).ok_or_else(|| "Réponse de Mojang illisible.".to_string()),
-        Ok(None) => Err(format!("« {nom} » n'existe pas chez Mojang.")),
+        Ok(None) => Err(format!("« {nom} » n’existe pas chez Mojang.")),
         Err(_) => Err("Pas de connexion. Réessaie.".into()),
     }
 }
@@ -2184,7 +2263,7 @@ fn agir_joueur(app: &AppHandle, id: &str, action: &str, nom: &str, motif: Option
         // Le serveur réécrit ses fichiers juste après : on lui laisse un instant.
         std::thread::sleep(Duration::from_millis(600));
     } else if fichier.is_empty() {
-        return Err("Il n'est pas connecté.".into());
+        return Err("Il n’est pas connecté.".into());
     } else {
         let dossier = Path::new(&serveur.dossier);
         let changement = if ajout {
@@ -2266,7 +2345,7 @@ fn commande_joueur(app: AppHandle, id: String, nom: String, action: String, etat
     let commande = match action.as_str() {
         "apparition" => {
             let dossier = Path::new(&serveur.dossier);
-            let [x, y, z] = fiche::apparition(&dossier.join(mondes::niveau(dossier))).ok_or("Point d'apparition introuvable.")?;
+            let [x, y, z] = fiche::apparition(&dossier.join(mondes::niveau(dossier))).ok_or("Point d’apparition introuvable.")?;
             if vieux { format!("tp {nom} {x} {y} {z}") } else { format!("execute in minecraft:overworld run tp {nom} {x}.5 {y} {z}.5") }
         }
         mode => {
@@ -2289,13 +2368,13 @@ fn commande_joueur(app: AppHandle, id: String, nom: String, action: String, etat
 
 /// Le serveur `id`, ou une phrase si BHOST ne le connaît plus.
 fn serveur_de(etat: &Etat, id: &str) -> Result<Serveur, String> {
-    etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or_else(|| "Ce serveur n'existe plus.".to_string())
+    etat.liste.lock().unwrap().iter().find(|s| s.id == id).cloned().ok_or_else(|| "Ce serveur n’existe plus.".to_string())
 }
 
 /// Refuse si le serveur tourne (ou attend son Java).
 fn arrete(etat: &Etat, id: &str) -> Result<(), String> {
     if etat.vivants.lock().unwrap().contains_key(id) || etat.preparation.lock().unwrap().contains(id) {
-        return Err("Arrête-le d'abord.".into());
+        return Err("Arrête-le d’abord.".into());
     }
     Ok(())
 }
@@ -2315,7 +2394,7 @@ impl Drop for Travail<'_> {
 
 fn commencer_travail<'a>(etat: &'a Etat, id: &str) -> Result<Travail<'a>, String> {
     if !etat.travaux.lock().unwrap().insert(id.to_string()) {
-        return Err("Attends la fin de l'opération en cours.".into());
+        return Err("Attends la fin de l’opération en cours.".into());
     }
     Ok(Travail { etat, id: id.to_string() })
 }
@@ -2335,7 +2414,7 @@ fn dire_travail(app: &AppHandle, id: &str, etape: &str, pourcent: u8) {
 
 /// Lance un travail lourd à part, pour ne pas figer BHOST.
 async fn a_part<T: Send + 'static>(travail: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
-    crate::hote::async_runtime::spawn_blocking(travail).await.map_err(|_| "Ça n'a pas marché.".to_string())?
+    crate::hote::async_runtime::spawn_blocking(travail).await.map_err(|_| "Ça n’a pas marché.".to_string())?
 }
 
 /// Les règles du jeu du monde joué, avec les changements pas encore écrits dans le monde.
@@ -2363,7 +2442,7 @@ fn regler_regle(app: AppHandle, id: String, cle: String, valeur: i64, etat: Stat
         return Err("Valeur refusée.".into());
     }
     let serveur = serveur_de(&etat, &id)?;
-    let commande = regles::commande(&serveur.version, &cle, valeur).ok_or("Cette version n'a pas cette règle.")?;
+    let commande = regles::commande(&serveur.version, &cle, valeur).ok_or("Cette version n’a pas cette règle.")?;
     let en_ligne = etat.statuts.lock().unwrap().get(&id).is_some_and(|s| s == "en-ligne");
     let processus = if en_ligne { etat.vivants.lock().unwrap().get(&id).cloned() } else { None };
     match processus {
@@ -2374,7 +2453,7 @@ fn regler_regle(app: AppHandle, id: String, cle: String, valeur: i64, etat: Stat
         }
         None => {
             let mut liste = etat.liste.lock().unwrap();
-            let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+            let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
             s.regles_attente.insert(cle, valeur);
             serveurs::enregistrer(&etat.fichier, &liste)?;
         }
@@ -2415,7 +2494,7 @@ async fn mondes_serveur(app: AppHandle, id: String) -> Result<Vec<mondes::Monde>
 /// Le dossier d'un monde du serveur, s'il existe.
 fn monde_existant(serveur: &Serveur, nom: &str) -> Result<PathBuf, String> {
     let dossier = Path::new(&serveur.dossier).join(nom);
-    if mondes::nom_valide(nom) && dossier.is_dir() { Ok(dossier) } else { Err("Ce monde n'existe plus.".into()) }
+    if mondes::nom_valide(nom) && dossier.is_dir() { Ok(dossier) } else { Err("Ce monde n’existe plus.".into()) }
 }
 
 /// Le monde que le serveur jouera à son prochain démarrage.
@@ -2457,7 +2536,7 @@ async fn supprimer_monde(app: AppHandle, id: String, dossier: String) -> Result<
         let serveur = serveur_de(&etat, &id)?;
         let racine = Path::new(&serveur.dossier);
         if mondes::niveau(racine) == dossier {
-            return Err("C'est le monde joué. Choisis-en un autre d'abord.".into());
+            return Err("C’est le monde joué. Choisis-en un autre d’abord.".into());
         }
         monde_existant(&serveur, &dossier)?;
         let _travail = commencer_travail(&etat, &id)?;
@@ -2498,13 +2577,14 @@ fn faire_sauvegarde(app: &AppHandle, serveur: &Serveur, genre: &str, quoi: &str,
     };
     let allume = en_ligne(&etat, &serveur.id);
     if let Some(p) = &allume {
-        let _ = commander(app, &serveur.id, p, "save-off");
-        let _ = commander(app, &serveur.id, p, if avant_1_13(&serveur.version) { "save-all" } else { "save-all flush" });
+        // Sans les écrire dans la console : c'est BHOST qui travaille, pas le joueur.
+        let _ = p.ecrire("save-off");
+        let _ = p.ecrire(if avant_1_13(&serveur.version) { "save-all" } else { "save-all flush" });
         std::thread::sleep(Duration::from_secs(3));
     }
     let fait = sauvegarde::zipper_avec(&elements, Some(&meta), &archive, &mut |p| dire_travail(app, &serveur.id, "Sauvegarde", p));
     if let Some(p) = &allume {
-        let _ = commander(app, &serveur.id, p, "save-on");
+        let _ = p.ecrire("save-on");
     }
     fait.map_err(|e| format!("Sauvegarde impossible : {e}"))?;
     // Les automatiques en trop partent (les plus anciennes, jamais les épinglées).
@@ -2533,7 +2613,7 @@ async fn reinitialiser_monde(app: AppHandle, id: String, dossier: String, meme_g
             faire_sauvegarde(&app, &serveur, "reinit", "monde", &dossier, Some(format!("Avant réinitialisation de « {dossier} »")))?;
         }
         for (d, _) in mondes::dossiers(racine, &dossier) {
-            std::fs::remove_dir_all(&d).map_err(|_| "Le monde n'a pas pu être effacé. Un fichier est peut-être ouvert.".to_string())?;
+            std::fs::remove_dir_all(&d).map_err(|_| "Le monde n’a pas pu être effacé. Un fichier est peut-être ouvert.".to_string())?;
         }
         // Le dossier revient vide : le serveur recréera le monde (un monde pas joué garde sa place dans la liste).
         std::fs::create_dir_all(&chemin).map_err(|e| e.to_string())?;
@@ -2656,10 +2736,10 @@ async fn changer_version(app: AppHandle, id: String, logiciel: String, version: 
         let serveur = serveur_de(&etat, &id)?;
         arrete(&etat, &id)?;
         if !familles(&serveur.logiciel).contains(&logiciel.as_str()) {
-            return Err("Ce changement n'est pas possible.".into());
+            return Err("Ce changement n’est pas possible.".into());
         }
         if logiciel == serveur.logiciel && version == serveur.version {
-            return Err("C'est déjà cette version.".into());
+            return Err("C’est déjà cette version.".into());
         }
         let _travail = commencer_travail(&etat, &id)?;
         let dossier = PathBuf::from(&serveur.dossier);
@@ -2671,7 +2751,7 @@ async fn changer_version(app: AppHandle, id: String, logiciel: String, version: 
             dire_travail(&app, &id, if tache == 0 { "Java" } else { "Installation" }, p)
         })?;
         let mut liste = etat.liste.lock().unwrap();
-        let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+        let s = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
         s.logiciel = logiciel;
         s.version = version;
         let ancien = std::mem::replace(&mut s.jar, jar);
@@ -2768,7 +2848,7 @@ async fn changer_adresse(app: AppHandle, id: String, mot: String) -> Result<(), 
 #[cfg_attr(feature = "bureau", tauri::command)]
 fn ouvrir_aux_amis(app: AppHandle, id: String, ouvert: bool, etat: State<Etat>) -> Result<ServeurVu, String> {
     let mut liste = etat.liste.lock().unwrap();
-    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n'existe plus.")?;
+    let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
     serveur.ouvert_amis = ouvert;
     let copie = serveur.clone();
     serveurs::enregistrer(&etat.fichier, &liste)?;
@@ -2947,6 +3027,7 @@ pub fn run() {
             changer_dossier_serveurs,
             versions_minecraft,
             creer_serveur,
+            chercher_modpacks,
             couleur_serveur,
             parametres_serveur,
             regler_serveur,
@@ -3016,7 +3097,7 @@ pub fn run() {
             mise_a_jour::installer_mise_a_jour
         ])
         .build(tauri::generate_context!())
-        .expect("BHOST n'a pas pu démarrer")
+        .expect("BHOST n’a pas pu démarrer")
         .run(|app, evenement| {
             if let RunEvent::Exit = evenement {
                 automatique::FERMETURE.store(true, Ordering::Relaxed);

@@ -64,12 +64,13 @@ fi
 # ---------- 2. L'agent ----------
 dire "Téléchargement de l'agent…"
 curl -fsSL --retry 3 -o /usr/local/bin/bhost-agent.nouveau "$AGENT_URL"
-if curl -fsSL -o /tmp/bhost-agent.sha256 "$AGENT_URL.sha256" 2>/dev/null; then
-	attendu=$(cut -d' ' -f1 </tmp/bhost-agent.sha256)
-	vu=$(sha256sum /usr/local/bin/bhost-agent.nouveau | cut -d' ' -f1)
-	rm -f /tmp/bhost-agent.sha256
-	[ "$attendu" = "$vu" ] || stop "Agent abîmé (empreinte différente). Relance la commande."
-fi
+# L'empreinte est obligatoire : sans elle, on n'installe rien.
+empreinte=$(mktemp)
+curl -fsSL --retry 3 -o "$empreinte" "$AGENT_URL.sha256" || { rm -f "$empreinte" /usr/local/bin/bhost-agent.nouveau; stop "Empreinte de l'agent introuvable. Relance la commande."; }
+attendu=$(cut -d' ' -f1 <"$empreinte")
+vu=$(sha256sum /usr/local/bin/bhost-agent.nouveau | cut -d' ' -f1)
+rm -f "$empreinte"
+[ -n "$attendu" ] && [ "$attendu" = "$vu" ] || { rm -f /usr/local/bin/bhost-agent.nouveau; stop "Agent abîmé (empreinte différente). Relance la commande."; }
 chmod 755 /usr/local/bin/bhost-agent.nouveau
 mv -f /usr/local/bin/bhost-agent.nouveau /usr/local/bin/bhost-agent
 
@@ -99,14 +100,29 @@ ExecStart=/usr/local/bin/bhost-agent
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM
-TimeoutStopSec=90
+# Les serveurs ont jusqu'à 90 s pour enregistrer leurs mondes : systemd attend un peu plus.
+TimeoutStopSec=120
+# SIGTERM à l'agent seulement : c'est lui qui arrête proprement les serveurs (Java ne reçoit pas le signal en même temps).
+KillMode=mixed
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/var/lib/bhost
 PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
 LimitNOFILE=65536
 # Chaque serveur a son groupe (mémoire max, part du processeur) : systemd confie le groupe de l'agent à l'agent.
+# (Pas de ProtectControlGroups : il casserait Delegate ; pas de MemoryDenyWriteExecute : Java en a besoin.)
 Delegate=yes
 
 [Install]
@@ -216,8 +232,18 @@ case "$action" in
 	mettre-a-jour)
 		etat installation
 		apt-get update -qq && mkdir -p /var/lib/apt/periodic && touch /var/lib/apt/periodic/update-success-stamp
-		apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
+		apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold --with-new-pkgs upgrade
 		apt-get -y -q autoremove --purge
+		# Le nouvel agent, déjà téléchargé et vérifié (signature) par l'agent : un vrai fichier, pas un lien.
+		nouveau=/var/lib/bhost/systeme/agent
+		if [ -f "$nouveau" ] && [ ! -L "$nouveau" ] && head -c 4 "$nouveau" | grep -q 'ELF'; then
+			install -m 755 -o root -g root "$nouveau" /usr/local/bin/bhost-agent.nouveau &&
+				mv -f /usr/local/bin/bhost-agent.nouveau /usr/local/bin/bhost-agent
+			rm -f "$nouveau"
+			etat ""
+			# L'agent arrête proprement les serveurs, puis repart avec la nouvelle version.
+			systemctl restart bhost-agent
+		fi
 		etat ""
 		;;
 esac
@@ -266,11 +292,14 @@ systemctl start bhost-performances bhost-systeme.path || true
 systemctl start bhost-systeme-etat || true
 systemctl restart bhost-agent
 
-# Le code (créé par l'agent s'il n'a pas été donné).
+# L'agent a vraiment démarré : il tourne, et il a créé sa clé (relais-cle.txt).
+# (Le code peut avoir été écrit par ce script : il ne prouve rien.)
 for _ in $(seq 1 30); do
-	[ -s "$DONNEES/machine-code.txt" ] && break
+	systemctl is-active -q bhost-agent && [ -s "$DONNEES/relais-cle.txt" ] && [ -s "$DONNEES/machine-code.txt" ] && break
 	sleep 1
 done
+sleep 2
+systemctl is-active -q bhost-agent && [ -s "$DONNEES/relais-cle.txt" ] || stop "L'agent ne démarre pas sur ce système : journalctl -u bhost-agent"
 code=$(cat "$DONNEES/machine-code.txt" 2>/dev/null || true)
 [ -n "$code" ] || stop "L'agent ne démarre pas : journalctl -u bhost-agent"
 echo

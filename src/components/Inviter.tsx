@@ -9,7 +9,7 @@ import "./Inviter.css";
 type Props = {
   serveur: Serveur;
   acces?: Acces;
-  ancre: DOMRect; // le bouton « Inviter » : le panneau s'ouvre dessous, aligné à droite
+  ancre: DOMRect; // le bouton « Inviter » : le panneau s’ouvre dessous, aligné à droite
   onFermer: () => void;
   onChange?: (listes: Joueurs) => void; // la liste blanche a changé
   onInfo: (texte: string) => void;
@@ -18,11 +18,11 @@ type Props = {
 
 const MARGE = 8;
 const LARGEUR = 360;
-const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n'a pas marché.");
+const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas marché.");
 
-// « Inviter des amis » (d'après la maquette) : l'adresse, un message prêt à envoyer,
-// et l'ajout à la liste blanche quand elle est active.
-// Un panneau de verre qui s'ouvre en ressort sous le bouton (rendu dans <body>).
+// « Inviter des amis » (d’après la maquette) : l’adresse, un message prêt à envoyer,
+// et l’ajout à la liste blanche quand elle est active.
+// Un panneau de verre qui s’ouvre en ressort sous le bouton (rendu dans <body>).
 export default function Inviter({ serveur, acces, ancre, onFermer, onChange, onInfo, onErreur }: Props) {
   const panneau = useRef<HTMLDivElement>(null);
   const [listes, setListes] = useState<Joueurs | null>(null);
@@ -77,7 +77,7 @@ export default function Inviter({ serveur, acces, ancre, onFermer, onChange, onI
       .finally(() => setEnCours(false));
   };
 
-  // L'adresse pour les amis (Paramètres › Ouvert à tes amis).
+  // L’adresse pour les amis (Paramètres › Ouvert à tes amis).
   const pourAmis = serveur.ouvertAmis ? acces : undefined;
   const publique = pourAmis?.etat === "ouvert" ? pourAmis.adresse : undefined;
   const sansAdresse = !serveur.ouvertAmis

@@ -92,13 +92,13 @@ pub fn suivre(app: &AppHandle, id: &str, ligne: &str) {
             let _ = p.ecrire("spark profiler stop");
         }
     } else if bas.contains(".sparkprofile") {
-        finir(app, id, None, Some("Le rapport n'a pas pu partir sur Internet. Il est dans le dossier du serveur."));
+        finir(app, id, None, Some("Le rapport n’a pas pu partir sur Internet. Il est dans le dossier du serveur."));
     }
 }
 
 /// Le serveur s'est arrêté : l'analyse aussi.
 pub fn oublier(app: &AppHandle, id: &str) {
-    finir(app, id, None, Some("Le serveur s'est arrêté."));
+    finir(app, id, None, Some("Le serveur s’est arrêté."));
 }
 
 /// Ce que l'interface reçoit tout de suite.
@@ -114,7 +114,7 @@ pub struct Lancement {
 pub async fn pourquoi_lag(app: AppHandle, id: String) -> Result<Lancement, String> {
     let serveur = crate::serveur_de(&app.state::<Etat>(), &id)?;
     if app.state::<Etat>().statuts.lock().unwrap().get(&id).map(String::as_str) != Some("en-ligne") {
-        return Err("Allume le serveur d'abord.".into());
+        return Err("Allume le serveur d’abord.".into());
     }
     match spark(&serveur.logiciel, &serveur.version) {
         Spark::Impossible => return Err("Pas possible avec Vanilla : il faut Paper ou un serveur à mods.".into()),
@@ -138,7 +138,7 @@ pub async fn pourquoi_lag(app: AppHandle, id: String) -> Result<Lancement, Strin
     std::thread::spawn(move || {
         std::thread::sleep(ATTENTE_MAX);
         if en_cours(|e| e.get(&id2).is_some_and(|t| t.elapsed() >= ATTENTE_MAX)) {
-            finir(&app2, &id2, None, Some("spark n'a pas répondu. Réessaie."));
+            finir(&app2, &id2, None, Some("spark n’a pas répondu. Réessaie."));
         }
     });
     Ok(Lancement { secondes: DUREE })

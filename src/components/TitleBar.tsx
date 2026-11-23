@@ -25,14 +25,14 @@ export default function TitleBar() {
     };
   }, []);
 
-  // Fenêtre agrandie : pas de liseré clair sur les bords (il faisait une ligne en haut de l'écran).
+  // Fenêtre agrandie : pas de liseré clair sur les bords (il faisait une ligne en haut de l’écran).
   useEffect(() => {
     document.documentElement.classList.toggle("agrandie", agrandie);
   }, [agrandie]);
 
   return (
     // data-tauri-drag-region : on peut déplacer la fenêtre en tirant ici,
-    // et un double-clic l'agrandit, comme une fenêtre Windows normale.
+    // et un double-clic l’agrandit, comme une fenêtre Windows normale.
     <header className="titlebar" data-tauri-drag-region>
       <div className="tb-app">
         <LogoBhost hauteur={18} />

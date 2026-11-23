@@ -203,7 +203,7 @@ pub fn poser(dossier: &Path, cle: &str, forcer: bool) -> Result<bool, String> {
         Ok(o) if !forcer && !de_bhost(&o) => return Ok(false),
         _ => {}
     }
-    crate::garde::ecrire_atomique(&chemin, image).map_err(|e| format!("Impossible d'écrire l'icône. {e}"))?;
+    crate::garde::ecrire_atomique(&chemin, image).map_err(|e| format!("Impossible d’écrire l’icône. {e}"))?;
     Ok(true)
 }
 

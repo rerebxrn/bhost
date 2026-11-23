@@ -14,8 +14,8 @@ type Props = {
   avecPanneau?: boolean; // un panneau (joueurs) est à droite de la console : on se décale
 };
 
-// La capsule d'actions : elle flotte en bas du contenu
-// et change de forme selon l'état du serveur.
+// La capsule d’actions : elle flotte en bas du contenu
+// et change de forme selon l’état du serveur.
 export default function ActionBar({ statut, onDemarrer, onArreter, onRedemarrer, onForcer, surConsole, commande, avecPanneau }: Props) {
   const dedans = useRef<HTMLDivElement>(null);
   const [largeur, setLargeur] = useState<number>();
@@ -33,7 +33,7 @@ export default function ActionBar({ statut, onDemarrer, onArreter, onRedemarrer,
 
   const occupe = statut === "demarrage" || statut === "arret";
   const forcer = (
-    <button type="button" data-gel className="ab ico kill" title="Forcer l'arrêt" aria-label="Forcer l'arrêt" onClick={onForcer}>
+    <button type="button" data-gel className="ab ico kill" title="Forcer l’arrêt" aria-label="Forcer l’arrêt" onClick={onForcer}>
       <IconBolt size={17} stroke={2} aria-hidden />
     </button>
   );
@@ -42,7 +42,7 @@ export default function ActionBar({ statut, onDemarrer, onArreter, onRedemarrer,
     <div className={"dock" + (surConsole ? " on-console" : "") + (avecPanneau ? " panneau" : "")}>
       {commande}
       <div className="g actbar" data-lens="bar" role="group" aria-label="Actions du serveur" style={{ width: largeur }}>
-        {/* key={statut} : le contenu réapparaît en douceur à chaque changement d'état */}
+        {/* key={statut} : le contenu réapparaît en douceur à chaque changement d’état */}
         <div className="act-in" ref={dedans} key={statut}>
           {occupe ? (
             <>

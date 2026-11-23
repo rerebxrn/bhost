@@ -8,13 +8,13 @@
 }
 
 .grp-t {
-  margin: 22px 0 8px 2px;
+  margin: var(--space-22) 0 var(--space-8) var(--space-2);
   font: var(--f-titre-section);
   color: var(--text2);
 }
 
 .params .grp-t:first-child {
-  margin-top: 4px;
+  margin-top: var(--space-4);
 }
 
 .params .lbl {
@@ -68,7 +68,7 @@
   border-top: 1px solid var(--sep);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .ps-cmd span {
@@ -78,7 +78,7 @@
 
 .ps-cmd code {
   display: block;
-  padding: 8px 10px;
+  padding: var(--space-8) var(--space-10);
   border-radius: var(--r-ctl);
   background: var(--field);
   box-shadow: 0 0 0 1px var(--surf-edge);
@@ -107,9 +107,9 @@
 .wrow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
   min-height: 56px;
-  padding: 8px 10px 8px 14px;
+  padding: var(--space-8) var(--space-10) var(--space-8) var(--space-14);
   border-bottom: 1px solid var(--sep);
 }
 
@@ -125,6 +125,18 @@
   color: var(--text2);
 }
 
+/* Monde actuel : la place vide de « Supprimer » et « Utiliser ». */
+.w-place {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  visibility: hidden;
+}
+
+.w-place .icb {
+  display: inline-block;
+}
+
 .wrow.cur .w-ic {
   background: color-mix(in srgb, var(--acc) 15%, transparent);
   color: var(--acc-text);
@@ -133,7 +145,7 @@
 .mod-txt {
   flex: 1;
   min-width: 0;
-  margin-left: 4px;
+  margin-left: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -193,12 +205,12 @@
 
 .params .row.w-acts {
   justify-content: flex-start;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .params .row .avance {
   flex: 1;
-  margin: 2px 0;
+  margin: var(--space-2) 0;
 }
 
 /* Code de conduite : une zone de texte sur toute la largeur. */

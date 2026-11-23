@@ -138,7 +138,13 @@ fn sha1_maven(adresse: &str, lire: &dyn Fn(&str) -> Result<Vec<u8>, String>) -> 
 }
 
 /// Trouve l'installateur pour un logiciel et une version de Minecraft.
+#[cfg(test)]
 pub fn trouver(logiciel: &str, mc: &str, lire: &dyn Fn(&str) -> Result<Vec<u8>, String>) -> Result<Installation, String> {
+    trouver_pour(logiciel, mc, None, lire)
+}
+
+/// Comme `trouver`, avec une version précise du chargeur (`chargeur`, demandée par un modpack) au lieu de la dernière.
+pub fn trouver_pour(logiciel: &str, mc: &str, chargeur: Option<&str>, lire: &dyn Fn(&str) -> Result<Vec<u8>, String>) -> Result<Installation, String> {
     let introuvable = || format!("{logiciel} {mc} introuvable.");
     // La version ne sert que dans des adresses : on refuse tout ce qui n'est pas « chiffres, lettres, points, tirets ».
     if mc.is_empty() || !mc.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
@@ -148,15 +154,20 @@ pub fn trouver(logiciel: &str, mc: &str, lire: &dyn Fn(&str) -> Result<Vec<u8>, 
     let sur = |t: &str| !t.is_empty() && t.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+'));
     match logiciel {
         "Fabric" => {
-            // Le dernier « loader » stable, et le dernier installateur stable.
-            let loaders = json(lire("https://meta.fabricmc.net/v2/versions/loader")?)?;
-            let loader = loaders
-                .as_array()
-                .and_then(|l| l.iter().find(|v| v.get("stable").and_then(|s| s.as_bool()) == Some(true)).or(l.first()))
-                .and_then(|v| v.get("version")?.as_str())
-                .filter(|v| sur(v))
-                .ok_or_else(introuvable)?
-                .to_string();
+            // Le dernier « loader » stable (ou celui du modpack), et le dernier installateur stable.
+            let loader = match chargeur {
+                Some(c) => Some(c.to_string()).filter(|v| sur(v)).ok_or_else(introuvable)?,
+                None => {
+                    let loaders = json(lire("https://meta.fabricmc.net/v2/versions/loader")?)?;
+                    loaders
+                        .as_array()
+                        .and_then(|l| l.iter().find(|v| v.get("stable").and_then(|s| s.as_bool()) == Some(true)).or(l.first()))
+                        .and_then(|v| v.get("version")?.as_str())
+                        .filter(|v| sur(v))
+                        .ok_or_else(introuvable)?
+                        .to_string()
+                }
+            };
             let installateurs = json(lire("https://meta.fabricmc.net/v2/versions/installer")?)?;
             let inst = installateurs
                 .as_array()
@@ -175,9 +186,14 @@ pub fn trouver(logiciel: &str, mc: &str, lire: &dyn Fn(&str) -> Result<Vec<u8>, 
             Ok(Installation { fichier: Fichier { empreinte: sha1_maven(&adresse, lire)?, adresse, taille: 0, java: None }, arguments, build: loader })
         }
         "Forge" => {
-            let promos = json(lire(adresse_liste("Forge").unwrap())?)?;
-            let promo = |genre: &str| promos.get("promos").and_then(|p| p.get(format!("{mc}-{genre}"))).and_then(|v| v.as_str()).filter(|v| sur(v)).map(String::from);
-            let forge = promo("recommended").or_else(|| promo("latest")).ok_or_else(introuvable)?;
+            let forge = match chargeur {
+                Some(c) => Some(c.to_string()).filter(|v| sur(v)).ok_or_else(introuvable)?,
+                None => {
+                    let promos = json(lire(adresse_liste("Forge").unwrap())?)?;
+                    let promo = |genre: &str| promos.get("promos").and_then(|p| p.get(format!("{mc}-{genre}"))).and_then(|v| v.as_str()).filter(|v| sur(v)).map(String::from);
+                    promo("recommended").or_else(|| promo("latest")).ok_or_else(introuvable)?
+                }
+            };
             // Les très vieilles versions (1.7.10, 1.8.9…) ont un nom en plus à la fin : « 1.7.10-10.13.4.1614-1.7.10 ».
             for build in [format!("{mc}-{forge}"), format!("{mc}-{forge}-{mc}")] {
                 let adresse = format!("{FORGE_MAVEN}/{build}/forge-{build}-installer.jar");
@@ -186,6 +202,11 @@ pub fn trouver(logiciel: &str, mc: &str, lire: &dyn Fn(&str) -> Result<Vec<u8>, 
                 }
             }
             Err(introuvable())
+        }
+        "NeoForge" if chargeur.is_some() => {
+            let choisie = chargeur.filter(|v| sur(v)).ok_or_else(introuvable)?;
+            let adresse = format!("{NEOFORGE_MAVEN}/{choisie}/neoforge-{choisie}-installer.jar");
+            Ok(Installation { fichier: Fichier { empreinte: sha1_maven(&adresse, lire)?, adresse, taille: 0, java: None }, arguments: vec!["--installServer".into()], build: choisie.to_string() })
         }
         "NeoForge" => {
             let xml = lire(adresse_liste("NeoForge").unwrap())?;
@@ -256,7 +277,7 @@ pub fn executer_suivi(
     sur_ligne: &mut dyn FnMut(&str),
 ) -> Result<(), String> {
     use std::io::{BufRead, Write};
-    let mut ecrit = std::fs::File::create(journal).map_err(|e| format!("Impossible d'écrire le journal ({e})."))?;
+    let mut ecrit = std::fs::File::create(journal).map_err(|e| format!("Impossible d’écrire le journal ({e})."))?;
     let mut commande = Command::new(java);
     commande.arg("-jar").arg(outil).args(arguments).current_dir(dossier).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
@@ -265,8 +286,10 @@ pub fn executer_suivi(
         commande.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     let mut enfant = commande.spawn().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound { "Java est introuvable sur ce PC.".to_string() } else { format!("L'installation n'a pas pu démarrer ({e}).") }
+        if e.kind() == std::io::ErrorKind::NotFound { "Java est introuvable sur ce PC.".to_string() } else { format!("L’installation n’a pas pu démarrer ({e}).") }
     })?;
+    // Tout ce que l'outil lance (BuildTools lance Maven, Git…) est coupé avec lui si le délai est dépassé.
+    let groupe = crate::processus::groupe::Groupe::ranger(&enfant);
     // Deux lecteurs (sortie et erreurs) envoient leurs lignes ici.
     let (envoi, reception) = std::sync::mpsc::channel::<String>();
     let lecteurs: Vec<_> = [enfant.stdout.take().map(|s| Box::new(s) as Box<dyn std::io::Read + Send>), enfant.stderr.take().map(|s| Box::new(s) as Box<dyn std::io::Read + Send>)]
@@ -305,8 +328,9 @@ pub fn executer_suivi(
         match enfant.try_wait() {
             Ok(Some(code)) => break Ok(code),
             Ok(None) if Instant::now() > limite => {
+                groupe.couper();
                 let _ = enfant.kill();
-                break Err("L'installation est trop longue. Réessaie.".to_string());
+                break Err("L’installation est trop longue. Réessaie.".to_string());
             }
             Ok(None) => {}
             Err(e) => break Err(e.to_string()),
@@ -320,7 +344,7 @@ pub fn executer_suivi(
     }
     match fin? {
         code if code.success() => Ok(()),
-        _ => Err("L'installation a échoué. Détails : bhost-installation.log.".into()),
+        _ => Err("L’installation a échoué. Détails : bhost-installation.log.".into()),
     }
 }
 

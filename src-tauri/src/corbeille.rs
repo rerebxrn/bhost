@@ -1,5 +1,5 @@
 //! Mettre le dossier d'un serveur à la Corbeille de Windows : on peut encore le récupérer.
-#![cfg_attr(not(windows), allow(dead_code))]
+//! Sur BHOST OS (pas de Corbeille) : supprimé pour de bon.
 use std::path::Path;
 
 /// Met un dossier à la Corbeille. Si Windows ne peut pas (disque sans Corbeille, clé USB…),
@@ -29,12 +29,15 @@ pub fn jeter(dossier: &Path) -> Result<(), String> {
         return Err("Suppression annulée.".into());
     }
     if resultat != 0 {
-        return Err("Le dossier n'a pas pu partir. Un fichier est peut-être ouvert.".into());
+        return Err("Le dossier n’a pas pu partir. Un fichier est peut-être ouvert.".into());
     }
     Ok(())
 }
 
+/// BHOST OS (pas de Corbeille) : effacé pour de bon. Un lien symbolique est retiré lui-même (jamais ce qu'il vise).
 #[cfg(not(windows))]
-pub fn jeter(_dossier: &Path) -> Result<(), String> {
-    Err("Seulement sur Windows.".into())
+pub fn jeter(dossier: &Path) -> Result<(), String> {
+    let meta = std::fs::symlink_metadata(dossier).map_err(|_| "Introuvable.".to_string())?;
+    let resultat = if meta.is_dir() { std::fs::remove_dir_all(dossier) } else { std::fs::remove_file(dossier) };
+    resultat.map_err(|e| format!("Impossible de supprimer ({e})."))
 }

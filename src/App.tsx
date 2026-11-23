@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconCheck } from "@tabler/icons-react";
+import { IconAlertCircle, IconCheck } from "@tabler/icons-react";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import Tabs from "./components/Tabs";
@@ -74,11 +74,11 @@ const POINTS = 40; // nombre de mesures gardées pour les mini-courbes (environ 
 const MESURES_VIDES: Mesures = { processeur: [], memoireMo: [], joueurs: [], tps: [] };
 const garder = (serie: number[], valeur: number) => [...serie, valeur].slice(-POINTS);
 // Onglets en une seule colonne : la page est plus étroite et reste au centre.
-const ETROITES: string[] = ["joueurs", "extensions", "sauvegardes", "parametres"];
+const ETROITES: string[] = ["joueurs", "extensions", "sauvegardes", "automatisations", "parametres"];
 
-// Le premier lancement (choix « ce PC » ou « machine dédiée ») n'est montré qu'une fois.
+// Le premier lancement (choix « ce PC » ou « machine dédiée ») n’est montré qu’une fois.
 const CLE_ACCUEIL = "bhost.accueil";
-// Réglages › « Revoir » met « revoir » : l'écran revient, même avec des serveurs.
+// Réglages › « Revoir » met « revoir » : l’écran revient, même avec des serveurs.
 const revoirAccueil = () => {
   try {
     return localStorage.getItem(CLE_ACCUEIL) === "revoir";
@@ -97,17 +97,17 @@ const retenirAccueil = () => {
   try {
     localStorage.setItem(CLE_ACCUEIL, "local");
   } catch {
-    // Pas de stockage : l'écran reviendra au prochain lancement, ce n'est pas grave.
+    // Pas de stockage : l’écran reviendra au prochain lancement, ce n’est pas grave.
   }
 };
 
-// Ce qu'on affiche à droite de la barre latérale.
+// Ce qu’on affiche à droite de la barre latérale.
 // « machine » : le tutoriel « Préparer une machine dédiée », ouvert depuis Réglages.
-// « infos » : la page « Machine » d'une machine dédiée (stockage, température…).
+// « infos » : la page « Machine » d’une machine dédiée (stockage, température…).
 type Vue = "serveur" | "nouveau" | "reglages" | "machine" | "infos";
 
 export default function App() {
-  // null : la liste n'est pas encore arrivée de la partie Rust.
+  // null : la liste n’est pas encore arrivée de la partie Rust.
   const [serveurs, setServeurs] = useState<Serveur[] | null>(null);
   const [idActif, setIdActif] = useState<string | null>(null);
   const [vue, setVue] = useState<Vue>("serveur");
@@ -131,7 +131,7 @@ export default function App() {
         setServeurs(liste);
         setIdActif(liste[0]?.id ?? null);
         if (liste.length === 0) setVue("nouveau");
-        // Déjà des serveurs (mise à jour depuis une ancienne version) : pas d'écran d'accueil.
+        // Déjà des serveurs (mise à jour depuis une ancienne version) : pas d’écran d’accueil.
         else if (!revoirAccueil()) {
           retenirAccueil();
           setAccueilVu(true);
@@ -148,14 +148,14 @@ export default function App() {
     machinesLiees().then(setMachines, () => {});
     return ecouterMachines(setMachines);
   }, []);
-  // Les mesures des machines (stockage, température…) : relues toutes les 5 s, tant qu'il y a une machine.
+  // Les mesures des machines (stockage, température…) : relues toutes les 5 s, tant qu’il y a une machine.
   const avecMachines = machines.length > 0;
   useEffect(() => {
     if (!avecMachines) return;
     const minuterie = window.setInterval(() => machinesLiees().then(setMachines, () => {}), 5000);
     return () => window.clearInterval(minuterie);
   }, [avecMachines]);
-  // Une machine vient de s'allumer (ou de s'éteindre) : on relit la liste, ses serveurs arrivent (ou partent).
+  // Une machine vient de s’allumer (ou de s’éteindre) : on relit la liste, ses serveurs arrivent (ou partent).
   const enLigne = machines
     .filter((m) => m.etat === "en-ligne")
     .map((m) => m.id)
@@ -168,8 +168,16 @@ export default function App() {
       return;
     }
     listerServeurs().then(setServeurs, () => {});
+    // Une machine revenue ne renvoie son « Ouvert à tes amis » et ses problèmes que s’ils changent : on les redemande.
+    etatsAcces().then((l) => setAcces(Object.fromEntries(l.map((a) => [a.id, a]))), () => {});
+    problemesServeurs().then(setProblemes, () => {});
   }, [enLigne]);
-  // Une machine vient d'être reliée : ses serveurs arrivent dans la liste.
+  // La machine affichée est hors ligne : on montre sa page (pas l’assistant « Créer un serveur », qui échouerait).
+  useEffect(() => {
+    const m = machines.find((x) => x.id === machineActive);
+    if (m && m.etat !== "en-ligne" && (vue === "serveur" || vue === "nouveau")) setVue("infos");
+  }, [machines, machineActive, vue]);
+  // Une machine vient d’être reliée : ses serveurs arrivent dans la liste.
   const machineAjoutee = (m: Machine) => {
     setMachines((l) => [...l.filter((x) => x.id !== m.id), m]);
     setMachineActive(m.id);
@@ -187,10 +195,11 @@ export default function App() {
         setMachineActive((a) => (a === m.id ? "ici" : a));
         prevenir(`« ${m.nom} » retirée`);
       },
-      (e) => setErreur(typeof e === "string" ? e : "Ça n'a pas marché."),
+      // Depuis Réglages ou la page Machine, il n’y a pas d’en-tête d’onglet pour l’erreur : le petit message la montre.
+      (e) => prevenir(typeof e === "string" ? e : "Ça n’a pas marché.", 4000, true),
     );
 
-  // Rust nous prévient à chaque changement d'état d'un serveur.
+  // Rust nous prévient à chaque changement d’état d’un serveur.
   useEffect(
     () =>
       ecouterStatuts((id, statut, depuis) => {
@@ -201,7 +210,7 @@ export default function App() {
     [],
   );
 
-  // Rust nous donne aussi la liste des joueurs connectés, dès qu'elle change.
+  // Rust nous donne aussi la liste des joueurs connectés, dès qu’elle change.
   useEffect(
     () =>
       ecouterJoueurs((id, joueurs) =>
@@ -210,7 +219,7 @@ export default function App() {
     [],
   );
 
-  // Ouvert à tes amis : l'adresse sur Internet de chaque serveur ouvert (ou pourquoi ça ne marche pas).
+  // Ouvert à tes amis : l’adresse sur Internet de chaque serveur ouvert (ou pourquoi ça ne marche pas).
   const [acces, setAcces] = useState<Record<string, Acces>>({});
   useEffect(() => {
     const ranger = (liste: Acces[]) => setAcces(Object.fromEntries(liste.map((a) => [a.id, a])));
@@ -218,7 +227,7 @@ export default function App() {
     return ecouterAcces(ranger);
   }, []);
 
-  // Les cartes d'erreur de l'Accueil (Java, port, plantage, mémoire), et la connexion Internet.
+  // Les cartes d’erreur de l’Accueil (Java, port, plantage, mémoire), et la connexion Internet.
   const [problemes, setProblemes] = useState<Record<string, Probleme>>({});
   const [internet, setInternet] = useState(true);
   useEffect(() => {
@@ -239,7 +248,7 @@ export default function App() {
     };
   }, []);
 
-  // Le téléchargement de Java, avant le démarrage d'un serveur.
+  // Le téléchargement de Java, avant le démarrage d’un serveur.
   useEffect(
     () =>
       ecouterJava((id, version, pourcent) =>
@@ -275,7 +284,7 @@ export default function App() {
     [],
   );
 
-  // Les ticks par seconde du serveur affiché à l'accueil (un relevé toutes les dix secondes).
+  // Les ticks par seconde du serveur affiché à l’accueil (un relevé toutes les dix secondes).
   useEffect(
     () =>
       ecouterTps((id, tps) =>
@@ -287,7 +296,7 @@ export default function App() {
     [],
   );
 
-  // Quelqu'un vient d'essayer d'entrer sans être sur la liste blanche : on le montre tout de suite.
+  // Quelqu’un vient d’essayer d’entrer sans être sur la liste blanche : on le montre tout de suite.
   const [demande, setDemande] = useState<{ id: string; nom: string } | null>(null);
   const [demandeVue, setDemandeVue] = useState(false);
   const demandeActuelle = useRef(demande);
@@ -314,7 +323,7 @@ export default function App() {
         setDemandeVue(false);
         prevenir(accepter ? `${nom} peut entrer` : `Demande de ${nom} refusée`);
       },
-      (e) => setErreur(typeof e === "string" ? e : "Ça n'a pas marché."),
+      (e) => setErreur(typeof e === "string" ? e : "Ça n’a pas marché."),
     );
   };
 
@@ -326,15 +335,15 @@ export default function App() {
   };
 
   // Petit message qui apparaît deux secondes en haut du contenu (« localhost » copié…).
-  const [message, setMessage] = useState({ texte: "", visible: false });
+  const [message, setMessage] = useState({ texte: "", visible: false, erreur: false });
   const minuterie = useRef(0);
-  // duree = 0 : le message reste jusqu'au suivant (copie en cours…).
-  const prevenir = (texte: string, duree = 2000) => {
+  // duree = 0 : le message reste jusqu’au suivant (copie en cours…). erreur : icône d’alerte au lieu de la coche.
+  const prevenir = (texte: string, duree = 2000, erreur = false) => {
     window.clearTimeout(minuterie.current);
-    setMessage({ texte, visible: true });
+    setMessage({ texte, visible: true, erreur });
     if (duree > 0) minuterie.current = window.setTimeout(() => setMessage((m) => ({ ...m, visible: false })), duree);
   };
-  // « Pourquoi ça lag ? » : le rapport de spark s'ouvre dans le navigateur, même si on a changé de page.
+  // « Pourquoi ça lag ? » : le rapport de spark s’ouvre dans le navigateur, même si on a changé de page.
   useEffect(
     () =>
       ecouterLag((_, lien, raison) => {
@@ -351,7 +360,7 @@ export default function App() {
     setMessage((m) => ({ ...m, visible: false }));
   };
 
-  // Clic droit › Dupliquer : la copie peut être longue (gros monde), on montre l'avancement.
+  // Clic droit › Dupliquer : la copie peut être longue (gros monde), on montre l’avancement.
   const dupliquer = (source: Serveur) => {
     ouvrir(source.id);
     prevenir(`Copie de « ${source.nom} »…`, 0);
@@ -363,26 +372,26 @@ export default function App() {
       })
       .catch((e) => {
         cacherMessage();
-        setErreur(typeof e === "string" ? e : "La copie n'a pas marché.");
+        setErreur(typeof e === "string" ? e : "La copie n’a pas marché.");
       })
       .finally(arreter);
   };
 
-  // Lance une action et affiche la phrase d'erreur de Rust si elle échoue.
+  // Lance une action et affiche la phrase d’erreur de Rust si elle échoue.
   const agir = (action: Promise<void>) => {
     setErreur("");
-    action.catch((e) => setErreur(typeof e === "string" ? e : "Ça n'a pas marché. Réessaie."));
+    action.catch((e) => setErreur(typeof e === "string" ? e : "Ça n’a pas marché. Réessaie."));
   };
 
-  // Démarrer. Sur une machine dédiée, la RAM peut manquer : on propose d'arrêter un autre serveur.
+  // Démarrer. Sur une machine dédiée, la RAM peut manquer : on propose d’arrêter un autre serveur.
   const [manque, setManque] = useState<{ id: string; nom: string; manque: Manque } | null>(null);
   const demarrer = (s: Serveur) => {
     setErreur("");
     demarrerServeur(s.id).catch((e) =>
-      estManqueMemoire(e) ? setManque({ id: s.id, nom: s.nom, manque: e }) : setErreur(typeof e === "string" ? e : "Ça n'a pas marché. Réessaie."),
+      estManqueMemoire(e) ? setManque({ id: s.id, nom: s.nom, manque: e }) : setErreur(typeof e === "string" ? e : "Ça n’a pas marché. Réessaie."),
     );
   };
-  // Arrête `autre` proprement, attend qu'il soit vraiment arrêté (2 min au plus), puis démarre `id`.
+  // Arrête `autre` proprement, attend qu’il soit vraiment arrêté (2 min au plus), puis démarre `id`.
   const arreterPuisDemarrer = (autre: string, id: string) =>
     new Promise<void>((fini, rate) => {
       let minuterie = 0;
@@ -394,16 +403,16 @@ export default function App() {
       });
       minuterie = window.setTimeout(() => {
         desabonner();
-        rate("Le serveur met trop de temps à s'arrêter.");
+        rate("Le serveur met trop de temps à s’arrêter.");
       }, 120_000);
       arreterServeur(autre).catch((e) => {
         window.clearTimeout(minuterie);
         desabonner();
         rate(e);
       });
-    }).catch((e) => setErreur(typeof e === "string" ? e : estManqueMemoire(e) ? "Toujours pas assez de mémoire." : "Ça n'a pas marché. Réessaie."));
+    }).catch((e) => setErreur(typeof e === "string" ? e : estManqueMemoire(e) ? "Toujours pas assez de mémoire." : "Ça n’a pas marché. Réessaie."));
 
-  // Le menu du clic droit sur un serveur, et la fenêtre « Renommer » qu'il peut ouvrir.
+  // Le menu du clic droit sur un serveur, et la fenêtre « Renommer » qu’il peut ouvrir.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [aRenommer, setARenommer] = useState<string | null>(null);
   const [aDecorer, setADecorer] = useState<string | null>(null);
@@ -418,11 +427,12 @@ export default function App() {
     couleurServeur(id, couleur).then((s) =>
       setServeurs((liste) => liste && liste.map((x) => (x.id === id ? { ...x, couleur: s.couleur } : x))),
     );
-  // Après la suppression (ou le retrait) : on montre le serveur d'à côté, ou l'assistant s'il n'en reste plus.
+  // Après la suppression (ou le retrait) : on montre le serveur d’à côté, ou l’assistant s’il n’en reste plus.
   const supprimer = (id: string, seulementRetirer: boolean) =>
     (seulementRetirer ? retirerServeur(id) : supprimerServeur(id)).then(() => {
       const reste = liste.filter((s) => s.id !== id);
-      setServeurs(reste);
+      // Seulement ce serveur : ceux des autres machines restent dans la liste.
+      setServeurs((l) => l && l.filter((s) => s.id !== id));
       if (idActif === id || !reste.some((s) => s.id === idActif)) {
         const i = liste.findIndex((s) => s.id === id);
         setIdActif(reste[Math.min(i, reste.length - 1)]?.id ?? null);
@@ -431,15 +441,14 @@ export default function App() {
     });
   const renommer = (id: string, nom: string) =>
     renommerServeur(id, nom).then((s) => setServeurs((liste) => liste && liste.map((x) => (x.id === id ? { ...x, nom: s.nom } : x))));
-  // Un serveur renvoyé par Rust après un réglage : on garde l'état du moment (statut, joueurs…) de l'interface.
+  // Un serveur renvoyé par Rust après un réglage : on garde l’état du moment (statut, joueurs…) de l’interface.
   const mettreAJour = (s: Serveur) =>
     setServeurs(
       (liste) =>
         liste &&
         liste.map((x) =>
-          x.id === s.id
-            ? { ...x, nom: s.nom, ramMo: s.ramMo, joueursMax: s.joueursMax, port: s.port, couleur: s.couleur, javaChoix: s.javaChoix, demarrerAuto: s.demarrerAuto, ouvertAmis: s.ouvertAmis, optimise: s.optimise, arguments: s.arguments, priorite: s.priorite }
-            : x,
+          // Tout ce que Rust renvoie (logiciel, version, jar, stockage max…), sauf l’état du moment que l’interface suit.
+          x.id === s.id ? { ...s, machine: x.machine, statut: x.statut, depuis: x.depuis, joueurs: x.joueurs, java: x.java } : x,
         ),
     );
 
@@ -565,22 +574,15 @@ export default function App() {
                 }}
               />
 
-              <div
-                className={"g toast" + (message.visible ? " show" : "") + (avecConsole ? " on-console" : "")}
-                data-lens="btn" role="status" aria-live="polite">
-                <IconCheck size={15} stroke={2.4} aria-hidden />
-                <span>{message.texte}</span>
-              </div>
-
               <div className={"edgebar" + (defile && !avecConsole ? " on" : "")} aria-hidden />
               <div ref={zoneScroll} className={"scroll" + (avecConsole ? " pleine" : "")} onScroll={(e) => setDefile(e.currentTarget.scrollTop > 4)}>
-                {/* key : la page réapparaît en douceur quand on change d'onglet ou de serveur */}
+                {/* key : la page réapparaît en douceur quand on change d’onglet ou de serveur */}
                 <div className={"page" + (ETROITES.includes(onglet) ? " etroite" : "")} key={serveur.id + onglet}>
                   <Filet>
                   {onglet === "accueil" ? (
-                    <Accueil serveur={serveur} machine={machineChoisie} acces={acces[serveur.id]} mesures={mesures[serveur.id]} erreur={erreur} probleme={problemes[serveur.id]} internet={internet} onChange={mettreAJour} onOnglet={setOnglet} onCopie={prevenir} onErreur={setErreur} />
+                    <Accueil serveur={serveur} machine={machineChoisie} acces={acces[serveur.id]} mesures={mesures[serveur.id]} erreur={erreur} probleme={problemes[serveur.id]} internet={internet} onChange={mettreAJour} onOnglet={setOnglet} onCopie={prevenir} onErreur={setErreur} onManque={(m) => setManque({ id: serveur.id, nom: serveur.nom, manque: m })} />
                   ) : avecExtensions ? (
-                    // L'onglet Plugins / Mods / Datapacks a son propre en-tête (bouton « Ajouter », page « Ajouter »).
+                    // L’onglet Plugins / Mods / Datapacks a son propre en-tête (bouton « Ajouter », page « Ajouter »).
                     <Extensions serveur={serveur} erreur={erreur} onErreur={setErreur} onInfo={prevenir} />
                   ) : (
                     <>
@@ -649,10 +651,25 @@ export default function App() {
               />
             </>
           )}
+          {/* Le petit message, sur toutes les pages (Réglages et page Machine comprises). */}
+          <div
+            className={
+              "g toast" +
+              (message.visible ? " show" : "") +
+              (message.erreur ? " erreur" : "") +
+              (surServeur ? (avecConsole ? " on-console" : "") : " sans-dock")
+            }
+            data-lens="btn"
+            role="status"
+            aria-live="polite"
+          >
+            {message.erreur ? <IconAlertCircle size={15} stroke={2.2} aria-hidden /> : <IconCheck size={15} stroke={2.4} aria-hidden />}
+            <span>{message.texte}</span>
+          </div>
           {demande && (
             <DemandePop
               nom={demande.nom}
-              serveur={liste.find((s) => s.id === demande.id)?.nom ?? ""}
+              serveur={tous.find((s) => s.id === demande.id)?.nom ?? ""}
               ouvert={demandeVue}
               onAccepter={() => repondre(true)}
               onRefuser={() => repondre(false)}
@@ -675,10 +692,14 @@ export default function App() {
           onRetirer={() => setASupprimer({ id: serveurMenu.id, garder: true })}
           onSupprimer={() => setASupprimer({ id: serveurMenu.id, garder: false })}
           allume={serveurMenu.statut !== "arrete" && serveurMenu.statut !== "plante"}
-          onDossier={() => {
-            ouvrir(serveurMenu.id);
-            agir(ouvrirDossier(serveurMenu.id));
-          }}
+          onDossier={
+            serveurMenu.machine
+              ? undefined
+              : () => {
+                  ouvrir(serveurMenu.id);
+                  agir(ouvrirDossier(serveurMenu.id));
+                }
+          }
         />
       )}
       {serveurADecorer && (
@@ -692,6 +713,7 @@ export default function App() {
         <Supprimer
           nom={serveurASupprimer.nom}
           garder={aSupprimer.garder}
+          machine={!!serveurASupprimer.machine}
           onSupprimer={() => supprimer(serveurASupprimer.id, aSupprimer.garder)}
           onFermer={() => setASupprimer(null)}
         />

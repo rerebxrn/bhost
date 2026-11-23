@@ -7,27 +7,28 @@ import Inviter from "../components/Inviter";
 import MondeCasse from "../components/MondeCasse";
 import Problemes from "../components/Problemes";
 import Adresse from "../components/Adresse";
-import { analysesLag, pourquoiLag, regarderTps, type Probleme } from "../api";
+import { analysesLag, pourquoiLag, regarderTps, type ManqueMemoire, type Probleme } from "../api";
 import { adresseLocale, decimale, duree, nombre, nomLogiciel, texteStatut, type Acces, type Machine, type Mesures, type Onglet, type Serveur } from "../types";
 
 type Props = {
   serveur: Serveur;
-  machine?: Machine; // la machine dédiée qui l'héberge ; absente = ce PC
+  machine?: Machine; // la machine dédiée qui l’héberge ; absente = ce PC
   acces?: Acces; // Ouvert à tes amis : absent = fermé
-  mesures?: Mesures; // absent tant que le serveur n'a pas tourné
+  mesures?: Mesures; // absent tant que le serveur n’a pas tourné
   erreur: string;
-  probleme?: Probleme; // la carte d'erreur (Java, port, plantage, mémoire)
+  probleme?: Probleme; // la carte d’erreur (Java, port, plantage, mémoire)
   internet: boolean; // faux : plus de connexion
   onChange: (s: Serveur) => void;
   onOnglet: (o: Onglet) => void;
   onCopie: (message: string) => void;
   onErreur: (texte: string) => void;
+  onManque?: (m: ManqueMemoire) => void;
 };
 
-// L'accueil d'un serveur : son état, son adresse, et sa console qui prend la place.
-export default function Accueil({ serveur, machine, acces, mesures, erreur, probleme, internet, onChange, onOnglet, onCopie, onErreur }: Props) {
+// L’accueil d’un serveur : son état, son adresse, et sa console qui prend la place.
+export default function Accueil({ serveur, machine, acces, mesures, erreur, probleme, internet, onChange, onOnglet, onCopie, onErreur, onManque }: Props) {
   const [inviter, setInviter] = useState<DOMRect | null>(null);
-  // L'heure, relue toutes les 30 secondes, pour « En ligne depuis 3 h 42 ».
+  // L’heure, relue toutes les 30 secondes, pour « En ligne depuis 3 h 42 ».
   const [maintenant, setMaintenant] = useState(Date.now());
   useEffect(() => {
     const battement = window.setInterval(() => setMaintenant(Date.now()), 30000);
@@ -56,8 +57,12 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
     }, 1000);
     return () => window.clearInterval(battement);
   }, [analyseLag, serveur.id]);
+  // Un seul lancement à la fois : un double clic n’installe pas spark deux fois.
+  const [lagDemande, setLagDemande] = useState(false);
   const lancerLag = () => {
-    pourquoiLag(serveur.id).then(
+    if (lagDemande) return;
+    setLagDemande(true);
+    pourquoiLag(serveur.id).finally(() => setLagDemande(false)).then(
       ({ secondes }) => {
         if (secondes === 0) {
           onCopie("spark est installé. Redémarre le serveur, puis réessaie.");
@@ -67,7 +72,7 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
         analysesLag.set(serveur.id, fin);
         setFinLag(fin);
       },
-      (e) => onErreur(typeof e === "string" ? e : "Ça n'a pas marché."),
+      (e) => onErreur(typeof e === "string" ? e : "Ça n’a pas marché."),
     );
   };
 
@@ -89,9 +94,7 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
     navigator.clipboard.writeText(local).then(() => onCopie(`« ${local} » copié`));
   };
 
-  // L'adresse pour les amis (Paramètres › Ouvert à tes amis).
-  const pourAmis = serveur.ouvertAmis ? acces : undefined;
-  const publique = pourAmis?.etat === "ouvert" ? pourAmis.adresse : undefined;
+  // L’adresse pour les amis (Paramètres › Ouvert à tes amis).
   return (
     <>
       <header className="head ligne">
@@ -101,7 +104,7 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
             <span className={"dot " + serveur.statut} aria-hidden />
             <b>
               {texteStatut(serveur)}
-              {depuis && ` depuis ${depuis}`} · {publique ? "ouvert à tes amis" : "local"}
+              {depuis && ` depuis ${depuis}`}
             </b>
             <span>· {nomLogiciel(serveur)}</span>
           </div>
@@ -120,7 +123,7 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
         </div>
       </header>
 
-      <Problemes serveur={serveur} probleme={probleme} internet={internet} onChange={onChange} onOnglet={onOnglet} onInfo={onCopie} onErreur={onErreur} />
+      <Problemes serveur={serveur} probleme={probleme} internet={internet} onChange={onChange} onOnglet={onOnglet} onInfo={onCopie} onErreur={onErreur} onManque={onManque} />
       <MondeCasse id={serveur.id} onInfo={onCopie} onErreur={onErreur} />
 
       <section className={"surf strip" + (disque ? " cinq" : "")} aria-label="Indicateurs">
@@ -160,8 +163,15 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
             <div className="v">
               {tps === null ? "–" : decimale(tps)}
               {serveur.statut === "en-ligne" ? (
-                <button type="button" className="cell-lag" disabled={analyseLag} onClick={lancerLag}>
-                  {analyseLag ? (resteLag > 0 ? `Analyse… ${resteLag} s` : "Rapport…") : "Pourquoi ça lag ?"}
+                <button type="button" className="cell-lag" disabled={analyseLag || lagDemande} onClick={lancerLag}>
+                  {analyseLag ? (
+                    resteLag > 0 ? `Analyse… ${resteLag} s` : "Rapport…"
+                  ) : (
+                    <>
+                      <span className="lag-long">Pourquoi ça lag ?</span>
+                      <span className="lag-court">Pourquoi ?</span>
+                    </>
+                  )}
                 </button>
               ) : (
                 tps !== null && <small>sur 20</small>
@@ -171,7 +181,7 @@ export default function Accueil({ serveur, machine, acces, mesures, erreur, prob
           <Courbe valeurs={tps === null ? [] : (mesures?.tps ?? [])} max={20} />
         </div>
         {disque && (
-          // Le stockage bouge lentement : une barre plutôt qu'une courbe.
+          // Le stockage bouge lentement : une barre plutôt qu’une courbe.
           <div className="cell cell-disque">
             <div>
               <div className="k">Stockage</div>

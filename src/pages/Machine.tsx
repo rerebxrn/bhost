@@ -40,14 +40,14 @@ function Barre({ p, label }: { p: number; label: string }) {
   );
 }
 
-// La page « Machine » d'une machine dédiée (clic sur son état, en haut de la barre de gauche).
+// La page « Machine » d’une machine dédiée (clic sur son état, en haut de la barre de gauche).
 export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, onCopie, onMessage }: Props) {
   const [codeVu, setCodeVu] = useState(false);
   const [question, setQuestion] = useState<Question>(null);
   const [systeme, setSysteme] = useState<EtatSysteme | null>(null);
   const enLigne = m.etat === "en-ligne";
 
-  // L'état du système : relu toutes les 5 s (plus souvent rien ne change ; pendant une recherche, il bouge).
+  // L’état du système : relu toutes les 5 s (plus souvent rien ne change ; pendant une recherche, il bouge).
   useEffect(() => {
     if (!enLigne) return;
     let fini = false;
@@ -219,7 +219,7 @@ export default function Machine({ machine: m, serveurs, onRenommer, onRetirer, o
           </div>
           <div className="row">
             <div className="lbl">
-              <span>BHOST OS{systeme?.version ? ` ${systeme.version}` : ""}</span>
+              <span title={systeme?.agent ? `Agent ${systeme.agent}` : undefined}>BHOST OS{systeme?.version ? ` ${systeme.version}` : ""}</span>
               <span className="t2">{enLigne ? etatMaj : "–"}</span>
             </div>
             {attente > 0 && !enCours ? (
