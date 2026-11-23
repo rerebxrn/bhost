@@ -12,7 +12,7 @@
 .tb-app {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: calc(var(--space-16) + var(--space-2));
   font: var(--f-legende);
   pointer-events: none;
 }
@@ -113,4 +113,82 @@
 .wc.close:hover {
   background: var(--close-hover);
   color: #ffffff;
+}
+
+/* Le choix de la machine, à droite du logo : discret au repos, comme un menu de la barre de titre de macOS. */
+.mach {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: var(--h-control);
+  padding: 0 var(--space-6) 0 var(--space-8);
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  font: var(--f-bouton);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+
+.mach .ic,
+.mach .nm {
+  color: var(--text2);
+  transition: color var(--dur-fast);
+}
+
+.mach .ic,
+.mach .fl,
+.mach .sm-point {
+  flex: none;
+  display: flex;
+}
+
+.mach .fl {
+  color: var(--text2);
+}
+
+/* Un nom long est coupé avec « … » (le nom entier dans la bulle du survol). */
+.mach .nm {
+  flex: 0 0 auto;
+  max-width: 144px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mach .sm-point {
+  margin-left: var(--space-2);
+}
+
+.mach:hover {
+  background: var(--hover);
+}
+
+.mach.on {
+  background: var(--fill);
+}
+
+.mach:hover .ic,
+.mach:hover .nm,
+.mach.on .ic,
+.mach.on .nm {
+  color: var(--text);
+}
+
+.mach:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+
+.g.ctx.choix-menu.sm-menu.mach-menu {
+  min-width: 220px;
+  max-width: 300px;
+}
+
+.mach-menu .sm-nom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

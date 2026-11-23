@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { IconBan, IconCheck, IconCrown, IconDots, IconDoorExit, IconPlus, IconUserPlus } from "@tabler/icons-react";
 import Segment from "../components/Segment";
 import Tete from "../components/Tete";
@@ -376,7 +377,7 @@ function MenuJoueur({ nom, x, y, op, onFermer, onOp, onExpulser, onBannir }: Men
     action();
   };
 
-  return (
+  return createPortal(
     <>
       <div className="ctx-catch" onMouseDown={onFermer} onContextMenu={(e) => (e.preventDefault(), onFermer())} />
       <div
@@ -402,6 +403,7 @@ function MenuJoueur({ nom, x, y, op, onFermer, onOp, onExpulser, onBannir }: Men
           Bannir…
         </button>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }

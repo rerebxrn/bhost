@@ -2045,6 +2045,32 @@ fn ecrire_fichier(id: String, chemin: String, texte: String, etat: State<Etat>) 
     fichiers::ecrire(Path::new(&serveur_de(&etat, &id)?.dossier), &chemin, &texte)
 }
 
+/// Supprime des fichiers ou des dossiers du serveur (Windows : à la Corbeille). Renvoie combien sont partis.
+#[cfg_attr(feature = "bureau", tauri::command)]
+async fn supprimer_fichiers(app: AppHandle, id: String, chemins: Vec<String>) -> Result<usize, String> {
+    a_part(move || {
+        let serveur = serveur_de(&app.state::<Etat>(), &id)?;
+        fichiers::supprimer(Path::new(&serveur.dossier), &chemins, &serveur.jar)
+    })
+    .await
+}
+
+/// Renomme un fichier ou un dossier du serveur. Renvoie son nouveau chemin.
+#[cfg_attr(feature = "bureau", tauri::command)]
+async fn renommer_fichier(app: AppHandle, id: String, chemin: String, nom: String) -> Result<String, String> {
+    a_part(move || {
+        let serveur = serveur_de(&app.state::<Etat>(), &id)?;
+        fichiers::renommer(Path::new(&serveur.dossier), &chemin, &nom, &serveur.jar)
+    })
+    .await
+}
+
+/// Crée un dossier vide dans un dossier du serveur. Renvoie son chemin.
+#[cfg_attr(feature = "bureau", tauri::command)]
+async fn nouveau_dossier(app: AppHandle, id: String, dossier: String, nom: String) -> Result<String, String> {
+    a_part(move || fichiers::nouveau_dossier(Path::new(&serveur_de(&app.state::<Etat>(), &id)?.dossier), &dossier, &nom)).await
+}
+
 /// Copie des fichiers du PC (choisis, ou glissés dans la fenêtre) dans un dossier du serveur.
 #[cfg_attr(feature = "bureau", tauri::command)]
 async fn importer_fichiers(app: AppHandle, id: String, dossier: String, sources: Vec<String>) -> Result<usize, String> {
@@ -3066,6 +3092,9 @@ pub fn run() {
             fichiers_serveur,
             lire_fichier,
             ecrire_fichier,
+            supprimer_fichiers,
+            renommer_fichier,
+            nouveau_dossier,
             importer_fichiers,
             icone_serveur,
             icone_du_jeu,

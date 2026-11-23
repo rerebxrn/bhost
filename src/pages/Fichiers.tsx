@@ -1,23 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent as SourisReact } from "react";
+import { createPortal } from "react-dom";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   IconAlertTriangle,
   IconArrowLeft,
   IconChevronRight,
   IconCopy,
+  IconDots,
   IconExternalLink,
   IconFile,
   IconFileText,
   IconFileZip,
   IconFolder,
   IconFolderOpen,
+  IconFolderPlus,
   IconInfoCircle,
   IconLock,
+  IconPencil,
   IconPhoto,
   IconSettings,
+  IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
 import Segment from "../components/Segment";
+import Confirmer from "../components/Confirmer";
+import Renommer from "../components/Renommer";
 import { poids } from "../components/Fenetre";
 import {
   changerListeBlanche,
@@ -31,6 +38,9 @@ import {
   ecouterTravail,
   lireFichier,
   montrerFichier,
+  nouveauDossier,
+  renommerFichier,
+  supprimerFichiers,
   parametresServeur,
   proprietesServeur,
   reglerPartie,
@@ -40,6 +50,7 @@ import {
   type Partie,
 } from "../api";
 import type { Onglet, Serveur } from "../types";
+import "../components/Menus.css";
 import "./Fichiers.css";
 
 type Props = {
@@ -74,6 +85,11 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
   const [brouillon, setBrouillon] = useState<string | null>(null);
   const [vueFacile, setVueFacile] = useState(true);
   const [survol, setSurvol] = useState(false);
+  // Clic droit (ou « … ») sur un élément, et les fenêtres qui en découlent.
+  const [menu, setMenu] = useState<{ x: number; y: number; cible: Cible } | null>(null);
+  const [aRenommer, setARenommer] = useState<Cible | null>(null);
+  const [aSupprimer, setASupprimer] = useState<Cible | null>(null);
+  const [creerDossier, setCreerDossier] = useState(false);
   const allume = serveur.statut !== "arrete" && serveur.statut !== "plante";
 
   // Une réponse arrivée en retard (on a déjà changé de dossier ou de fichier) est ignorée :
@@ -150,6 +166,35 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
     );
   };
 
+  // Le fichier ouvert est-il cet élément, ou dans ce dossier ?
+  const touche = (c: string) => chemin !== null && (chemin === c || chemin.startsWith(c + "/"));
+
+  const supprimer = (c: Cible) =>
+    supprimerFichiers(serveur.id, [c.chemin]).then(
+      () => {
+        onInfo(`« ${c.nom} » supprimé`);
+        if (touche(c.chemin)) ouvrirFichier(null);
+        relire();
+      },
+      (e) => {
+        onErreur(phrase(e));
+        relire();
+      },
+    );
+
+  const renommer = (c: Cible) => (nom: string) =>
+    renommerFichier(serveur.id, c.chemin, nom).then((nouveau) => {
+      onInfo("Renommé");
+      if (touche(c.chemin) && chemin !== null) ouvrirFichier(nouveau + chemin.slice(c.chemin.length));
+      relire();
+    });
+
+  const creer = (nom: string) =>
+    nouveauDossier(serveur.id, dossier, nom).then(() => {
+      onInfo("Dossier créé");
+      relire();
+    });
+
   const nomFichier = chemin?.split("/").pop() ?? "";
   const gere = GERES.includes(nomFichier);
   const journal = /\.log$/i.test(nomFichier);
@@ -201,6 +246,9 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
               </span>
             ))}
           </nav>
+          <button type="button" className="icb" aria-label="Nouveau dossier" title="Nouveau dossier" onClick={() => setCreerDossier(true)}>
+            <IconFolderPlus size={15} stroke={2} aria-hidden />
+          </button>
           <button type="button" className="icb" aria-label="Importer des fichiers" title="Importer des fichiers" onClick={() => choisirFichiers().then((l) => importer(l, dossier))}>
             <IconUpload size={15} stroke={2} aria-hidden />
           </button>
@@ -226,19 +274,45 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
               const c = (dossier ? dossier + "/" : "") + e.nom;
               const choisi = !e.dossier && c === chemin;
               const Icone = icone(e);
+              const cible: Cible = { chemin: c, nom: e.nom, dossier: e.dossier };
+              const ouvrirMenu = (x: number, y: number) => setMenu({ x, y, cible });
               return (
-                <button
+                <div
                   key={e.nom}
-                  type="button"
-                  role="option"
-                  aria-selected={choisi}
-                  className={"fl" + (e.dossier ? " isdir" : "") + (choisi ? " sel" : "")}
-                  onClick={() => (e.dossier ? setDossier(c) : ouvrirFichier(c))}
+                  className={"fl-ligne" + (choisi ? " sel" : "") + (menu?.cible.chemin === c ? " menu" : "")}
+                  onContextMenu={(ev) => {
+                    ev.preventDefault();
+                    ouvrirMenu(ev.clientX, ev.clientY);
+                  }}
                 >
-                  <Icone className="fl-ic" size={16} stroke={1.8} aria-hidden />
-                  <span className="fl-n">{e.nom}</span>
-                  <span className="fl-m">{e.dossier ? `${e.taille} élément${e.taille > 1 ? "s" : ""}` : poids(e.taille)}</span>
-                </button>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={choisi}
+                    className={"fl" + (e.dossier ? " isdir" : "") + (choisi ? " sel" : "")}
+                    onClick={() => (e.dossier ? setDossier(c) : ouvrirFichier(c))}
+                    onKeyDown={(ev: KeyboardEvent) => {
+                      if (ev.key === "Delete") setASupprimer(cible);
+                      else if (ev.key === "F2") setARenommer(cible);
+                    }}
+                  >
+                    <Icone className="fl-ic" size={16} stroke={1.8} aria-hidden />
+                    <span className="fl-n">{e.nom}</span>
+                    <span className="fl-m">{e.dossier ? `${e.taille} élément${e.taille > 1 ? "s" : ""}` : poids(e.taille)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="icb fl-plus"
+                    aria-label={`Actions pour ${e.nom}`}
+                    title="Actions"
+                    onClick={(ev: SourisReact) => {
+                      const r = ev.currentTarget.getBoundingClientRect();
+                      ouvrirMenu(r.right - 4, r.bottom + 4);
+                    }}
+                  >
+                    <IconDots size={15} stroke={2} aria-hidden />
+                  </button>
+                </div>
               );
             })
           )}
@@ -383,7 +457,147 @@ export default function Fichiers({ serveur, onChange, onOnglet, onErreur, onInfo
           </>
         )}
       </section>
+
+      {menu && (
+        <MenuFichier
+          x={menu.x}
+          y={menu.y}
+          cible={menu.cible}
+          logiciel={menu.cible.chemin === serveur.jar}
+          surCePc={!serveur.machine}
+          onFermer={() => setMenu(null)}
+          onOuvrir={() => (menu.cible.dossier ? setDossier(menu.cible.chemin) : ouvrirFichier(menu.cible.chemin))}
+          onRenommer={() => setARenommer(menu.cible)}
+          onMontrer={() => montrerFichier(serveur.id, menu.cible.chemin).catch((e) => onErreur(phrase(e)))}
+          onSupprimer={() => setASupprimer(menu.cible)}
+        />
+      )}
+      {aRenommer && (
+        <Renommer
+          nom={aRenommer.nom}
+          titre={aRenommer.dossier ? "Renommer le dossier" : "Renommer le fichier"}
+          longueur={120}
+          onEnregistrer={renommer(aRenommer)}
+          onFermer={() => setARenommer(null)}
+        />
+      )}
+      {creerDossier && <Renommer nom="" titre="Nouveau dossier" bouton="Créer" longueur={120} onEnregistrer={creer} onFermer={() => setCreerDossier(false)} />}
+      {aSupprimer && (
+        <Confirmer
+          titre={`Supprimer « ${aSupprimer.nom} » ?`}
+          texte={
+            (aSupprimer.dossier ? "Le dossier et tout ce qu’il contient. " : "") +
+            (serveur.machine ? "Ce sera effacé pour de bon." : "Ça ira dans la Corbeille de Windows.") +
+            (allume ? " Le serveur tourne : mieux vaut l’arrêter avant." : "")
+          }
+          bouton="Supprimer"
+          onOui={() => supprimer(aSupprimer)}
+          onFermer={() => setASupprimer(null)}
+        />
+      )}
     </div>
+  );
+}
+
+type Cible = { chemin: string; nom: string; dossier: boolean };
+
+const MARGE = 8; // le menu ne touche jamais le bord de la fenêtre
+
+// Le menu du clic droit (ou du bouton « … ») sur un fichier ou un dossier.
+function MenuFichier({
+  x,
+  y,
+  cible,
+  logiciel,
+  surCePc,
+  onFermer,
+  onOuvrir,
+  onRenommer,
+  onMontrer,
+  onSupprimer,
+}: {
+  x: number;
+  y: number;
+  cible: Cible;
+  logiciel: boolean; // le .jar du serveur : ni renommé ni supprimé ici
+  surCePc: boolean;
+  onFermer: () => void;
+  onOuvrir: () => void;
+  onRenommer: () => void;
+  onMontrer: () => void;
+  onSupprimer: () => void;
+}) {
+  const menu = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState({ x, y });
+
+  // S’il dépasse en bas ou à droite, on le décale pour qu’il reste dans la fenêtre.
+  useLayoutEffect(() => {
+    const el = menu.current;
+    if (!el) return;
+    setPlace({
+      x: Math.max(MARGE, Math.min(x, window.innerWidth - el.offsetWidth - MARGE)),
+      y: Math.max(MARGE, Math.min(y, window.innerHeight - el.offsetHeight - MARGE)),
+    });
+    el.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [x, y]);
+
+  useEffect(() => {
+    window.addEventListener("resize", onFermer);
+    window.addEventListener("blur", onFermer);
+    return () => {
+      window.removeEventListener("resize", onFermer);
+      window.removeEventListener("blur", onFermer);
+    };
+  }, [onFermer]);
+
+  const touche = (e: KeyboardEvent) => {
+    if (e.key === "Escape") return onFermer();
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const choix = [...(menu.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+    const i = choix.indexOf(document.activeElement as HTMLButtonElement);
+    choix[(i + (e.key === "ArrowDown" ? 1 : choix.length - 1)) % choix.length]?.focus();
+  };
+
+  const choisir = (action: () => void) => () => {
+    onFermer();
+    action();
+  };
+  const bloque = logiciel ? "C’est le logiciel du serveur : sa version se change dans Paramètres." : undefined;
+
+  return createPortal(
+    <>
+      <div
+        className="ctx-catch"
+        onClick={onFermer}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onFermer();
+        }}
+      />
+      <div ref={menu} className="g ctx fx-menu" data-lens="panel" role="menu" aria-label={cible.nom} style={{ left: place.x, top: place.y }} onKeyDown={touche}>
+        <button type="button" role="menuitem" className="pm-item" onClick={choisir(onOuvrir)}>
+          {cible.dossier ? <IconFolderOpen size={16} stroke={2} aria-hidden /> : <IconFileText size={16} stroke={2} aria-hidden />}
+          Ouvrir
+        </button>
+        <button type="button" role="menuitem" className="pm-item" disabled={logiciel} title={bloque} onClick={choisir(onRenommer)}>
+          <IconPencil size={16} stroke={2} aria-hidden />
+          Renommer…
+        </button>
+        {surCePc && (
+          <button type="button" role="menuitem" className="pm-item" onClick={choisir(onMontrer)}>
+            <IconExternalLink size={16} stroke={2} aria-hidden />
+            Afficher dans l’Explorateur
+          </button>
+        )}
+        <div className="pm-sep" role="separator" />
+        <button type="button" role="menuitem" className="pm-item danger" disabled={logiciel} title={bloque} onClick={choisir(onSupprimer)}>
+          <IconTrash size={16} stroke={2} aria-hidden />
+          Supprimer…
+        </button>
+      </div>
+    </>,
+    document.body,
   );
 }
 

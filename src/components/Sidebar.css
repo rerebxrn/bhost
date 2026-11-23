@@ -4,14 +4,91 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  min-height: 0;
   padding: var(--space-4) var(--space-10) 12px;
-  overflow-y: auto;
 }
 
-.sec-title {
-  padding: 12px var(--space-10) var(--space-4);
+/* La liste (jauges, sections, serveurs) défile ; « Créer » et Réglages restent en bas. */
+.side-liste {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  overflow-y: auto;
+  margin: 0 calc(-1 * var(--space-10));
+  padding: 0 var(--space-10);
+}
+
+.side-liste > * {
+  flex: none;
+}
+
+.side-liste > :first-child {
+  margin-top: var(--space-4);
+}
+
+.side-bas {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-top: var(--space-6);
+}
+
+/* La case de 28 px de l'icône de « Créer » et Réglages (l'icône au centre, à 32 px comme les cubes). */
+.slot {
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Titre de section (« Serveurs ») : « + » au survol pour créer un serveur. */
+.grp {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 24px;
+  margin-top: var(--space-8);
+  padding: 0 var(--space-2) 0 var(--space-10);
+  border-radius: var(--r-sel);
   font: var(--f-titre-section);
   color: var(--text2);
+}
+
+.grp-nm {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grp-b {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-inner);
+  background: transparent;
+  color: var(--text2);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+}
+
+.grp:hover .grp-b,
+.grp-b:focus-visible {
+  opacity: 1;
+}
+
+.grp-b:hover {
+  background: var(--fill);
+  color: var(--text);
 }
 
 .srv,
@@ -88,23 +165,22 @@
 /* « Créer un serveur » : un lien d'action, jamais un bouton plein. */
 /* Icônes centrées sur le même axe que celles des serveurs (32 px), textes au même départ (56 px). */
 .new {
-  gap: var(--space-16);
+  gap: var(--space-10);
   height: var(--h-control);
-  padding: 0 var(--space-10) 0 var(--space-14);
+  padding: 0 var(--space-8);
   color: var(--acc-text);
   font: var(--f-bouton);
 }
 
 .side-foot {
-  margin-top: auto;
   padding-top: var(--space-8);
   border-top: 1px solid var(--sep);
 }
 
 .side-set {
-  gap: var(--space-16);
+  gap: var(--space-10);
   height: var(--h-control);
-  padding: 0 var(--space-10) 0 var(--space-14);
+  padding: 0 var(--space-8);
   font: var(--f-bouton);
   color: var(--text);
 }
@@ -129,81 +205,6 @@
 }
 
 /* ---------- Avec une machine dédiée ---------- */
-
-/* Le sélecteur de machine : en haut de la barre. Piste A (21/11, choix de Thomas « pour le moment ») :
-   une ligne transparente comme dans la barre du Finder, gris léger au survol, sans carte blanche. */
-.sel-machine {
-  display: flex;
-  align-items: center;
-  gap: var(--space-10);
-  width: 100%;
-  min-height: 48px;
-  margin-top: var(--space-6);
-  padding: var(--space-6) var(--space-8) var(--space-6) var(--space-8);
-  border: 0;
-  border-radius: var(--r-sel);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 0.3s var(--ease-spring),
-    background var(--dur-fast);
-}
-
-.sel-machine:hover {
-  background: var(--hover);
-}
-
-.sel-machine:active {
-  transform: scale(0.98);
-}
-
-.sel-machine.on {
-  background: var(--fill);
-}
-
-.sel-machine:focus-visible {
-  outline: 2px solid var(--acc);
-  outline-offset: 1px;
-}
-
-.sm-ico {
-  flex: 0 0 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  color: var(--text);
-}
-
-.sm-txt {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.sm-txt b {
-  font: var(--f-corps-fort);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sm-txt > span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font: var(--f-sous-titre);
-  color: var(--text2);
-}
-
-.sm-fleche {
-  flex: none;
-  color: var(--text2);
-}
 
 .sm-point {
   flex: none;
@@ -358,24 +359,4 @@
 
 .srv.off:active {
   transform: none;
-}
-
-/* « Machine dédiée + » juste au-dessus du trait de Réglages, tant qu'aucune machine n'est reliée. */
-.side-set.side-machine {
-  margin-top: auto;
-  color: var(--text2);
-}
-
-.side-machine + .side-foot {
-  margin-top: 0;
-}
-
-.side-machine .side-plus {
-  margin-left: auto;
-  color: var(--text3);
-}
-
-.side-machine:hover,
-.side-machine:hover .side-plus {
-  color: var(--text);
 }

@@ -453,6 +453,10 @@ export type FichierLu = ContenuFichier & { taille: number; modifie: number | nul
 export const fichiersServeur = (id: string, dossier: string) => invoke<Element[]>("fichiers_serveur", { id, dossier });
 export const lireFichier = (id: string, chemin: string) => invoke<FichierLu>("lire_fichier", { id, chemin });
 export const ecrireFichier = (id: string, chemin: string, texte: string) => invoke<void>("ecrire_fichier", { id, chemin, texte });
+// Supprimer (Windows : à la Corbeille ; machine dédiée : pour de bon), renommer, créer un dossier.
+export const supprimerFichiers = (id: string, chemins: string[]) => invoke<number>("supprimer_fichiers", { id, chemins });
+export const renommerFichier = (id: string, chemin: string, nom: string) => invoke<string>("renommer_fichier", { id, chemin, nom });
+export const nouveauDossier = (id: string, dossier: string, nom: string) => invoke<string>("nouveau_dossier", { id, dossier, nom });
 // Serveur sur une machine dédiée : les fichiers (plugins, mods, dossiers…) partent de ce PC vers la machine.
 export function importerFichiers(id: string, dossier: string, sources: string[]) {
   const m = surMachine(id);

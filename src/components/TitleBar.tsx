@@ -3,13 +3,20 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { IconMoon, IconSun } from "@tabler/icons-react";
 import { useTheme } from "../theme/ThemeProvider";
 import LogoBhost from "./LogoBhost";
+import SelecteurMachine from "./SelecteurMachine";
+import type { Machine } from "../types";
 import "./TitleBar.css";
 
 const fenetre = getCurrentWindow();
 
+type Props = {
+  // Le choix de la machine, à droite du logo (absent pendant le premier lancement).
+  machine?: { machines: Machine[]; active: string; onChoisir: (id: string) => void; onAjouter: () => void };
+};
+
 // Barre de titre maison : on retire celle de Windows pour garder le style BHOST,
 // mais on garde les vrais boutons − ▢ ✕ de Windows 11.
-export default function TitleBar() {
+export default function TitleBar({ machine }: Props) {
   const [agrandie, setAgrandie] = useState(false);
   const theme = useTheme();
 
@@ -36,6 +43,8 @@ export default function TitleBar() {
     <header className="titlebar" data-tauri-drag-region>
       <div className="tb-app">
         <LogoBhost hauteur={18} />
+        {/* Le bouton reçoit les clics : il n’est pas une zone pour déplacer la fenêtre. */}
+        {machine && <SelecteurMachine {...machine} />}
       </div>
 
       <div className="tb-right">

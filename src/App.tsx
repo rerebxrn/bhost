@@ -517,22 +517,27 @@ export default function App() {
 
   return (
     <div className="fenetre">
-      <TitleBar />
-      <div className="corps">
-        <Sidebar
-          serveurs={liste}
-          machines={machines}
-          machineActive={machineActive}
-          machineOuverte={vue === "infos"}
-          onMachine={(id) => {
+      <TitleBar
+        machine={{
+          machines,
+          active: machineActive,
+          onChoisir: (id) => {
             setMachineActive(id);
             // Machine hors ligne : ses serveurs sont grisés, on montre la machine.
             const eteinte = machines.some((m) => m.id === id && m.etat !== "en-ligne");
             const premier = eteinte ? undefined : tous.find((s) => (s.machine ?? "ici") === id);
             setIdActif(premier?.id ?? null);
             setVue(premier ? "serveur" : id === "ici" ? "nouveau" : "infos");
-          }}
-          onAjouterMachine={() => setAjoutMachine(true)}
+          },
+          onAjouter: () => setAjoutMachine(true),
+        }}
+      />
+      <div className="corps">
+        <Sidebar
+          serveurs={liste}
+          machines={machines}
+          machineActive={machineActive}
+          machineOuverte={vue === "infos"}
           onVueMachine={() => setVue("infos")}
           idActif={surServeur ? serveur.id : null}
           nouveauOuvert={serveurs !== null && vue !== "reglages" && vue !== "infos" && !surServeur}

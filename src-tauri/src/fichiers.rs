@@ -1,5 +1,5 @@
 // L'onglet Fichiers : parcourir le dossier d'un serveur, lire et modifier les fichiers texte,
-// importer des fichiers, changer l'icône du serveur (server-icon.png, 64 × 64).
+// importer, supprimer, renommer, créer un dossier, changer l'icône du serveur (server-icon.png, 64 × 64).
 // On ne sort jamais du dossier du serveur. Ce fichier ne dépend pas de Tauri : il se teste tout seul (cargo test).
 
 use base64::Engine;
@@ -189,6 +189,98 @@ pub fn importer(racine: &Path, relatif: &str, sources: &[PathBuf]) -> Result<usi
     Ok(copies)
 }
 
+/// Un nom de fichier ou de dossier accepté (« config.yml », « Mes mondes ») : pas de « / », pas de « .. »,
+/// rien que Windows refuse (< > : " | ? * et les noms réservés comme CON ou NUL).
+pub fn nom_valide(nom: &str) -> Result<&str, String> {
+    let nom = nom.trim();
+    if nom.is_empty() {
+        return Err("Donne un nom.".into());
+    }
+    if nom.chars().count() > 120 {
+        return Err("Nom trop long.".into());
+    }
+    if nom == "." || nom == ".." || nom.ends_with('.') || nom.chars().any(|c| c.is_control() || "/\\<>:\"|?*".contains(c)) {
+        return Err("Ce nom n’est pas possible. Évite / \\ < > : \" | ? *".into());
+    }
+    let base = nom.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let reserves = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3"];
+    if reserves.contains(&base.as_str()) {
+        return Err("Ce nom est réservé par Windows.".into());
+    }
+    Ok(nom)
+}
+
+/// Les éléments qu'on ne supprime ni ne renomme ici : le logiciel du serveur (il se change dans Paramètres).
+fn protege(racine: &Path, chemin: &Path, jar: &str) -> Result<(), String> {
+    if chemin == racine {
+        return Err("Le dossier du serveur ne se supprime pas ici.".into());
+    }
+    if !jar.is_empty() && chemin == racine.join(jar) {
+        return Err("C’est le logiciel du serveur. Change de version dans Paramètres.".into());
+    }
+    Ok(())
+}
+
+/// Supprime des fichiers ou des dossiers du serveur. Sur Windows : à la Corbeille ; sur BHOST OS : pour de bon.
+/// Renvoie le nombre d'éléments supprimés. S'arrête à la première erreur (ceux d'avant restent supprimés).
+pub fn supprimer(racine: &Path, chemins: &[String], jar: &str) -> Result<usize, String> {
+    let mut faits = 0;
+    for relatif in chemins {
+        let chemin = chemin_sur(racine, relatif)?;
+        protege(racine, &chemin, jar)?;
+        if fs::symlink_metadata(&chemin).is_err() {
+            continue; // déjà parti
+        }
+        crate::corbeille::jeter(&chemin).map_err(|e| {
+            let nom = relatif.rsplit(['/', '\\']).next().unwrap_or(relatif);
+            format!("« {nom} » : {e}")
+        })?;
+        faits += 1;
+    }
+    Ok(faits)
+}
+
+/// Renomme un fichier ou un dossier, sans changer de dossier. Renvoie le nouveau chemin relatif.
+pub fn renommer(racine: &Path, relatif: &str, nouveau: &str, jar: &str) -> Result<String, String> {
+    let chemin = chemin_sur(racine, relatif)?;
+    protege(racine, &chemin, jar)?;
+    let nouveau = nom_valide(nouveau)?;
+    if fs::symlink_metadata(&chemin).is_err() {
+        return Err("Il n’existe plus.".into());
+    }
+    let parent = chemin.parent().ok_or("Chemin refusé.")?;
+    let cible = parent.join(nouveau);
+    let meme = chemin.file_name().is_some_and(|n| n.to_string_lossy() == nouveau);
+    if meme {
+        return Ok(relatif.to_string());
+    }
+    // « Config » → « config » : même fichier sur Windows, on laisse faire ; sinon, pas d'écrasement.
+    let casse = chemin.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase() == nouveau.to_lowercase());
+    if !casse && fs::symlink_metadata(&cible).is_ok() {
+        return Err(format!("« {nouveau} » existe déjà ici."));
+    }
+    crate::garde::dans(racine, &cible)?;
+    fs::rename(&chemin, &cible).map_err(|e| format!("Impossible de renommer ({e}). Un fichier est peut-être ouvert."))?;
+    let dossier = relatif.trim_end_matches(['/', '\\']).rsplit_once(['/', '\\']).map(|(d, _)| d).unwrap_or("");
+    Ok(if dossier.is_empty() { nouveau.to_string() } else { format!("{dossier}/{nouveau}") })
+}
+
+/// Crée un dossier vide dans un dossier du serveur. Renvoie son chemin relatif.
+pub fn nouveau_dossier(racine: &Path, relatif: &str, nom: &str) -> Result<String, String> {
+    let dossier = chemin_sur(racine, relatif)?;
+    if !dossier.is_dir() {
+        return Err("Ce dossier n’existe plus.".into());
+    }
+    let nom = nom_valide(nom)?;
+    let cible = dossier.join(nom);
+    if fs::symlink_metadata(&cible).is_ok() {
+        return Err(format!("« {nom} » existe déjà ici."));
+    }
+    fs::create_dir(&cible).map_err(|e| format!("Impossible de créer le dossier ({e})."))?;
+    let relatif = relatif.trim_matches(['/', '\\']);
+    Ok(if relatif.is_empty() { nom.to_string() } else { format!("{relatif}/{nom}") })
+}
+
 /// Fait l'icône du serveur (server-icon.png, 64 × 64) à partir d'une image PNG, recadrée au centre.
 pub fn icone(source: &Path, racine: &Path) -> Result<(), String> {
     let illisible = |_| "Image illisible (il faut un fichier PNG).".to_string();
@@ -308,6 +400,38 @@ mod tests {
         assert_eq!(fs::read(serveur.join("plugins").join("a (2).jar")).unwrap(), b"neuf");
         assert!(serveur.join("plugins").join("Config").join("x.yml").is_file());
         assert!(importer(&serveur, "plugins", &[d.clone()]).is_err()); // le serveur dans lui-même
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn supprime_renomme_et_cree() {
+        let d = dossier("gerer");
+        fs::create_dir_all(d.join("plugins").join("Essentials")).unwrap();
+        fs::write(d.join("plugins").join("Essentials").join("config.yml"), b"a: 1").unwrap();
+        fs::write(d.join("plugins").join("Essentials.jar"), b"PK").unwrap();
+        fs::write(d.join("paper.jar"), b"PK").unwrap();
+        // Nouveau dossier, puis il existe déjà.
+        assert_eq!(nouveau_dossier(&d, "plugins", "Vieux").unwrap(), "plugins/Vieux");
+        assert!(d.join("plugins").join("Vieux").is_dir());
+        assert!(nouveau_dossier(&d, "plugins", "Vieux").is_err());
+        assert!(nouveau_dossier(&d, "", "a/b").is_err());
+        assert!(nouveau_dossier(&d, "", "..").is_err());
+        assert!(nouveau_dossier(&d, "", "NUL").is_err());
+        assert!(nouveau_dossier(&d, "", "  ").is_err());
+        // Renommer : pas d'écrasement, pas de sortie du dossier.
+        assert_eq!(renommer(&d, "plugins/Vieux", "Ancien", "paper.jar").unwrap(), "plugins/Ancien");
+        assert!(renommer(&d, "plugins/Ancien", "Essentials", "paper.jar").is_err());
+        assert!(renommer(&d, "plugins/Ancien", "../x", "paper.jar").is_err());
+        assert!(renommer(&d, "paper.jar", "x.jar", "paper.jar").is_err());
+        assert!(renommer(&d, "", "x", "paper.jar").is_err());
+        // Supprimer : un dossier entier et un fichier ; jamais le logiciel ni le dossier du serveur.
+        assert_eq!(supprimer(&d, &["plugins/Essentials".into(), "plugins/Essentials.jar".into()], "paper.jar").unwrap(), 2);
+        assert!(!d.join("plugins").join("Essentials").exists());
+        assert!(!d.join("plugins").join("Essentials.jar").exists());
+        assert!(supprimer(&d, &["paper.jar".into()], "paper.jar").is_err());
+        assert!(supprimer(&d, &["".into()], "paper.jar").is_err());
+        assert!(supprimer(&d, &["../x".into()], "paper.jar").is_err());
+        assert_eq!(supprimer(&d, &["plugins/rien".into()], "paper.jar").unwrap(), 0);
         let _ = fs::remove_dir_all(&d);
     }
 

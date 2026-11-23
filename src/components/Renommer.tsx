@@ -4,12 +4,14 @@ import "./Menus.css";
 type Props = {
   nom: string; // le nom actuel
   titre?: string; // « Renommer la machine » ; par défaut, un serveur
+  bouton?: string; // « Créer » ; par défaut « Enregistrer »
+  longueur?: number; // nombre de caractères max (40 par défaut)
   onEnregistrer: (nom: string) => Promise<void>; // rejetée avec une phrase si Rust refuse
   onFermer: () => void;
 };
 
-// La petite fenêtre « Renommer le serveur » (ou « Renommer la machine »).
-export default function Renommer({ nom, titre = "Renommer le serveur", onEnregistrer, onFermer }: Props) {
+// La petite fenêtre « Renommer le serveur » (ou la machine, un fichier, « Nouveau dossier »).
+export default function Renommer({ nom, titre = "Renommer le serveur", bouton = "Enregistrer", longueur = 40, onEnregistrer, onFermer }: Props) {
   const [valeur, setValeur] = useState(nom);
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
@@ -55,7 +57,7 @@ export default function Renommer({ nom, titre = "Renommer le serveur", onEnregis
           className="field dlg-field"
           type="text"
           value={valeur}
-          maxLength={40}
+          maxLength={longueur}
           aria-label="Nouveau nom"
           onChange={(e) => {
             setValeur(e.target.value);
@@ -73,7 +75,7 @@ export default function Renommer({ nom, titre = "Renommer le serveur", onEnregis
             Annuler
           </button>
           <button type="submit" className="dlg-ok" disabled={!valide}>
-            Enregistrer
+            {bouton}
           </button>
         </div>
       </form>
