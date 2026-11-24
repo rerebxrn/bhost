@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -52,6 +52,8 @@ const NOMS_MAX: usize = 200_000;
 /// « Ce nom est-il libre ? » : questions permises par adresse IP (bloc /64) en 10 minutes.
 const QUESTIONS_MAX: u32 = 120;
 const QUESTIONS_DUREE: Duration = Duration::from_secs(600);
+/// Part des joueurs relayés gardée aux serveurs BHOST+ (relais prioritaire) : 20 %.
+const PART_PRIORITAIRE: usize = 20;
 /// Machines dédiées : codes faux permis par adresse IP avant d'attendre.
 const ESSAIS_MAX: u32 = 5;
 /// … et l'attente après le 5ᵉ code faux.
@@ -64,6 +66,17 @@ pub struct Reglages {
     pub agents: SocketAddr,
     /// Le registre des noms (JSON). None : en mémoire seulement (tests).
     pub registre: Option<PathBuf>,
+    /// Joueurs relayés en même temps au plus. Au-delà de 80 %, seuls les serveurs BHOST+ font encore entrer les leurs.
+    pub joueurs_max: usize,
+    /// La clé publique du service BHOST+ (hexa) : elle signe les jetons du relais prioritaire. None : pas de priorité.
+    pub plus_cle: Option<String>,
+}
+
+impl Reglages {
+    /// Sans BHOST+ (essais) : 400 joueurs, pas de clé.
+    pub fn simples(domaine: &str, joueurs: SocketAddr, agents: SocketAddr, registre: Option<PathBuf>) -> Reglages {
+        Reglages { domaine: domaine.into(), joueurs, agents, registre, joueurs_max: 400, plus_cle: None }
+    }
 }
 
 /// Un nom pris : sa clé publique (hexa) et la dernière fois qu'on l'a vu (secondes depuis 1970).
@@ -82,6 +95,8 @@ struct Registre {
 struct Agent {
     session: u64,
     envoi: mpsc::Sender<DuRelais>,
+    /// BHOST+ : relais prioritaire jusqu'à cette date (secondes depuis 1970 ; 0 : non).
+    priorite: Arc<AtomicU64>,
     /// Retiré ou remplacé : ce bout tombe, et la session le voit (elle coupe la connexion).
     _fin: oneshot::Sender<()>,
 }
@@ -125,6 +140,20 @@ pub struct Relais {
     essais: Mutex<HashMap<IpAddr, (Instant, u32)>>,
     /// Questions « LIBRE » par adresse IP : (depuis quand, combien).
     questions: Mutex<HashMap<IpAddr, (Instant, u32)>>,
+    /// Joueurs relayés en ce moment, et le maximum.
+    relayes: AtomicUsize,
+    joueurs_max: usize,
+    /// La clé du service BHOST+ qui signe les jetons du relais prioritaire.
+    plus_cle: Option<ed25519_dalek::VerifyingKey>,
+}
+
+/// Un joueur relayé : compté tant qu'il est là.
+struct Relaye<'a>(&'a AtomicUsize);
+
+impl Drop for Relaye<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 fn maintenant() -> u64 {
@@ -180,7 +209,15 @@ impl Drop for Place<'_> {
 }
 
 impl Relais {
-    fn nouveau(domaine: &str, fichier: Option<PathBuf>) -> io::Result<Relais> {
+    fn nouveau(domaine: &str, fichier: Option<PathBuf>, joueurs_max: usize, plus_cle: Option<&str>) -> io::Result<Relais> {
+        let plus_cle = match plus_cle {
+            None => None,
+            Some(hexa) => {
+                let octets = protocole::depuis_hexa(hexa.trim()).and_then(|o| <[u8; 32]>::try_from(o).ok());
+                let cle = octets.and_then(|o| ed25519_dalek::VerifyingKey::from_bytes(&o).ok());
+                Some(cle.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "clé BHOST+ invalide"))?)
+            }
+        };
         // Un registre abîmé ne doit jamais devenir un registre vide (tous les noms seraient libres) :
         // le relais refuse de démarrer, il faut le réparer (ou reprendre noms.bak).
         let mut registre: Registre = match fichier.as_ref().map(std::fs::read) {
@@ -208,6 +245,9 @@ impl Relais {
             machines: Mutex::default(),
             essais: Mutex::default(),
             questions: Mutex::default(),
+            relayes: AtomicUsize::new(0),
+            joueurs_max: joueurs_max.max(1),
+            plus_cle,
         })
     }
 
@@ -349,7 +389,7 @@ where
 
 /// Ouvre les deux ports et lance le relais. Rend les vraies adresses (utile avec le port 0).
 pub async fn demarrer(r: Reglages) -> io::Result<(SocketAddr, SocketAddr, Arc<Relais>)> {
-    let relais = Arc::new(Relais::nouveau(&r.domaine, r.registre)?);
+    let relais = Arc::new(Relais::nouveau(&r.domaine, r.registre, r.joueurs_max, r.plus_cle.as_deref())?);
     let joueurs = TcpListener::bind(r.joueurs).await?;
     let agents = TcpListener::bind(r.agents).await?;
     let adresses = (joueurs.local_addr()?, agents.local_addr()?);
@@ -404,9 +444,13 @@ async fn joueur(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()>
         return absent(&mut flux, lu, taille, protocole, suite, ETEINT).await;
     };
     // Le BHOST de ce serveur est-il là ?
-    let envoi = rel.agents.lock().unwrap().get(&nom).map(|a| a.envoi.clone());
-    let Some(envoi) = envoi else {
+    let present = rel.agents.lock().unwrap().get(&nom).map(|a| (a.envoi.clone(), a.priorite.load(Ordering::Relaxed)));
+    let Some((envoi, priorite)) = present else {
         return absent(&mut flux, lu, taille, protocole, suite, ETEINT).await;
+    };
+    // Relais chargé : les 20 % de places du haut restent aux serveurs BHOST+ (la liste des serveurs passe toujours).
+    let Some(_relaye) = rel.place_relayee(priorite > maintenant(), suite == 1) else {
+        return absent(&mut flux, lu, taille, protocole, suite, PLEIN).await;
     };
     let id = numero();
     let jeton = protocole::hexa(&hasard::<16>());
@@ -427,6 +471,30 @@ async fn joueur(rel: &Relais, mut flux: TcpStream, ip: IpAddr) -> io::Result<()>
 }
 
 const ETEINT: &str = "Serveur éteint ou introuvable.";
+const PLEIN: &str = "Le relais BHOST est plein. Réessaie dans quelques minutes.";
+
+impl Relais {
+    /// Une place de joueur relayé. `prioritaire` : serveur BHOST+ ; `statut` : la liste des serveurs (jamais refusée).
+    fn place_relayee(&self, prioritaire: bool, statut: bool) -> Option<Relaye<'_>> {
+        let limite = if prioritaire || statut { self.joueurs_max } else { self.joueurs_max * (100 - PART_PRIORITAIRE) / 100 };
+        let mut n = self.relayes.load(Ordering::Relaxed);
+        loop {
+            if n >= limite && !statut {
+                return None;
+            }
+            match self.relayes.compare_exchange_weak(n, n + 1, Ordering::Relaxed, Ordering::Relaxed) {
+                Ok(_) => return Some(Relaye(&self.relayes)),
+                Err(autre) => n = autre,
+            }
+        }
+    }
+
+    /// Joueurs relayés en ce moment.
+    pub fn relayes(&self) -> usize {
+        self.relayes.load(Ordering::Relaxed)
+    }
+
+}
 
 /// Un numéro de connexion au hasard : on ne peut pas deviner celui d'un autre.
 fn numero() -> u64 {
@@ -621,15 +689,27 @@ async fn controle(rel: &Relais, mut flux: TcpStream, ip: IpAddr, nom: String, cl
     let session = numero();
     let (envoi, mut reception) = mpsc::channel::<DuRelais>(64);
     let (fin, mut remplace) = oneshot::channel::<()>();
-    rel.agents.lock().unwrap().insert(nom.clone(), Agent { session, envoi: envoi.clone(), _fin: fin });
+    let priorite = Arc::new(AtomicU64::new(0));
+    rel.agents.lock().unwrap().insert(nom.clone(), Agent { session, envoi: envoi.clone(), priorite: priorite.clone(), _fin: fin });
     ecrire(&mut flux, &DuRelais::Ok { adresse: format!("{nom}.{}", rel.domaine) }).await?;
 
     let (mut lecture, mut ecriture) = flux.into_split();
-    // Les lignes de BHOST : PING (on répond PONG par le même canal), sinon on coupe. Rien pendant 70 s : parti.
+    // Les lignes de BHOST : PING (on répond PONG par le même canal), PRIORITE (BHOST+), sinon on coupe.
+    // Rien pendant 70 s : parti.
+    let plus = rel.plus_cle.is_some().then(|| (rel.plus_cle, cle.clone()));
     let mut lecteur = tokio::spawn(async move {
         while let Ok(Some(ligne)) = lire_ligne(&mut lecture, DELAI_SILENCE).await {
-            if protocole::lire_de_bhost(&ligne) != Some(DeBhost::Ping) || envoi.send(DuRelais::Pong).await.is_err() {
-                break;
+            match protocole::lire_de_bhost(&ligne) {
+                Some(DeBhost::Ping) if envoi.send(DuRelais::Pong).await.is_ok() => {}
+                Some(DeBhost::Priorite { expire, signature }) => {
+                    // Un jeton faux est ignoré (sans couper) : le serveur passe simplement sans priorité.
+                    if let Some((Some(cle_plus), cle)) = &plus
+                        && jeton_signe(cle_plus, cle, expire, &signature)
+                    {
+                        priorite.store(expire, Ordering::Relaxed);
+                    }
+                }
+                _ => break,
             }
         }
     });
@@ -780,6 +860,12 @@ async fn piloter(rel: &Relais, mut flux: TcpStream, ip: IpAddr, code: String, ma
 }
 
 /// Compare deux jetons sans que le temps de réponse dise où ils diffèrent.
+/// Le jeton BHOST+ : signé par le service pour la clé `cle`, pas encore expiré.
+fn jeton_signe(plus: &ed25519_dalek::VerifyingKey, cle: &str, expire: u64, signature: &str) -> bool {
+    let Some(signature) = protocole::depuis_hexa(signature).and_then(|o| <[u8; 64]>::try_from(o).ok()) else { return false };
+    expire > maintenant() && plus.verify_strict(protocole::a_signer_priorite(cle, expire).as_bytes(), &ed25519_dalek::Signature::from_bytes(&signature)).is_ok()
+}
+
 fn egal_temps_constant(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }

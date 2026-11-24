@@ -1,4 +1,5 @@
 // Le programme du relais : `bhost-relais --domaine bhost.app --joueurs 0.0.0.0:25565 --agents 0.0.0.0:4443 --registre noms.json`
+// BHOST+ (relais prioritaire) : `--plus-cle /opt/bhost-relais/plus.cle.pub`, et `--joueurs-max 400`.
 use bhost_relais::{Reglages, demarrer};
 use std::path::PathBuf;
 
@@ -25,7 +26,7 @@ async fn main() {
     plus_de_fichiers();
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--aide" || a == "--help") {
-        println!("bhost-relais --domaine bhost.app --joueurs 0.0.0.0:25565 --agents 0.0.0.0:4443 --registre noms.json");
+        println!("bhost-relais --domaine bhost.app --joueurs 0.0.0.0:25565 --agents 0.0.0.0:4443 --registre noms.json [--joueurs-max 400] [--plus-cle plus.cle.pub]");
         return;
     }
     let lire = |nom: &str, defaut: &str| valeur(&args, nom, defaut).parse().unwrap_or_else(|_| panic!("{nom} : adresse invalide"));
@@ -34,6 +35,13 @@ async fn main() {
         joueurs: lire("--joueurs", "0.0.0.0:25565"),
         agents: lire("--agents", "0.0.0.0:4443"),
         registre: Some(PathBuf::from(valeur(&args, "--registre", "noms.json"))),
+        joueurs_max: valeur(&args, "--joueurs-max", "400").parse().expect("--joueurs-max : un nombre"),
+        // BHOST+ : la clé publique du service (fichier plus.cle.pub, écrit par bhost-plus). Absente : pas de priorité.
+        plus_cle: args
+            .iter()
+            .position(|a| a == "--plus-cle")
+            .and_then(|i| args.get(i + 1))
+            .map(|f| std::fs::read_to_string(f).unwrap_or_else(|_| panic!("{f} : clé BHOST+ illisible"))),
     };
     let domaine = reglages.domaine.clone();
     let (joueurs, agents, relais) = demarrer(reglages).await.expect("impossible d'ouvrir les ports");

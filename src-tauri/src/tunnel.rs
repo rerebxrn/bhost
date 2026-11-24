@@ -65,6 +65,14 @@ pub struct Tunnels {
 /// « Ce serveur peut-il recevoir un joueur ? » (id du serveur).
 pub type Actif = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
+/// BHOST+ : le jeton du relais prioritaire (expire, signature), donné par plus.rs.
+/// Chaque serveur l'envoie au relais en se connectant, puis dès qu'il change.
+static PRIORITE: Mutex<Option<(u64, String)>> = Mutex::new(None);
+
+pub(crate) fn regler_priorite(jeton: Option<(u64, String)>) {
+    *PRIORITE.lock().unwrap() = jeton;
+}
+
 /// La clé de ce PC (créée au premier besoin) : elle prouve au relais que les noms sont à nous.
 /// Elle n'est créée que si le fichier n'existe pas : une clé illisible n'est jamais remplacée
 /// (sinon toutes les adresses des serveurs changeraient).
@@ -516,7 +524,15 @@ impl Fil {
 
         let mut dernier_ping = Instant::now();
         let mut dernier_mot = Instant::now();
+        let mut priorite_envoyee = None;
         while !self.arret.load(Ordering::Relaxed) {
+            let priorite = PRIORITE.lock().unwrap().clone();
+            if priorite != priorite_envoyee {
+                if let Some((expire, signature)) = &priorite {
+                    flux.write_all(protocole::ecrire_de_bhost(&DeBhost::Priorite { expire: *expire, signature: signature.clone() }).as_bytes())?;
+                }
+                priorite_envoyee = priorite;
+            }
             if dernier_ping.elapsed() >= PING {
                 flux.write_all(protocole::ecrire_de_bhost(&DeBhost::Ping).as_bytes())?;
                 dernier_ping = Instant::now();
@@ -606,7 +622,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let local: SocketAddr = "127.0.0.1:0".parse().unwrap();
         let (joueurs, agents, _relais) = rt
-            .block_on(bhost_relais::demarrer(bhost_relais::Reglages { domaine: "bhost.test".into(), joueurs: local, agents: local, registre: None }))
+            .block_on(bhost_relais::demarrer(bhost_relais::Reglages::simples("bhost.test", local, local, None)))
             .unwrap();
         // SAFETY : seul ce test lit BHOST_RELAIS.
         unsafe { std::env::set_var("BHOST_RELAIS", agents.to_string()) };

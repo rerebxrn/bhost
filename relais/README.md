@@ -6,6 +6,8 @@ et ses amis rejoignent `nom-xxxx.bhost.app`.
 - Port **25565** : les joueurs (le DNS `*.bhost.app` pointe ici).
 - Port **4443** : BHOST (une connexion par serveur en ligne, puis une par joueur).
 - `noms.json` : quel nom appartient à quelle clé (un nom pas vu depuis 180 jours est libéré).
+- BHOST+ (relais prioritaire) : `--plus-cle plus.cle.pub` (écrit par le service `plus/`) et `--joueurs-max 400`.
+  Au-delà de 80 % des places, seuls les serveurs avec un jeton BHOST+ valable font encore entrer leurs joueurs.
 
 ```
 cargo build --release

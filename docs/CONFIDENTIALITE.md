@@ -21,6 +21,7 @@ Il se connecte à Internet seulement pour les choses suivantes.
 | « Pourquoi ça lag ? » | spark (`spark.lucko.me`) | Le rapport de performance du serveur (publié en ligne par spark, lien donné à toi seul). |
 | « Ouvert à tes amis » par le relais | Relais BHOST (`relais.bhost.app`) | Les connexions des joueurs vers ton serveur passent par le relais : il voit leur adresse IP. Il la garde en mémoire au plus 1 heure, pour limiter les abus, et ne l’écrit nulle part. |
 | Lier une machine dédiée | Relais BHOST | Une empreinte du code de la machine (jamais le code lui-même). Le pilotage est chiffré de bout en bout. |
+| BHOST+ (abonnement) | Polar (`polar.sh`) et le service BHOST+ (`plus.bhost.app`) | Ta clé et le nom de ton PC à l’activation, puis ta clé toutes les 6 heures pour la vérifier (avec la clé publique de ton BHOST, pour le relais prioritaire). Le service BHOST+ ne garde rien : il demande à Polar et répond. Le paiement se fait sur le site de Polar, jamais dans BHOST. |
 
 Chacune de ces fonctions se désactive : il suffit de ne pas l’utiliser, ou de couper « Ouvert à tes amis »
 dans les paramètres du serveur.

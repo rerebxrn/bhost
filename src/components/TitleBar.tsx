@@ -4,6 +4,8 @@ import { IconMoon, IconSun } from "@tabler/icons-react";
 import { useTheme } from "../theme/ThemeProvider";
 import LogoBhost from "./LogoBhost";
 import SelecteurMachine from "./SelecteurMachine";
+import BoutonPlus from "../plus/BoutonPlus";
+import { abonne, usePlus } from "../plus/etat";
 import type { Machine } from "../types";
 import "./TitleBar.css";
 
@@ -19,6 +21,7 @@ type Props = {
 export default function TitleBar({ machine }: Props) {
   const [agrandie, setAgrandie] = useState(false);
   const theme = useTheme();
+  const plus = usePlus();
 
   // Quand la fenêtre change de taille, on vérifie si elle est agrandie
   // pour afficher la bonne icône (▢ ou deux carrés).
@@ -42,12 +45,14 @@ export default function TitleBar({ machine }: Props) {
     // et un double-clic l’agrandit, comme une fenêtre Windows normale.
     <header className="titlebar" data-tauri-drag-region>
       <div className="tb-app">
-        <LogoBhost hauteur={18} />
+        {/* Abonné à BHOST+ : le logo devient « BHOST+ » (le + à la couleur du thème). */}
+        <LogoBhost hauteur={18} plus={!!machine && plus?.disponible === true && abonne(plus)} />
         {/* Le bouton reçoit les clics : il n’est pas une zone pour déplacer la fenêtre. */}
         {machine && <SelecteurMachine {...machine} />}
       </div>
 
       <div className="tb-right">
+        {machine && <BoutonPlus />}
         {/* Bascule rapide clair / sombre : garde le thème choisi (Ambre ou Azur). */}
         <div className={"g seg" + (theme.sombre ? " sombre" : "")} role="group" aria-label="Apparence">
           <span className="seg-pouce" aria-hidden />

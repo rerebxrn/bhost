@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconDownload, IconFileImport, IconPlus, IconRefresh, IconTrash, IconUnlink, IconWorld } from "@tabler/icons-react";
 import Segment from "../components/Segment";
+import { abonne, usePlus } from "../plus/etat";
 import Curseur from "../components/Curseur";
 import ChangerVersion, { familles } from "../components/ChangerVersion";
 import ImporterMonde from "../components/ImporterMonde";
@@ -82,9 +83,11 @@ type Props = {
 };
 
 // La ligne sous « Ouvert à tes amis ».
-function texteAmis(serveur: Serveur, acces?: Acces): string {
+function texteAmis(serveur: Serveur, acces: Acces | undefined, prioritaire: boolean): string {
   if (!serveur.ouvertAmis) return "Tes amis rejoignent par Internet.";
-  if (acces?.etat === "ouvert") return `Adresse : ${acces.adresse}`;
+  // BHOST+ : un serveur de ce PC ouvert par le relais passe en priorité.
+  if (acces?.etat === "ouvert")
+    return `Adresse : ${acces.adresse}` + (prioritaire && !serveur.machine && acces.adresse?.endsWith(".bhost.app") ? " · relais prioritaire" : "");
   if (acces?.etat === "erreur") return acces.message ?? "Ça n’a pas marché.";
   return "Ouverture de ta box…";
 }
@@ -94,6 +97,7 @@ const phrase = (e: unknown) => (typeof e === "string" ? e : "Ça n’a pas march
 // L’onglet Paramètres d’un serveur : Général, Performances, Partie, Règles du jeu, Mondes, Avancé, Zone sensible.
 // Chaque changement est enregistré tout de suite.
 export default function Parametres({ serveur, acces, onChange, onRenommer, onRetirer, onSupprimer, onErreur, onInfo }: Props) {
+  const abonnePlus = abonne(usePlus());
   const [infos, setInfos] = useState<Infos | null>(null);
   const [nom, setNom] = useState(serveur.nom);
   const [ram, setRam] = useState(Math.max(1, Math.round(serveur.ramMo / 1024)));
@@ -351,7 +355,7 @@ export default function Parametres({ serveur, acces, onChange, onRenommer, onRet
         <div className="row">
           <div className="lbl">
             <span id="ps-amis">Ouvert à tes amis</span>
-            <span className={"t2" + (serveur.ouvertAmis && acces?.etat === "erreur" ? " ps-err" : "")}>{texteAmis(serveur, acces)}</span>
+            <span className={"t2" + (serveur.ouvertAmis && acces?.etat === "erreur" ? " ps-err" : "")}>{texteAmis(serveur, acces, abonnePlus)}</span>
           </div>
           <button
             type="button"

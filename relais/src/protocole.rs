@@ -36,7 +36,7 @@ pub const RESERVES: &[&str] = &[
     "panel", "site", "web", "docs", "doc", "blog", "aide", "help", "faq", "wiki", "forum", "discord", "telechargement", "telecharger",
     "download", "downloads", "compte", "comptes", "account", "connexion", "inscription", "register", "signup", "paiement", "payer",
     "pay", "payment", "don", "dons", "donate", "shop", "store", "boutique", "pub", "pubs", "ads", "stats", "carte", "map", "contact",
-    "news", "actu", "play", "jouer", "staff", "modo", "mod", "owner", "verif", "official", "noreply",
+    "news", "actu", "play", "jouer", "staff", "modo", "mod", "owner", "verif", "official", "noreply", "plus",
     // Des marques
     "minecraft", "mojang", "microsoft", "hypixel", "paypal",
 ];
@@ -117,6 +117,12 @@ pub fn a_signer_machine(empreinte: &str, defi: &str) -> String {
 /// Le texte que BHOST signe pour prouver que le nom est à lui.
 pub fn a_signer(nom: &str, defi: &str) -> String {
     format!("bhost-relais-v1|{nom}|{defi}")
+}
+
+/// Le jeton du relais prioritaire (BHOST+) : signé par le service BHOST+ (plus/), pour la clé de ce BHOST,
+/// jusqu'à `expire` (secondes depuis 1970). BHOST l'envoie sur sa connexion de contrôle : « PRIORITE <expire> <signature> ».
+pub fn a_signer_priorite(cle: &str, expire: u64) -> String {
+    format!("BHOST+ PRIORITE {cle} {expire}")
 }
 
 /// Le texte que BHOST signe pour rendre un nom (il a changé d'adresse).
@@ -343,6 +349,8 @@ pub enum DeBhost {
     Libre { nom: String, cle: String },
     /// Rendre un nom (BHOST a pris une autre adresse) : puis un défi à signer.
     Lacher { nom: String, cle: String },
+    /// BHOST+ : le jeton du relais prioritaire (sur la connexion de contrôle, après OK).
+    Priorite { expire: u64, signature: String },
 }
 
 /// Ce que le relais répond.
@@ -376,6 +384,7 @@ pub fn ecrire_de_bhost(m: &DeBhost) -> String {
         DeBhost::Piloter { empreinte, id } => format!("PILOTER {empreinte} {id}\n"),
         DeBhost::Libre { nom, cle } => format!("LIBRE {nom} {cle}\n"),
         DeBhost::Lacher { nom, cle } => format!("LACHER {nom} {cle}\n"),
+        DeBhost::Priorite { expire, signature } => format!("PRIORITE {expire} {signature}\n"),
     }
 }
 
@@ -394,6 +403,7 @@ pub fn lire_de_bhost(ligne: &str) -> Option<DeBhost> {
             Some(DeBhost::Libre { nom: nom.to_string(), cle: cle.to_ascii_lowercase() })
         }
         ["LACHER", nom, cle] if nom_valide(nom) && hexa_valide(cle, 64) => Some(DeBhost::Lacher { nom: nom.to_string(), cle: cle.to_ascii_lowercase() }),
+        ["PRIORITE", expire, s] if hexa_valide(s, 128) => Some(DeBhost::Priorite { expire: expire.parse().ok()?, signature: s.to_ascii_lowercase() }),
         _ => None,
     }
 }
@@ -559,6 +569,7 @@ mod tests {
             DeBhost::Lier { empreinte: cle.clone() },
             DeBhost::Libre { nom: "survie".into(), cle: cle.clone() },
             DeBhost::Lacher { nom: "survie".into(), cle: cle.clone() },
+            DeBhost::Priorite { expire: 1_800_000_000, signature: "cd".repeat(64) },
         ] {
             assert_eq!(lire_de_bhost(&ecrire_de_bhost(&m)), Some(m));
         }

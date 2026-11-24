@@ -1,5 +1,6 @@
 // Les icônes de serveur (dessinées par docs/logo/icones.py, en PNG 192 px dans src/assets/icones : sans grille entre les pixels).
-// Rangées par groupe, dans l’ordre de la fenêtre « Icône… ».
+// Rangées par groupe, dans l’ordre de la fenêtre « Icône… » : 10 par groupe.
+// Couleurs, Numéros et Serveurs sont gratuits ; les autres groupes viennent avec BHOST+.
 
 const fichiers = import.meta.glob("../assets/icones/*.png", { eager: true, query: "?url", import: "default" }) as Record<string, string>;
 
@@ -41,10 +42,15 @@ export const GROUPES: Groupe[] = [
     nom: "Serveurs",
     icones: [
       { cle: "serveur-acier", nom: "Acier" },
-      { cle: "serveur-dore", nom: "Doré" },
       { cle: "serveur-titane", nom: "Titane" },
       { cle: "serveur-noir", nom: "Noir" },
+      { cle: "serveur-dore", nom: "Doré" },
       { cle: "serveur-orrose", nom: "Or rose" },
+      { cle: "serveur-rubis", nom: "Rubis" },
+      { cle: "serveur-amethyste", nom: "Améthyste" },
+      { cle: "serveur-saphir", nom: "Saphir" },
+      { cle: "serveur-diamant", nom: "Diamant" },
+      { cle: "serveur-emeraude", nom: "Émeraude" },
     ],
   },
   {
@@ -52,38 +58,59 @@ export const GROUPES: Groupe[] = [
     icones: [
       { cle: "cadeau-rouge", nom: "Cadeau rouge" },
       { cle: "cadeau-bleu", nom: "Cadeau bleu" },
+      { cle: "cadeau-violet", nom: "Cadeau violet" },
       { cle: "cadeau-vert", nom: "Cadeau de Noël" },
+      { cle: "pull", nom: "Pull de Noël" },
       { cle: "gateau", nom: "Gâteau d’anniversaire" },
       { cle: "gateau-chocolat", nom: "Gâteau au chocolat" },
+      { cle: "bougie", nom: "Bougie" },
+      { cle: "citrouille", nom: "Citrouille" },
+      { cle: "lanterne", nom: "Lanterne" },
     ],
   },
   {
     nom: "Gourmandises",
     icones: [
+      { cle: "burger", nom: "Burger" },
+      { cle: "bento", nom: "Bento" },
       { cle: "fromage", nom: "Fromage" },
       { cle: "pain", nom: "Pain de mie" },
+      { cle: "pasteque", nom: "Pastèque" },
+      { cle: "cookie", nom: "Cookie" },
+      { cle: "gaufre", nom: "Gaufre" },
+      { cle: "beignet", nom: "Beignet" },
+      { cle: "chocolat", nom: "Chocolat" },
       { cle: "guimauve", nom: "Guimauve" },
-      { cle: "bento", nom: "Bento" },
     ],
   },
   {
     nom: "Objets",
     icones: [
       { cle: "carton", nom: "Carton" },
-      { cle: "de", nom: "Dé" },
-      { cle: "camera", nom: "Caméra" },
-      { cle: "terminal", nom: "Terminal" },
-      { cle: "damier", nom: "Damier" },
       { cle: "caisse", nom: "Caisse en bois" },
+      { cle: "tresor", nom: "Coffre au trésor" },
+      { cle: "livres", nom: "Livres" },
+      { cle: "de", nom: "Dé" },
+      { cle: "damier", nom: "Damier" },
+      { cle: "tele", nom: "Télé rétro" },
+      { cle: "camera", nom: "Caméra" },
+      { cle: "disquette", nom: "Disquette" },
+      { cle: "terminal", nom: "Terminal" },
     ],
   },
   {
     nom: "Nature",
     icones: [
       { cle: "herbe", nom: "Bloc d’herbe" },
-      { cle: "hiver", nom: "Hiver" },
-      { cle: "aquarium", nom: "Aquarium" },
+      { cle: "buche", nom: "Bûche" },
+      { cle: "champignon", nom: "Champignon" },
+      { cle: "cactus", nom: "Cactus" },
+      { cle: "cerisier", nom: "Cerisier" },
+      { cle: "ruche", nom: "Ruche" },
       { cle: "grenouille", nom: "Grenouille" },
+      { cle: "plage", nom: "Plage" },
+      { cle: "aquarium", nom: "Aquarium" },
+      { cle: "hiver", nom: "Hiver" },
     ],
   },
 ];
@@ -96,4 +123,12 @@ export function image(cle: string): string {
 
 export function nomIcone(cle: string): string {
   return TOUTES.find((i) => i.cle === cle)?.nom ?? "";
+}
+
+/** Les groupes gratuits : les autres icônes viennent avec BHOST+. */
+const GRATUITS = new Set(["Couleurs", "Numéros", "Serveurs"]);
+
+/** Vrai si l’icône vient avec BHOST+. */
+export function payante(cle: string): boolean {
+  return !GROUPES.some((g) => GRATUITS.has(g.nom) && g.icones.some((i) => i.cle === cle));
 }

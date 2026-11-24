@@ -43,6 +43,8 @@ mod joueurs;
 mod listes;
 #[cfg(feature = "bureau")]
 mod mise_a_jour;
+#[cfg(feature = "bureau")]
+mod plus;
 mod mondes;
 mod nbt;
 mod problemes;
@@ -1673,10 +1675,17 @@ fn dupliquer(app: &AppHandle, id: &str) -> Result<ServeurVu, String> {
 
 /// Change l'icône d'un serveur (clic droit › Icône…).
 #[cfg_attr(feature = "bureau", tauri::command)]
-fn couleur_serveur(id: String, couleur: String, etat: State<Etat>) -> Result<ServeurVu, String> {
+fn couleur_serveur(app: AppHandle, id: String, couleur: String, etat: State<Etat>) -> Result<ServeurVu, String> {
     if !serveurs::icone_valide(&couleur) {
         return Err("Icône inconnue.".into());
     }
+    // Les icônes payantes viennent avec BHOST+ (sur BHOST OS, c'est l'appli qui vérifie avant d'envoyer).
+    #[cfg(feature = "bureau")]
+    if !serveurs::icone_gratuite(&couleur) && plus::verrouille(&app) {
+        return Err("Cette icône vient avec BHOST+.".into());
+    }
+    #[cfg(not(feature = "bureau"))]
+    let _ = app;
     let mut liste = etat.liste.lock().unwrap();
     let serveur = liste.iter_mut().find(|s| s.id == id).ok_or("Ce serveur n’existe plus.")?;
     serveur.couleur = Some(couleur.clone());
@@ -2996,6 +3005,7 @@ pub fn run() {
             let appdata = app.path().data_dir()?;
             let dossier = serveurs::demenager(&appdata.join("Cubo"), &appdata.join("BHOST"));
             std::fs::create_dir_all(&dossier)?;
+            app.manage(plus::EtatPlus::nouveau(&dossier));
             app.manage(nouvel_etat(dossier));
             lire_les_reglages(&app.state::<Etat>());
             // La zone de notification (en bas à droite) et l'extinction de Windows.
@@ -3020,6 +3030,7 @@ pub fn run() {
                 DEJA_RANGE.store(true, Ordering::Relaxed);
             }
             lancer_le_coeur(app.handle().clone());
+            plus::surveiller(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -3122,6 +3133,13 @@ pub fn run() {
             catalogue::mettre_a_jour_extensions,
             catalogue::bedrock_serveur,
             catalogue::regler_bedrock,
+            plus::etat_plus,
+            plus::activer_plus,
+            plus::retirer_plus,
+            plus::pcs_plus,
+            plus::liberer_pc,
+            plus::regler_avance,
+            plus::ouvrir_plus,
             mise_a_jour::chercher_mise_a_jour,
             mise_a_jour::installer_mise_a_jour
         ])

@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { IconCopy, IconPlus, IconUserPlus, IconX } from "@tabler/icons-react";
+import { IconBolt, IconCopy, IconPlus, IconUserPlus, IconX } from "@tabler/icons-react";
 import { actionJoueur, joueursServeur, type Joueurs } from "../api";
+import { abonne, usePlus } from "../plus/etat";
+import "../plus/Plus.css";
 import type { Acces, Serveur } from "../types";
 import "./Menus.css";
 import "./Inviter.css";
@@ -80,6 +82,8 @@ export default function Inviter({ serveur, acces, ancre, onFermer, onChange, onI
   // L’adresse pour les amis (Paramètres › Ouvert à tes amis).
   const pourAmis = serveur.ouvertAmis ? acces : undefined;
   const publique = pourAmis?.etat === "ouvert" ? pourAmis.adresse : undefined;
+  // BHOST+ : un serveur de ce PC ouvert par le relais (adresse en .bhost.app) passe en priorité.
+  const prioritaire = abonne(usePlus()) && !serveur.machine && !!publique?.endsWith(".bhost.app");
   const sansAdresse = !serveur.ouvertAmis
     ? "Ouvre-le à tes amis dans Paramètres."
     : pourAmis?.etat === "erreur"
@@ -123,6 +127,12 @@ export default function Inviter({ serveur, acces, ancre, onFermer, onChange, onI
           <div className="inv-box off">
             <span>{sansAdresse}</span>
           </div>
+        )}
+        {prioritaire && (
+          <p className="inv-prio">
+            <IconBolt size={14} stroke={2} aria-hidden />
+            Relais prioritaire : tes amis entrent même quand il est plein.
+          </p>
         )}
 
         {publique && (

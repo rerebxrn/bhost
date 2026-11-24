@@ -107,10 +107,21 @@ fn faux(b: &bool) -> bool {
 
 /// Les icônes qu'on peut choisir pour un serveur (les mêmes que dans src/theme/icones.ts).
 /// Les 10 premières sont les anciennes couleurs : les serveurs déjà créés gardent la leur.
-pub const ICONES: [&str; 44] = [
-    "graphite", "bleu", "indigo", "violet", "rose", "rouge", "orange", "jaune", "vert", "menthe", "serveur-acier", "serveur-dore", "serveur-titane", "serveur-noir", "serveur-orrose", "cadeau-rouge", "cadeau-bleu", "cadeau-vert", "gateau", "gateau-chocolat", "fromage", "pain", "guimauve", "bento", "carton", "de", "camera", "aquarium", "terminal", "damier", "caisse", "herbe", "hiver", "grenouille",
+/// Couleurs, Numéros et Serveurs (les 30 premières) sont gratuites ; les autres viennent avec BHOST+.
+pub const ICONES: [&str; 70] = [
+    "graphite", "bleu", "indigo", "violet", "rose", "rouge", "orange", "jaune", "vert", "menthe",
     "numero-0", "numero-1", "numero-2", "numero-3", "numero-4", "numero-5", "numero-6", "numero-7", "numero-8", "numero-9",
+    "serveur-acier", "serveur-titane", "serveur-noir", "serveur-dore", "serveur-orrose", "serveur-rubis", "serveur-amethyste", "serveur-saphir", "serveur-diamant", "serveur-emeraude",
+    "cadeau-rouge", "cadeau-bleu", "cadeau-violet", "cadeau-vert", "pull", "gateau", "gateau-chocolat", "bougie", "citrouille", "lanterne",
+    "burger", "bento", "fromage", "pain", "pasteque", "cookie", "gaufre", "beignet", "chocolat", "guimauve",
+    "carton", "caisse", "tresor", "livres", "de", "damier", "tele", "camera", "disquette", "terminal",
+    "herbe", "buche", "champignon", "cactus", "cerisier", "ruche", "grenouille", "plage", "aquarium", "hiver",
 ];
+
+/// Les icônes gratuites : Couleurs, Numéros, Serveurs. Les autres viennent avec BHOST+.
+pub fn icone_gratuite(icone: &str) -> bool {
+    ICONES[..30].contains(&icone)
+}
 
 /// Vérifie une icône avant de l'enregistrer.
 pub fn icone_valide(icone: &str) -> bool {

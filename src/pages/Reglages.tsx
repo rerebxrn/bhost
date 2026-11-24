@@ -1,5 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { IconEye, IconEyeOff, IconFolder, IconPlus } from "@tabler/icons-react";
+import { IconEye, IconEyeOff, IconFolder, IconLock, IconPlus } from "@tabler/icons-react";
+import ReglagesPlus from "../plus/ReglagesPlus";
+import { abonne, noterPlus, ouvert as plusOuvert, ouvrirPlus, usePlus } from "../plus/etat";
 import Curseur from "../components/Curseur";
 import {
   changerDossierServeurs,
@@ -8,6 +10,7 @@ import {
   installerMiseAJour,
   ouvrirDossierServeurs,
   reglagesBhost,
+  reglerAvance,
   reglerBhost,
   suivreMiseAJour,
   type ChangementReglages,
@@ -79,6 +82,9 @@ const ETATS_MACHINE: Record<Machine["etat"], string> = {
 export default function Reglages({ machines, onAjouterMachine, onRenommerMachine, onDelierMachine }: Props) {
   const theme = useTheme();
   const [vue, setVue] = useState<VueReglages | null>(null);
+  const plus = usePlus();
+  const abonnePlus = abonne(plus);
+  const ambreFerme = !plusOuvert(plus);
   const [pseudo, setPseudo] = useState("");
   const [erreur, setErreur] = useState("");
   const [maj, setMaj] = useState<Maj>({ etape: "rien" });
@@ -182,6 +188,7 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
       </header>
 
       <div className="params">
+        <ReglagesPlus />
         <div className="grp-t">Général</div>
         <section className="surf">
           {interrupteur(
@@ -305,7 +312,7 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
               className="appear"
               role="radiogroup"
               aria-label="Thème"
-              onKeyDown={fleches(FONDS.map((f) => f.id), theme.fond, (fond) => theme.changer({ fond }))}
+              onKeyDown={fleches(FONDS.map((f) => f.id).filter((f) => f !== "ambre" || !ambreFerme), theme.fond, (fond) => theme.changer({ fond }))}
             >
               {FONDS.map((f) => (
                 <button
@@ -315,11 +322,16 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
                   aria-checked={theme.fond === f.id}
                   tabIndex={theme.fond === f.id ? 0 : -1}
                   className={"ap" + (theme.fond === f.id ? " sel" : "")}
-                  onClick={() => theme.changer({ fond: f.id })}
+                  onClick={() => (f.id === "ambre" && ambreFerme ? ouvrirPlus() : theme.changer({ fond: f.id }))}
                 >
                   {/* Toujours la version claire : c’est là que les deux thèmes se distinguent le mieux */}
                   <i className={"v-" + f.id + "-clair"}>
                     <span />
+                    {f.id === "ambre" && ambreFerme && (
+                      <b className="cad" aria-label="Avec BHOST+">
+                        <IconLock size={11} stroke={2.2} aria-hidden />
+                      </b>
+                    )}
                   </i>
                   {f.nom}
                 </button>
@@ -386,6 +398,31 @@ export default function Reglages({ machines, onAjouterMachine, onRenommerMachine
               </button>
             )}
           </div>
+          {plus?.disponible && (
+            <div className="row">
+              <div className="lbl">
+                <span id="rg-avance">
+                  Versions en avance
+                  {!abonnePlus && (
+                    <span className="cadenas rg-cadenas" aria-label="Avec BHOST+">
+                      <IconLock size={13} stroke={2} aria-hidden />
+                    </span>
+                  )}
+                </span>
+                <span className="t2">{abonnePlus ? "Les nouveautés avant tout le monde." : "Les nouveautés avant tout le monde, avec BHOST+."}</span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={abonnePlus && plus.avance}
+                aria-labelledby="rg-avance"
+                className={"sw" + (abonnePlus && plus.avance ? " on" : "") + (abonnePlus ? "" : " rg-ferme")}
+                onClick={() => (abonnePlus ? reglerAvance(!plus.avance).then(noterPlus, (e) => setErreur(phrase(e))) : ouvrirPlus())}
+              >
+                <i />
+              </button>
+            </div>
+          )}
           <div className="row">
             <div className="lbl">
               <span>Écran de bienvenue</span>

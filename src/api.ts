@@ -741,3 +741,35 @@ export function ecouterMachines(recu: (machines: Machine[]) => void) {
     abonnement.then((arreter) => arreter());
   };
 }
+
+// ---- BHOST+ (plus.rs) ----
+// « retard » : paiement refusé, Polar réessaie (BHOST+ reste ouvert) ;
+// « pause » : pas de vérification depuis 7 jours (sans Internet) ; ça revient à la prochaine connexion.
+export type EtatPlus = "aucun" | "actif" | "retard" | "pause" | "expire";
+export type PcPlus = { id: string; nom: string; depuis: number | null; ici: boolean };
+export type VuePlus = {
+  etat: EtatPlus;
+  cle: string | null; // masquée : « ••••-••••-A1B2 »
+  fin: number | null;
+  formule: "mois" | "an" | null;
+  arrete: boolean; // l’abonnement s’arrête à `fin`
+  pcs: PcPlus[]; // les PC où la clé est activée (vide si le service BHOST+ n’a pas répondu)
+  places: number | null;
+  joursSansInternet: number | null; // jours restants avant la pause (à partir du 3e jour sans Internet)
+  avance: boolean;
+  disponible: boolean; // faux tant que BHOST+ n’est pas branché à Polar : rien n’est fermé
+};
+export const etatPlus = () => invokeTauri<VuePlus>("etat_plus");
+export const activerPlus = (cle: string) => invokeTauri<VuePlus>("activer_plus", { cle });
+export const retirerPlus = () => invokeTauri<VuePlus>("retirer_plus");
+export const pcsPlus = (cle: string) => invokeTauri<PcPlus[]>("pcs_plus", { cle });
+// `cle` : celle qu’on colle (ce PC n’est pas encore activé) ; null : celle de ce PC.
+export const libererPc = (cle: string | null, pc: string) => invokeTauri<VuePlus>("liberer_pc", { cle, pc });
+export const reglerAvance = (oui: boolean) => invokeTauri<VuePlus>("regler_avance", { oui });
+export const ouvrirPagePlus = (page: "mensuel" | "annuel" | "espace") => invokeTauri<void>("ouvrir_plus", { page });
+export function ecouterPlus(recu: (vue: VuePlus) => void) {
+  const abonnement = listen<VuePlus>("bhost-plus", (e) => recu(e.payload));
+  return () => {
+    abonnement.then((arreter) => arreter());
+  };
+}

@@ -1,12 +1,12 @@
 // L'icône du serveur dans Minecraft (server-icon.png, 64 × 64) : par défaut, la même que dans BHOST.
-// Les 44 icônes sont dessinées en PNG par docs/logo/icones.py (sortie/jeu) et rangées dans le programme.
+// Les 70 icônes sont dessinées en PNG par docs/logo/icones.py (sortie/jeu) et rangées dans le programme.
 // Si l'utilisateur a mis sa propre image (Fichiers › Icône du serveur), BHOST n'y touche plus.
 
 use std::fs;
 use std::path::Path;
 
-/// Les 44 icônes, en PNG 64 × 64, dans l'ordre de `serveurs::ICONES`.
-const PNGS: [(&str, &[u8]); 44] = [
+/// Les 70 icônes, en PNG 64 × 64, dans l'ordre de `serveurs::ICONES`.
+const PNGS: [(&str, &[u8]); 70] = [
     ("graphite", include_bytes!("../icones-jeu/graphite.png")),
     ("bleu", include_bytes!("../icones-jeu/bleu.png")),
     ("indigo", include_bytes!("../icones-jeu/indigo.png")),
@@ -17,30 +17,6 @@ const PNGS: [(&str, &[u8]); 44] = [
     ("jaune", include_bytes!("../icones-jeu/jaune.png")),
     ("vert", include_bytes!("../icones-jeu/vert.png")),
     ("menthe", include_bytes!("../icones-jeu/menthe.png")),
-    ("serveur-acier", include_bytes!("../icones-jeu/serveur-acier.png")),
-    ("serveur-dore", include_bytes!("../icones-jeu/serveur-dore.png")),
-    ("serveur-titane", include_bytes!("../icones-jeu/serveur-titane.png")),
-    ("serveur-noir", include_bytes!("../icones-jeu/serveur-noir.png")),
-    ("serveur-orrose", include_bytes!("../icones-jeu/serveur-orrose.png")),
-    ("cadeau-rouge", include_bytes!("../icones-jeu/cadeau-rouge.png")),
-    ("cadeau-bleu", include_bytes!("../icones-jeu/cadeau-bleu.png")),
-    ("cadeau-vert", include_bytes!("../icones-jeu/cadeau-vert.png")),
-    ("gateau", include_bytes!("../icones-jeu/gateau.png")),
-    ("gateau-chocolat", include_bytes!("../icones-jeu/gateau-chocolat.png")),
-    ("fromage", include_bytes!("../icones-jeu/fromage.png")),
-    ("pain", include_bytes!("../icones-jeu/pain.png")),
-    ("guimauve", include_bytes!("../icones-jeu/guimauve.png")),
-    ("bento", include_bytes!("../icones-jeu/bento.png")),
-    ("carton", include_bytes!("../icones-jeu/carton.png")),
-    ("de", include_bytes!("../icones-jeu/de.png")),
-    ("camera", include_bytes!("../icones-jeu/camera.png")),
-    ("aquarium", include_bytes!("../icones-jeu/aquarium.png")),
-    ("terminal", include_bytes!("../icones-jeu/terminal.png")),
-    ("damier", include_bytes!("../icones-jeu/damier.png")),
-    ("caisse", include_bytes!("../icones-jeu/caisse.png")),
-    ("herbe", include_bytes!("../icones-jeu/herbe.png")),
-    ("hiver", include_bytes!("../icones-jeu/hiver.png")),
-    ("grenouille", include_bytes!("../icones-jeu/grenouille.png")),
     ("numero-0", include_bytes!("../icones-jeu/numero-0.png")),
     ("numero-1", include_bytes!("../icones-jeu/numero-1.png")),
     ("numero-2", include_bytes!("../icones-jeu/numero-2.png")),
@@ -51,6 +27,56 @@ const PNGS: [(&str, &[u8]); 44] = [
     ("numero-7", include_bytes!("../icones-jeu/numero-7.png")),
     ("numero-8", include_bytes!("../icones-jeu/numero-8.png")),
     ("numero-9", include_bytes!("../icones-jeu/numero-9.png")),
+    ("serveur-acier", include_bytes!("../icones-jeu/serveur-acier.png")),
+    ("serveur-titane", include_bytes!("../icones-jeu/serveur-titane.png")),
+    ("serveur-noir", include_bytes!("../icones-jeu/serveur-noir.png")),
+    ("serveur-dore", include_bytes!("../icones-jeu/serveur-dore.png")),
+    ("serveur-orrose", include_bytes!("../icones-jeu/serveur-orrose.png")),
+    ("serveur-rubis", include_bytes!("../icones-jeu/serveur-rubis.png")),
+    ("serveur-amethyste", include_bytes!("../icones-jeu/serveur-amethyste.png")),
+    ("serveur-saphir", include_bytes!("../icones-jeu/serveur-saphir.png")),
+    ("serveur-diamant", include_bytes!("../icones-jeu/serveur-diamant.png")),
+    ("serveur-emeraude", include_bytes!("../icones-jeu/serveur-emeraude.png")),
+    ("cadeau-rouge", include_bytes!("../icones-jeu/cadeau-rouge.png")),
+    ("cadeau-bleu", include_bytes!("../icones-jeu/cadeau-bleu.png")),
+    ("cadeau-violet", include_bytes!("../icones-jeu/cadeau-violet.png")),
+    ("cadeau-vert", include_bytes!("../icones-jeu/cadeau-vert.png")),
+    ("pull", include_bytes!("../icones-jeu/pull.png")),
+    ("gateau", include_bytes!("../icones-jeu/gateau.png")),
+    ("gateau-chocolat", include_bytes!("../icones-jeu/gateau-chocolat.png")),
+    ("bougie", include_bytes!("../icones-jeu/bougie.png")),
+    ("citrouille", include_bytes!("../icones-jeu/citrouille.png")),
+    ("lanterne", include_bytes!("../icones-jeu/lanterne.png")),
+    ("burger", include_bytes!("../icones-jeu/burger.png")),
+    ("bento", include_bytes!("../icones-jeu/bento.png")),
+    ("fromage", include_bytes!("../icones-jeu/fromage.png")),
+    ("pain", include_bytes!("../icones-jeu/pain.png")),
+    ("pasteque", include_bytes!("../icones-jeu/pasteque.png")),
+    ("cookie", include_bytes!("../icones-jeu/cookie.png")),
+    ("gaufre", include_bytes!("../icones-jeu/gaufre.png")),
+    ("beignet", include_bytes!("../icones-jeu/beignet.png")),
+    ("chocolat", include_bytes!("../icones-jeu/chocolat.png")),
+    ("guimauve", include_bytes!("../icones-jeu/guimauve.png")),
+    ("carton", include_bytes!("../icones-jeu/carton.png")),
+    ("caisse", include_bytes!("../icones-jeu/caisse.png")),
+    ("tresor", include_bytes!("../icones-jeu/tresor.png")),
+    ("livres", include_bytes!("../icones-jeu/livres.png")),
+    ("de", include_bytes!("../icones-jeu/de.png")),
+    ("damier", include_bytes!("../icones-jeu/damier.png")),
+    ("tele", include_bytes!("../icones-jeu/tele.png")),
+    ("camera", include_bytes!("../icones-jeu/camera.png")),
+    ("disquette", include_bytes!("../icones-jeu/disquette.png")),
+    ("terminal", include_bytes!("../icones-jeu/terminal.png")),
+    ("herbe", include_bytes!("../icones-jeu/herbe.png")),
+    ("buche", include_bytes!("../icones-jeu/buche.png")),
+    ("champignon", include_bytes!("../icones-jeu/champignon.png")),
+    ("cactus", include_bytes!("../icones-jeu/cactus.png")),
+    ("cerisier", include_bytes!("../icones-jeu/cerisier.png")),
+    ("ruche", include_bytes!("../icones-jeu/ruche.png")),
+    ("grenouille", include_bytes!("../icones-jeu/grenouille.png")),
+    ("plage", include_bytes!("../icones-jeu/plage.png")),
+    ("aquarium", include_bytes!("../icones-jeu/aquarium.png")),
+    ("hiver", include_bytes!("../icones-jeu/hiver.png")),
 ];
 
 /// L'icône par défaut selon le logiciel, quand l'utilisateur n'en a pas choisi (comme `IconeServeur.tsx`).
@@ -68,8 +94,9 @@ pub fn par_defaut(logiciel: &str) -> &'static str {
 
 /// Les icônes posées par les versions d'avant de BHOST (empreintes SHA-1) : à remplacer aussi.
 /// Les 34 premières : rendus du 18/11 au matin ; les 34 suivantes : rendus SVG « sans joints » (qui en avaient encore) ;
-/// les 34 dernières : les PNG du 18/11 avec des métadonnées en plus (même dessin).
-const ANCIENNES: [&str; 102] = [
+/// les 34 suivantes : les PNG du 18/11 avec des métadonnées en plus (même dessin) ;
+/// les 10 dernières : les numéros du 21/11 (sans le cadre du 23/11).
+const ANCIENNES: [&str; 112] = [
     "84692cafb2853ebede0999a14cf65c6022c4b26d",
     "501c1fb48ef79516fca73489d11af5da06891a93",
     "a2855654029d82ac9a857e9119ab8d0b6dfbe26e",
@@ -172,6 +199,16 @@ const ANCIENNES: [&str; 102] = [
     "4dc52e0eef3f071db514b0aec9c86a313a24ae81",
     "c2d73bbbe1cfdc2231033705532103ae2b2c1c82",
     "b06e229eb0fa089726ab362b7b8ca0585c7bac49",
+    "6f64d32ae66f09f3daeadffdf3169f887f453d12",
+    "084f6d74b686c390072a93bb64e418bed0a41d63",
+    "1edee5bb97d428f983ee59d2ea123ec5f63174ce",
+    "43150025851c8e084165b8e9067b65d394ec69ab",
+    "4071c25679b6c915fb79db2ded050f319e94f45e",
+    "7a29cfa57211d2ba62354bd2846975867a2eff5b",
+    "a0df5d58a7a4ef688e6f4d5e078b7781496a2bcc",
+    "ec4d8b49cac5140943c632857ada850f5591d102",
+    "c17d11bed993bb14f42e87fe92f7734df6255d37",
+    "040d69a2fc8a8217ba0e38f075994732b309ed46",
 ];
 
 fn png(cle: &str) -> Option<&'static [u8]> {

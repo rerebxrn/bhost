@@ -23,7 +23,7 @@ pub(crate) async fn appeler(app: &AppHandle, commande: &str, args: &Value) -> Re
         "infos_creation" => Ok(json(crate::infos_creation(app.state::<Etat>()))),
         "versions_minecraft" => crate::versions_minecraft(app.clone(), arg(args, "logiciel")?, arg(args, "snapshots")?).await.map(json).map_err(json),
         "creer_serveur" => crate::creer_serveur(app.clone(), arg(args, "demande")?).await.map(json).map_err(json),
-        "couleur_serveur" => crate::couleur_serveur(arg(args, "id")?, arg(args, "couleur")?, app.state::<Etat>()).map(json).map_err(json),
+        "couleur_serveur" => crate::couleur_serveur(app.clone(), arg(args, "id")?, arg(args, "couleur")?, app.state::<Etat>()).map(json).map_err(json),
         "parametres_serveur" => crate::parametres_serveur(arg(args, "id")?, app.state::<Etat>()).map(json).map_err(json),
         "regler_serveur" => crate::regler_serveur(arg(args, "id")?, arg(args, "reglages")?, app.state::<Etat>()).map(json).map_err(json),
         "regler_partie" => crate::regler_partie(app.clone(), arg(args, "id")?, arg(args, "partie")?, app.state::<Etat>()).map(json).map_err(json),

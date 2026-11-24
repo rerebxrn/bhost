@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { IconAlertCircle, IconCheck } from "@tabler/icons-react";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -15,6 +16,8 @@ import AjouterMachine from "./components/CodeMachine";
 import Confirmer from "./components/Confirmer";
 import ManqueMemoire from "./components/ManqueMemoire";
 import Reglages from "./pages/Reglages";
+import FenetrePlus from "./plus/FenetrePlus";
+import { abonne, ouvert, usePlus } from "./plus/etat";
 import NouveauServeur from "./pages/NouveauServeur";
 import PremierLancement from "./pages/PremierLancement";
 import MachineDediee from "./pages/MachineDediee";
@@ -123,6 +126,28 @@ export default function App() {
   const [machineActive, setMachineActive] = useState("ici"); // la machine affichée à gauche : « ici » = ce PC
   const theme = useTheme();
   useLiquidGlass(theme.reel, theme.teinte, theme.sombre);
+
+  // BHOST+ : la fenêtre (bouton de la barre de titre, cadenas…) ; abonné, on va droit à Réglages › BHOST+.
+  const plus = usePlus();
+  const [fenPlus, setFenPlus] = useState(false);
+  const abonnePlus = abonne(plus);
+  useEffect(() => {
+    const ouvrir = () => (abonnePlus ? setVue("reglages") : setFenPlus(true));
+    window.addEventListener("ouvrir-bhost-plus", ouvrir);
+    return () => window.removeEventListener("ouvrir-bhost-plus", ouvrir);
+  }, [abonnePlus]);
+  // Sans BHOST+ : le thème Ambre repasse en Azur.
+  const ambreFerme = !ouvert(plus) && theme.fond === "ambre";
+  useEffect(() => {
+    if (ambreFerme) theme.changer({ fond: "azur" });
+  }, [ambreFerme, theme]);
+  // BHOST+ vient de s’arrêter : les icônes payantes ont repris celle du logiciel, on relit la liste.
+  const etatAvant = useRef(plus?.etat);
+  useEffect(() => {
+    if (etatAvant.current !== "expire" && etatAvant.current !== "aucun" && (plus?.etat === "expire" || plus?.etat === "aucun"))
+      listerServeurs().then(setServeurs, () => {});
+    etatAvant.current = plus?.etat;
+  }, [plus]);
 
   // Au lancement : on demande à Rust la liste des serveurs, avec leur état.
   useEffect(() => {
@@ -730,6 +755,19 @@ export default function App() {
           onFermer={() => setARenommer(null)}
         />
       )}
+      {/* Dans <body>, comme les menus : au milieu de toute la fenêtre de BHOST. */}
+      {fenPlus &&
+        createPortal(
+          <FenetrePlus
+            onCle={() => {
+              setFenPlus(false);
+              setVue("reglages");
+              window.setTimeout(() => document.getElementById("plus-cle")?.focus(), 50);
+            }}
+            onFermer={() => setFenPlus(false)}
+          />,
+          document.body,
+        )}
       {fenetreAjout}
       {manque && (
         <ManqueMemoire

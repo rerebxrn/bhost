@@ -1,0 +1,431 @@
+/* Bouton BHOST+ dans la barre de titre : capsule de 28 px, comme « Inviter ». */
+.plus-b {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--h-control);
+  padding: 0 var(--space-10) 0 var(--space-8);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font: var(--f-bouton);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast),
+    transform 0.35s var(--ease-spring);
+}
+
+.plus-b:hover {
+  background: color-mix(in srgb, var(--acc) 26%, transparent);
+}
+
+.plus-b:active {
+  transform: scale(0.95);
+  transition-duration: 0.1s;
+}
+
+/* Abonné : la même capsule que la bascule clair / sombre, l'étincelle reste teintée. */
+.plus-b.actif {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.plus-b.actif svg {
+  color: var(--acc-text);
+}
+
+.plus-b.actif:hover {
+  background: var(--fill);
+}
+
+/* Paiement en retard, expiré : orange (comme les avertissements). */
+.plus-b.alerte,
+.plus-alerte {
+  --orange-fond: rgba(217, 147, 11, 0.16);
+  --orange: #9a6409;
+}
+
+[data-theme="dark"] .plus-b.alerte,
+[data-theme="dark"] .plus-alerte {
+  --orange-fond: rgba(242, 193, 78, 0.16);
+  --orange: #f2c14e;
+}
+
+.plus-b.alerte {
+  background: var(--orange-fond);
+  color: var(--orange);
+}
+
+.plus-b.alerte:hover {
+  background: color-mix(in srgb, var(--orange-fond) 100%, var(--orange) 10%);
+}
+
+/* ---- Fenêtre BHOST+ ---- */
+.g.dialog.plus-dlg {
+  width: 380px;
+}
+
+.plus-dlg .dlg-ic {
+  margin-bottom: var(--space-10);
+}
+
+.plus-dlg h4 {
+  margin: 0 0 var(--space-4);
+  font: var(--f-titre-2);
+}
+
+.plus-dlg .dlg-txt {
+  margin: 0 0 var(--space-16);
+  color: var(--text2);
+}
+
+.plus-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 var(--space-16);
+  padding: 0;
+  list-style: none;
+}
+
+.plus-liste li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.plus-liste .pi {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--acc-tint);
+  color: var(--acc-text);
+}
+
+.plus-liste .rs-t b {
+  white-space: normal;
+}
+
+.plus-prix {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+  margin: 0 0 var(--space-6);
+  padding: var(--space-10) 12px;
+  border-radius: 12px;
+  background: rgba(var(--g-rgb), 0.5);
+  box-shadow: inset 0 0 0 1px var(--sep);
+}
+
+.plus-prix .pp-v {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.plus-prix .pp-v b {
+  font: var(--f-valeur-stat);
+}
+
+.plus-prix .pp-v b small {
+  margin-left: var(--space-2);
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.plus-prix .pp-v span {
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.plus-prix .seg-mini {
+  flex: none;
+}
+
+.plus-note {
+  margin: 0 0 var(--space-14);
+  padding: 0 var(--space-2);
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.plus-note.centre {
+  margin: var(--space-10) 0 0;
+  text-align: center;
+}
+
+.dlg-btns .dlg-ok svg {
+  margin-left: var(--space-4);
+  vertical-align: -2px;
+}
+
+/* ---- Réglages › BHOST+ ---- */
+.plus-etat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.plus-etat .pi {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--acc-tint);
+  color: var(--acc-text);
+}
+
+.plus-etat .pi.gris {
+  background: var(--fill);
+  color: var(--text2);
+}
+
+.plus-etat .pi.orange {
+  background: var(--orange-fond);
+  color: var(--orange);
+}
+
+.params .field.plus-cle {
+  width: 240px;
+  font: var(--f-champ-mono);
+  letter-spacing: 0.04em;
+}
+
+.params .field.plus-cle.faux {
+  box-shadow: 0 0 0 2px var(--danger);
+}
+
+.params .lbl .plus-err {
+  color: var(--danger);
+}
+
+.params .lbl .plus-orange {
+  color: var(--orange);
+}
+
+.plus-places {
+  display: flex;
+  gap: 3px;
+  margin-left: var(--space-2);
+}
+
+.plus-places i {
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fill-strong);
+}
+
+.plus-places i.pris {
+  background: var(--acc);
+}
+
+.plus-app {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.plus-app > svg {
+  flex: none;
+  color: var(--text2);
+}
+
+.badge-ici {
+  margin-left: var(--space-6);
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font: var(--f-badge);
+  vertical-align: 1px;
+}
+
+.plus-bandeau {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-10);
+  padding: var(--space-8) var(--space-10);
+  border-radius: 10px;
+  background: var(--orange-fond);
+  font: var(--f-legende);
+  line-height: 1.4;
+}
+
+.plus-bandeau svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--orange);
+}
+
+/* ---- Cadenas ---- */
+.cadenas {
+  display: inline-flex;
+  color: var(--text2);
+}
+
+/* Sur une vignette de thème : petit rond en bas à droite. */
+.ap i .cad {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--mat-ultrathick);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.ap .ap-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Une icône payante : un petit cadenas en bas à droite, l'icône reste lisible. */
+.look-c.paye {
+  position: relative;
+}
+
+.look-c.paye .cad {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--mat-ultrathick);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.look-nom .cadenas {
+  margin-left: 3px;
+  vertical-align: -2px;
+}
+
+.look-offre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+  margin-top: var(--space-4);
+  padding: var(--space-8) var(--space-10);
+  border-radius: 10px;
+  background: var(--acc-tint);
+  font: var(--f-legende);
+  color: var(--text);
+  text-align: left;
+}
+
+.look-offre span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.look-offre span svg {
+  color: var(--acc-text);
+}
+
+.look-offre button {
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--acc-text);
+  font: var(--f-legende);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---- Relais prioritaire ---- */
+.prio {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px 1px 5px;
+  border-radius: var(--r-pill);
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font: var(--f-badge);
+  white-space: nowrap;
+}
+
+.inv-prio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: var(--space-6) var(--space-14) 0;
+  font: var(--f-legende);
+  color: var(--text2);
+}
+
+.inv-prio svg {
+  flex: none;
+  color: var(--acc-text);
+}
+
+.inv-prio button {
+  margin-left: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--acc-text);
+  font: var(--f-legende);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Abonné : le « + » du logo, en couleur d’accent. */
+.logo-plus {
+  fill: var(--acc-text);
+}
+
+.plus-note.plus-err {
+  color: var(--danger);
+}
+
+/* Réglages › BHOST › Versions en avance, sans BHOST+ : cadenas et interrupteur grisé. */
+.rg-cadenas {
+  margin-left: 4px;
+  vertical-align: -2px;
+}
+
+.sw.rg-ferme {
+  opacity: 0.45;
+}
+
+/* L'en-tête de la fenêtre BHOST+ : le logo et la phrase, au milieu. */
+.plus-dlg h4.plus-logo {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-4) 0 var(--space-8);
+  color: var(--text);
+}
+
+.plus-dlg .dlg-txt {
+  text-align: center;
+}

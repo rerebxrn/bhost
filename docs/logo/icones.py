@@ -212,7 +212,7 @@ icone("Objets", "Caméra", "camera",
       t=["MMMMMM", "MFFMMM", "MMMMMM", "MMMMMM", "MMMMSM", "MMMMMM"],
       g=["MMMMMM", "MMRRMM", "MRwGRM", "MRGgRM", "MMRRMM", "MMMMMM"],
       d=["MMMMMM", "MMMMlM", "MssssM", "MssssM", "MssssM", "MMMMMM"])
-icone("Objets", "Aquarium", "aquarium",
+icone("Nature", "Aquarium", "aquarium",
       {"F": ("m", "#D4E9F0"), "a": ("m", "#57B4E6"), "A": ("m", "#2F95D8"), "o": ("x", "#F68A2E"), "T": ("x", "#D9661A"),
        "e": ("x", "#1E2127"), "w": ("x", "#E8F8FF"), "v": ("v", "#3FAE58"), "y": ("m", "#E2C994")},
       t=["FFFFFF", "FaaaaF", "FaaaaF", "FaaaaF", "FaaaaF", "FFFFFF"],
@@ -221,19 +221,19 @@ icone("Objets", "Aquarium", "aquarium",
 
 
 # Bloc d'herbe (dessin à nous) : herbe sur le dessus avec deux touffes plus claires, qui retombe en bord irrégulier sur la terre.
-icone("Ambiances", "Bloc d'herbe", "herbe",
+icone("Nature", "Bloc d'herbe", "herbe",
       {"V": ("m", "#5DB846"), "v": ("m", "#5DB846", 0.1), "f": ("m", "#5DB846", -0.1), "T": ("m", "#9A6A43"), "t": ("m", "#9A6A43", -0.14)},
       t=["VVVVfV", "VvVVVV", "VVVfVV", "VVVVVv", "fVvVVV", "VVVVVV"],
       g=["VVVVVV", "VTVVTV", "TTTVTT", "TTTTTT", "TtTTTT", "TTTTtT"],
       d=["VVVVVV", "VVTVVT", "TVTTTT", "TTTTtT", "TtTTTT", "TTTTTT"])
 # Hiver : une épaisse couche de neige, bord arrondi qui coule un peu sur les côtés, deux flocons.
-icone("Ambiances", "Hiver", "hiver",
+icone("Nature", "Hiver", "hiver",
       {"M": ("m", "#3E74CF"), "W": ("m", "#EEF5FD"), "w": ("v", "#C2D7F0"), "f": ("x", "#EAF4FF")},
       t=["wwwwww", "wWWWWW", "wWWWWW", "wWWWWW", "wWWWWW", "wWWWWW"],
       g=["WWWWWW", "WWWWWW", "WWMWWM", "MMMWMM", "MMMMMM", "MfMMMM"],
       d=["WWWWWW", "WWWWWW", "MWWWMM", "MMWMMM", "MMMMMM", "MMMfMM"])
 
-icone("Personnages", "Grenouille", "grenouille",
+icone("Nature", "Grenouille", "grenouille",
       {"M": ("m", "#5DBB4A"), "w": ("x", "#FFFFFF"), "d": NOIR, "p": ("x", "#F59A86")},
       g=["MMMMMM", "wdMMwd", "wwMMww", "pMMMMp", "MddddM", "MMMMMM"])
 
@@ -291,7 +291,144 @@ icone("Objets", "Caisse en bois", "caisse",
       g=["FFFFFF", "FMMMMF", "FmmmmF", "FMMMMF", "FmmmmF", "FFFFFF"],
       d=["FFFFFF", "FMMMMF", "FmmmmF", "FMMMMF", "FmmmmF", "FFFFFF"])
 
-# On range les icônes par groupe, dans l'ordre de la planche.
+# Ajoutées le 23/11 : 10 icônes par groupe.
+# ---- Serveurs : 5 pierres précieuses (même boîtier que les serveurs métal, un éclat sur le dessus).
+METAUX.update({
+    "diamant":   ["#06232B", "#0B3B46", "#115661", "#19737E", "#24929C", "#38B2B9", "#5ACFD2", "#8CE5E4", "#C3F5F2", "#F0FFFE"],
+    "emeraude":  ["#041F0F", "#083718", "#0D5124", "#146C32", "#1C8A42", "#2AA856", "#47C470", "#7ADC97", "#B3F0C5", "#E7FDEE"],
+    "rubis":     ["#1E0C0E", "#35171B", "#4F2229", "#6A3038", "#863F49", "#A1535E", "#BA7079", "#D399A1", "#E9C6CB", "#FAEFF1"],
+    "amethyste": ["#17101F", "#291D37", "#3E2C51", "#553C6E", "#6D4E8A", "#8666A5", "#A084BD", "#BDA7D4", "#DBCFE9", "#F6F2FB"],
+    "saphir":    ["#0D1221", "#182139", "#243154", "#33436F", "#41568A", "#546DA3", "#6F89BA", "#95AAD0", "#C1CFE6", "#ECF1FA"],
+})
+for metal, nom in [("diamant", "Serveur diamant"), ("emeraude", "Serveur émeraude"), ("rubis", "Serveur rubis"),
+                   ("amethyste", "Serveur améthyste"), ("saphir", "Serveur saphir")]:
+    icone("Serveurs", nom, "serveur-" + metal,
+          {"M": ("metal", metal), "A": ("metal", metal, -1), "V": ("x", "#5ED68A"), "O": ("x", "#F2C14E"),
+           "e": ("x", "#FFFFFF"), "E": ("metal", metal, 0.25)},
+          t=["MMMMMM", "MMMMEM", "MMMEeM", "MMMMEM", "MMMMMM", "MMMMMM"],
+          g=["MMMMMM", "MAAAAM", "MMMMMM", "MAAAAM", "MVMOMM", "MMMMMM"],
+          d=["MMMMMM", "MMMMMM", "MAAAAM", "MMMMMM", "MMMMMM", "MMMMMM"])
+
+# ---- Fête
+icone("Fête", "Citrouille", "citrouille",
+      {"M": ("m", "#F08A24"), "r": ("m", "#F08A24", -0.13), "V": ("m", "#4E8A2E"), "y": ("x", "#FFD34D")},
+      t=["MMMMMM", "MMrrMM", "MrVVrM", "MrVVrM", "MMrrMM", "MMMMMM"],
+      g=["MrMMrM"] * 6,
+      d=["MrMMrM"] * 6)
+icone("Fête", "Lanterne", "lanterne",
+      {"R": ("m", "#D8322E"), "r": ("m", "#D8322E", -0.14), "l": ("v", "#FF9A5C", 0.08), "L": ("v", "#FFC27A", 0.12),
+       "G": ("m", "#E9B949"), "k": ("m", "#5A1E14")},
+      t=["GGGGGG", "GGGGGG", "GGkkGG", "GGkkGG", "GGGGGG", "GGGGGG"],
+      g=["GGGGGG", "RrRRrR", "RrllrR", "RrLLrR", "RrRRrR", "GGGGGG"],
+      d=["GGGGGG", "RrRRrR", "RrllrR", "RrLLrR", "RrRRrR", "GGGGGG"])
+
+# ---- Gourmandises
+icone("Gourmandises", "Pastèque", "pasteque",
+      {"G": ("m", "#2F8F3A"), "g": ("m", "#2F8F3A", -0.14), "C": ("m", "#C9E7A6"), "R": ("m", "#EC4A55"), "s": NOIR},
+      t=["CCCCCC", "CRRRRC", "CRsRRC", "CRRRsC", "CsRRRC", "CCCCCC"],
+      g=["GgGGgG"] * 6,
+      d=["GgGGgG"] * 6)
+icone("Gourmandises", "Beignet", "beignet",
+      {"P": ("m", "#F48FB1"), "D": ("m", "#D9A35F"), "h": ("m", "#D9A35F", -0.42), "y": ("x", "#FFE15A"), "b": ("x", "#5BB8F5"),
+       "w": ("x", "#FFFFFF"), "o": ("vide",)},
+      t=["PPyPPP", "PbPPwP", "PPhhPy", "PwhoPP", "PPPbPP", "PyPPwP"],
+      g=["PPPPPP", "PDPPDP", "DDDDDD", "DDDDDD", "DDDDDD", "DDDDDD"],
+      d=["PPPPPP", "DPPDPP", "DDDDDD", "DDDDDD", "DDDDDD", "DDDDDD"])
+icone("Gourmandises", "Chocolat", "chocolat",
+      {"M": ("m", "#6B3B22"), "c": ("m", "#6B3B22", -0.13), "P": ("m", "#7E3FB8"), "A": ("metal", "acier", 0.1)},
+      t=["MMcMMc", "MMcMMc", "cccccc", "MMcMMc", "MMcMMc", "cccccc"],
+      g=["MMcMMc", "cccccc", "AAAAAA", "PPPPPP", "PPPPPP", "PPPPPP"],
+      d=["MMcMMc", "cccccc", "AAAAAA", "PPPPPP", "PPPPPP", "PPPPPP"])
+icone("Gourmandises", "Gaufre", "gaufre",
+      {"L": ("m", "#E6AA52"), "D": ("m", "#E6AA52", -0.3), "d": ("m", "#E6AA52", -0.14), "B": ("v", "#FFF0A8"),
+       "S": ("m", "#B8661E", 0.05)},
+      t=["LLLLLL", "LDLDLD", "LLBBSL", "LDBBDS", "LLSSLL", "LDLSLD"],
+      g=["LLLSLL", "LdLSLd", "LLLLLL", "LdLdLd", "LLLLLL", "LdLdLd"],
+      d=["LLLLLL", "dLdLdL", "LLLLLL", "dLdLdL", "LLLLLL", "dLdLdL"])
+
+# ---- Objets
+icone("Objets", "Livres", "livres",
+      {"R": ("m", "#C8423B"), "B": ("m", "#3E6FC9"), "G": ("m", "#3E9A5C"), "y": ("v", "#F2C14E"), "c": ("m", "#F3E9D2")},
+      t=["RRRRRR", "RRRRRR", "RyyyyR", "RRRRRR", "RRRRRR", "RRRRRR"],
+      g=["RRRRRR", "RyRRyR", "BBBBBB", "ByBByB", "GGGGGG", "GyGGyG"],
+      d=["Rccccc", "RRRRRR", "Bccccc", "BBBBBB", "Gccccc", "GGGGGG"])
+
+# ---- Nature
+icone("Nature", "Bûche", "buche",
+      {"B": ("m", "#7E5232"), "b": ("m", "#7E5232", -0.13), "L": ("m", "#E2BF85"), "D": ("m", "#B98A52")},
+      t=["BBBBBB", "BLLLLB", "BLDDLB", "BLDDLB", "BLLLLB", "BBBBBB"],
+      g=["BbBBbB", "BbBBBb", "bBBbBB", "BBbBbB", "BbBBbB", "bBBbBB"],
+      d=["BBbBBb", "bBBbBB", "BbBBbB", "BBbBBb", "bBBbBB", "BbBBbB"])
+icone("Nature", "Champignon", "champignon",
+      {"R": ("m", "#D9343A"), "w": ("x", "#FFFFFF"), "S": ("m", "#F1E4C8"), "s": ("m", "#F1E4C8", -0.12)},
+      t=["RRRRRR", "RwRRwR", "RRRRRR", "RRwRRR", "RRRRwR", "RwRRRR"],
+      g=["RRwRRR", "RRRRwR", "sssssss"[:6], "SSSSSS", "SSSSSS", "SSSSSS"],
+      d=["RwRRRR", "RRRwRR", "ssssss", "SSSSSS", "SSSSSS", "SSSSSS"])
+icone("Nature", "Cactus", "cactus",
+      {"V": ("m", "#3F9A4A"), "v": ("m", "#3F9A4A", -0.13), "w": ("x", "#F4F6E8"), "p": ("v", "#F27EB0"),
+       "y": ("v", "#F6D23C")},
+      t=["VVVVVV", "VvVVvV", "VVppVV", "VVpyVV", "VvVVvV", "VVVVVV"],
+      g=["VvVVvV", "wvVVvV", "VvVwvV", "VvVVvw", "VvwVvV", "VvVVvV"],
+      d=["VvVVvV", "VvwVvV", "wvVVvV", "VvVVvw", "VvVwvV", "VvVVvV"])
+icone("Nature", "Cerisier", "cerisier",
+      {"P": ("m", "#F6BCD2"), "p": ("m", "#E890B3"), "w": ("x", "#FFF4F8")},
+      t=["PPpPPp", "PwpPPp", "ppPPpp", "PPpPwp", "PPpPPp", "ppPPpp"],
+      g=["PPpPPp", "PwpPPp", "ppPPpp", "PPpPwp", "PPpPPp", "ppPPpp"],
+      d=["pPPpPP", "pPwpPP", "ppPPpp", "pwPPpP", "pPPpPP", "ppPPpp"])
+icone("Nature", "Plage", "plage",
+      {"A": ("m", "#2FB5D9"), "a": ("m", "#2FB5D9", 0.1), "w": ("x", "#F2FBFF"), "S": ("m", "#EAD39A"), "s": ("m", "#EAD39A", -0.1)},
+      t=["AAAAAA", "AAaAAA", "AAAAaA", "wwwwww", "SSSSSS", "SSsSSS"],
+      g=["SSSSSS", "SsSSSS", "SSSSsS", "SSSSSS", "SsSSSS", "SSSSSS"],
+      d=["SSwAAA", "SSSwAA", "SSSSwA", "SSsSSS", "SSSSSS", "SsSSSS"])
+
+CADEAU_T = DESSUS_CADEAU
+CADEAU_F = FACE_CADEAU
+icone("Fête", "Pull de Noël", "pull",
+      {"R": ("m", "#C23A3A"), "W": ("m", "#F4F1EA"), "G": ("m", "#2E8048")},
+      t=["RRRRRR"] * 6,
+      g=["RRRRRR", "RRRRRR", "WRWRWR", "RWRWRW", "RRRRRR", "RRRRRR"],
+      d=["RRRRRR", "RRRRRR", "RWRWRW", "WRWRWR", "RRRRRR", "RRRRRR"])
+icone("Fête", "Cadeau violet", "cadeau-violet",
+      {"B": ("m", "#8E5BD9"), "R": ("metal", "acier", 0.15), "K": ("metal", "acier", 0.3)},
+      t=CADEAU_T, g=CADEAU_F, d=CADEAU_F, fond="B")
+icone("Fête", "Bougie", "bougie",
+      {"R": ("m", "#C8323A"), "W": ("m", "#F6EFE2"), "k": NOIR, "f": ("x", "#FFC93C"), "F": ("x", "#FF8A3D")},
+      t=["WWWWWW", "WWWWWW", "WWfFWW", "WWFkWW", "WWWWWW", "WWWWWW"],
+      g=["WWWWWW", "RWRRWR", "RWRRRR", "RRRRRR", "RRRRRR", "RRRRRR"],
+      d=["WWWWWW", "RRWRRW", "RRWRRR", "RRRRRR", "RRRRRR", "RRRRRR"])
+icone("Gourmandises", "Cookie", "cookie",
+      {"M": ("m", "#C98A4B"), "k": ("m", "#4A2A18")},
+      t=["MMMMMM", "MkMMMM", "MMMMkM", "MMkMMM", "kMMMMM", "MMMkMM"],
+      g=["MMMMMM", "MMkMMM", "MMMMMk", "MkMMMM", "MMMkMM", "MMMMMM"],
+      d=["MMMMMM", "MkMMMM", "MMMMkM", "MMkMMM", "MMMMMM", "kMMMkM"])
+icone("Gourmandises", "Burger", "burger",
+      {"B": ("m", "#D99A4E"), "w": ("x", "#FFF6E0"), "L": ("m", "#5DB846"), "C": ("m", "#F5C33B"), "P": ("m", "#5A3420")},
+      t=["BBBBBB", "BwBBwB", "BBBwBB", "BwBBBB", "BBBBwB", "BBBBBB"],
+      g=["BBBBBB", "BBBBBB", "LLLLLL", "CCCCCC", "PPPPPP", "BBBBBB"],
+      d=["BBBBBB", "BBBBBB", "LLLLLL", "CCCCCC", "PPPPPP", "BBBBBB"])
+icone("Objets", "Télé rétro", "tele",
+      {"M": ("m", "#D8CFBF"), "S": ("m", "#3D4A5C"), "s": ("m", "#6D84A3"), "k": NOIR, "l": ("m", "#D8CFBF", -0.15)},
+      t=["MMMMMM"] * 6,
+      g=["MMMMMM", "MSSSSM", "MSsSSM", "MSSSSM", "MSSSSM", "MMMMMM"],
+      d=["MMMMMM", "MlllkM", "MMMMMM", "MlllkM", "MMMMMM", "MMMMMM"])
+icone("Objets", "Coffre au trésor", "tresor",
+      {"W": ("m", "#7A4A2B"), "w": ("m", "#7A4A2B", -0.12), "G": ("m", "#E2B649"), "y": ("m", "#E2B649", 0.12), "k": NOIR},
+      t=["GGGGGG", "GWWWWG", "GwwwwG", "GWWWWG", "GwwwwG", "GGGGGG"],
+      g=["GWWWWG", "GwwwwG", "GGGGGG", "GWyyWG", "GwykwG", "GWWWWG"],
+      d=["GWWWWG", "GwwwwG", "GGGGGG", "GWWWWG", "GwwwwG", "GWWWWG"])
+icone("Objets", "Disquette", "disquette",
+      {"B": ("m", "#3563B8"), "A": ("metal", "acier", 0.15), "k": ("m", "#3563B8", -0.3), "W": ("m", "#F4F1EA"), "l": ("m", "#F4F1EA", -0.2)},
+      t=["BBBBBB"] * 6,
+      g=["BAAkAB", "BAAkAB", "BBBBBB", "BWWWWB", "BWllWB", "BWWWWB"],
+      d=["BBBBBB"] * 6)
+icone("Nature", "Ruche", "ruche",
+      {"H": ("m", "#E3AA3A"), "h": ("m", "#E3AA3A", -0.2), "k": ("m", "#3A2412"), "y": ("x", "#FFD23F"), "b": ("x", "#1E2127"),
+       "D": ("v", "#F7B733", 0.1)},
+      t=["hhhhhh", "hHHHHh", "hHhhHh", "hHhhHh", "hHHHHh", "hhhhhh"],
+      g=["HHDHHH", "hhDhhh", "HHDHHH", "hhhhhh", "HHkkHH", "hhkkhh"],
+      d=["HHHHDH", "hhhhDh", "HHHHHH", "hhhhhh", "HHHHHH", "hhhhhh"])
+
+
 # Numéros 0 à 9 (21/11, style D « ardoise bleutée ») : cube mat, chiffre blanc 3 × 5 sur la façade gauche,
 # colonnes 2 à 4, collé en haut (rangées 0 à 4) : il ne touche jamais le bas, sinon il disparaît sur fond blanc.
 CHIFFRES = {
@@ -317,12 +454,26 @@ def face_chiffre(c, x0=2):
     return ["".join(l) for l in g]
 
 
+# Cadre plus foncé sur le dessus et la face droite (23/11) : un numéro ne ressemble plus à un cube de couleur.
+CADRE = ["DDDDDD", "DMMMMD", "DMMMMD", "DMMMMD", "DMMMMD", "DDDDDD"]
 for c in "0123456789":
-    icone("Numéros", f"Numéro {c}", f"numero-{c}", {"M": ("m", "#66789A"), "x": ("x", "#FFFFFF")}, g=face_chiffre(c))
+    icone("Numéros", f"Numéro {c}", f"numero-{c}", {"M": ("m", "#66789A"), "D": ("m", "#66789A", -0.1), "x": ("x", "#FFFFFF")},
+          t=CADRE, g=face_chiffre(c), d=CADRE)
 
 
-ORDRE = ["Couleurs", "Numéros", "Serveurs", "Fête", "Gourmandises", "Objets", "Ambiances", "Personnages"]
-ICONES.sort(key=lambda ic: ORDRE.index(ic["groupe"]))
+# L'ordre de la fenêtre « Icône… » (le même que src/theme/icones.ts et ICONES de serveurs.rs).
+RANG = [
+    "graphite", "bleu", "indigo", "violet", "rose", "rouge", "orange", "jaune", "vert", "menthe",
+    "numero-0", "numero-1", "numero-2", "numero-3", "numero-4", "numero-5", "numero-6", "numero-7", "numero-8", "numero-9",
+    "serveur-acier", "serveur-titane", "serveur-noir", "serveur-dore", "serveur-orrose",
+    "serveur-rubis", "serveur-amethyste", "serveur-saphir", "serveur-diamant", "serveur-emeraude",
+    "cadeau-rouge", "cadeau-bleu", "cadeau-violet", "cadeau-vert", "pull", "gateau", "gateau-chocolat", "bougie", "citrouille", "lanterne",
+    "burger", "bento", "fromage", "pain", "pasteque", "cookie", "gaufre", "beignet", "chocolat", "guimauve",
+    "carton", "caisse", "tresor", "livres", "de", "damier", "tele", "camera", "disquette", "terminal",
+    "herbe", "buche", "champignon", "cactus", "cerisier", "ruche", "grenouille", "plage", "aquarium", "hiver",
+]
+assert sorted(RANG) == sorted(ic["cle"] for ic in ICONES), "RANG et les icônes ne correspondent pas"
+ICONES.sort(key=lambda ic: RANG.index(ic["cle"]))
 PROPOSITIONS = []
 
 

@@ -24,6 +24,13 @@ L'installeur est signé : BHOST refuse une mise à jour qui n'est pas signée av
 4. La version apparaît dans Releases, avec **BHOST-Setup.exe** : c'est le fichier à télécharger depuis le site
    (`https://github.com/rerebxrn/bhost/releases/latest/download/BHOST-Setup.exe`). Les BHOST installés trouvent la mise à jour.
 
+## Versions en avance (BHOST+)
+
+Les abonnés qui cochent Réglages › Versions en avance lisent d’abord la release au tag `avance`
+(`…/releases/download/avance/latest.json`), puis la release normale.
+Pour donner une version en avance : publie-la en « pre-release » avec le tag `avance` (remplace l’ancienne).
+À chaque version normale, remets aussi la release `avance` à jour : sinon elle paraît plus vieille et rien ne se propose.
+
 ## BHOST Setup sur ton PC
 
 Pour essayer l'installeur sans publier (PowerShell, dans le dossier du projet) :

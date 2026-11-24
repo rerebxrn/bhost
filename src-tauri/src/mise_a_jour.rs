@@ -14,9 +14,18 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::signature::{CLE_PUBLIQUE, DEPOT};
 
-/// Où lire la dernière version.
-fn adresse() -> Option<String> {
-    (!DEPOT.is_empty()).then(|| format!("https://github.com/{DEPOT}/releases/latest/download/latest.json"))
+/// Où lire la dernière version. Avec BHOST+ › Versions en avance : la release « avance » d'abord
+/// (à republier aussi à chaque version normale, sinon elle paraît plus vieille et rien ne se propose).
+fn adresses(avance: bool) -> Vec<String> {
+    if DEPOT.is_empty() {
+        return Vec::new();
+    }
+    let normale = format!("https://github.com/{DEPOT}/releases/latest/download/latest.json");
+    if avance {
+        vec![format!("https://github.com/{DEPOT}/releases/download/avance/latest.json"), normale]
+    } else {
+        vec![normale]
+    }
 }
 
 /// La mise à jour trouvée par la dernière recherche (pour l'installer ensuite).
@@ -35,12 +44,13 @@ pub struct VueMaj {
 }
 
 fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
-    let (Some(adresse), false) = (adresse(), CLE_PUBLIQUE.is_empty()) else {
+    let adresses = adresses(crate::plus::en_avance(app));
+    if adresses.is_empty() || CLE_PUBLIQUE.is_empty() {
         return Err("Les mises à jour arrivent bientôt.".into());
-    };
-    let adresse = adresse.parse().map_err(|_| "Adresse des mises à jour invalide.".to_string())?;
+    }
+    let adresses = adresses.iter().map(|a| a.parse()).collect::<Result<Vec<_>, _>>().map_err(|_| "Adresse des mises à jour invalide.".to_string())?;
     app.updater_builder()
-        .endpoints(vec![adresse])
+        .endpoints(adresses)
         .and_then(|b| b.pubkey(CLE_PUBLIQUE).timeout(std::time::Duration::from_secs(30)).build())
         .map_err(|_| "La recherche n’a pas pu démarrer.".to_string())
 }
@@ -106,9 +116,11 @@ mod tests {
     fn adresse_github() {
         // Tant que le dépôt n'est pas noté, pas d'adresse (et pas de clé = pas d'installation possible).
         if super::DEPOT.is_empty() {
-            assert_eq!(super::adresse(), None);
+            assert!(super::adresses(true).is_empty());
         } else {
-            assert!(super::adresse().unwrap().ends_with("/releases/latest/download/latest.json"));
+            assert!(super::adresses(false)[0].ends_with("/releases/latest/download/latest.json"));
+            let avance = super::adresses(true);
+            assert!(avance[0].ends_with("/releases/download/avance/latest.json") && avance[1] == super::adresses(false)[0]);
         }
     }
 }

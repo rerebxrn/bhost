@@ -80,7 +80,6 @@ export default function SelecteurMachine({ machines, active, onChoisir, onAjoute
         aria-haspopup="menu"
         aria-expanded={ouvert}
         aria-label={`Machine : ${nom}${m ? ` (${ETATS[m.etat]})` : ""}`}
-        title={nom}
         onClick={() => (ouvert ? fermer() : setOuvert(true))}
       >
         <span className="ic">{m ? <IconServer2 size={15} stroke={1.8} aria-hidden /> : <IconDeviceDesktop size={15} stroke={1.8} aria-hidden />}</span>

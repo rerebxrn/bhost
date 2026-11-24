@@ -12,7 +12,7 @@ const DOMAINE: &str = "bhost.test";
 
 async fn relais() -> (SocketAddr, SocketAddr) {
     let local = "127.0.0.1:0".parse().unwrap();
-    let (j, a, _) = demarrer(Reglages { domaine: DOMAINE.into(), joueurs: local, agents: local, registre: None }).await.unwrap();
+    let (j, a, _) = demarrer(Reglages::simples(DOMAINE, local, local, None)).await.unwrap();
     (j, a)
 }
 
@@ -367,4 +367,70 @@ async fn ancienne_version_sans_machines() {
     let mut ligne = String::new();
     timeout(Duration::from_secs(5), f.read_line(&mut ligne)).await.unwrap().unwrap();
     assert_eq!(protocole::lire_du_relais(&ligne), Some(DuRelais::Non { raison: "version".into() }));
+}
+
+/// Un joueur se connecte (poignée de main + un mot) et attend l'écho : vrai s'il est passé.
+async fn entrer(joueurs: SocketAddr, hote: &str) -> (bool, TcpStream) {
+    let mut j = TcpStream::connect(joueurs).await.unwrap();
+    let mut envoi = poignee(hote, 2);
+    envoi.extend_from_slice(b"salut");
+    j.write_all(&envoi).await.unwrap();
+    let mut recu = vec![0u8; envoi.len()];
+    let passe = matches!(timeout(Duration::from_secs(5), j.read_exact(&mut recu)).await, Ok(Ok(_))) && recu == envoi;
+    (passe, j)
+}
+
+#[tokio::test]
+async fn relais_plein_les_serveurs_bhost_plus_passent_encore() {
+    // 5 places : au-delà de 4 (80 %), seuls les serveurs BHOST+ font entrer leurs joueurs.
+    let plus = SigningKey::from_bytes(&[42; 32]);
+    let local = "127.0.0.1:0".parse().unwrap();
+    let mut reglages = Reglages::simples(DOMAINE, local, local, None);
+    reglages.joueurs_max = 5;
+    reglages.plus_cle = Some(protocole::hexa(plus.verifying_key().as_bytes()));
+    let (joueurs, agents, relais) = demarrer(reglages).await.unwrap();
+    let serveur = echo().await;
+
+    // « gratuit » sans jeton ; « abonne » avec un jeton signé par le service BHOST+ ; « faux » avec un jeton d'une autre clé.
+    let gratuit = bhost(agents, "gratuit").await;
+    servir(gratuit, agents, serveur);
+    let (ok, mut abonne) = presenter(agents, "abonne", 8, false).await;
+    assert!(matches!(ok, DuRelais::Ok { .. }));
+    let cle_abonne = protocole::hexa(SigningKey::from_bytes(&[8; 32]).verifying_key().as_bytes());
+    let expire = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3600;
+    let signature = protocole::hexa(&plus.sign(protocole::a_signer_priorite(&cle_abonne, expire).as_bytes()).to_bytes());
+    abonne.get_mut().write_all(protocole::ecrire_de_bhost(&DeBhost::Priorite { expire, signature }).as_bytes()).await.unwrap();
+    servir(abonne, agents, serveur);
+    let (ok, mut faux) = presenter(agents, "faux", 9, false).await;
+    assert!(matches!(ok, DuRelais::Ok { .. }));
+    let cle_faux = protocole::hexa(SigningKey::from_bytes(&[9; 32]).verifying_key().as_bytes());
+    let signature = protocole::hexa(&SigningKey::from_bytes(&[1; 32]).sign(protocole::a_signer_priorite(&cle_faux, expire).as_bytes()).to_bytes());
+    faux.get_mut().write_all(protocole::ecrire_de_bhost(&DeBhost::Priorite { expire, signature }).as_bytes()).await.unwrap();
+    servir(faux, agents, serveur);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let mut gardes = Vec::new();
+    for _ in 0..4 {
+        let (passe, j) = entrer(joueurs, "gratuit.bhost.test").await;
+        assert!(passe);
+        gardes.push(j);
+    }
+    assert_eq!(relais.relayes(), 4);
+    // Plein pour les serveurs gratuits (et pour un jeton mal signé) : écran « Déconnecté ».
+    for hote in ["gratuit.bhost.test", "faux.bhost.test"] {
+        let mut j = TcpStream::connect(joueurs).await.unwrap();
+        j.write_all(&poignee(hote, 2)).await.unwrap();
+        let mut recu = Vec::new();
+        timeout(Duration::from_secs(5), j.read_to_end(&mut recu)).await.unwrap().unwrap();
+        assert_eq!(recu, protocole::refus_connexion("Le relais BHOST est plein. Réessaie dans quelques minutes."));
+    }
+    // Le serveur BHOST+ passe encore.
+    let (passe, j) = entrer(joueurs, "abonne.bhost.test").await;
+    assert!(passe, "le serveur BHOST+ garde ses places");
+    gardes.push(j);
+    // Deux joueurs partent : on repasse sous 80 %, les serveurs gratuits refont entrer.
+    gardes.drain(..2);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(relais.relayes(), 3);
+    assert!(entrer(joueurs, "gratuit.bhost.test").await.0);
 }

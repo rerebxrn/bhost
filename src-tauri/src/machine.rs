@@ -600,6 +600,11 @@ fn demarrer_lien(canal: crate::chiffre::Canal, mut lecteur: BufReader<crate::chi
 pub async fn machine_appel(app: AppHandle, machine: String, commande: String, args: Value) -> Result<Value, Value> {
     crate::hote::async_runtime::spawn_blocking(move || {
         let etat = crate::hote::Manager::state::<crate::Etat>(&app);
+        // Les icônes payantes viennent avec BHOST+ : vérifié ici, la machine ne connaît pas l'abonnement.
+        #[cfg(feature = "bureau")]
+        if commande == "couleur_serveur" && args["couleur"].as_str().is_some_and(|c| !crate::serveurs::icone_gratuite(c)) && crate::plus::verrouille(&app) {
+            return Err(Value::String("Cette icône vient avec BHOST+.".into()));
+        }
         let m = lire(&etat.dossier).into_iter().find(|m| m.id == machine).ok_or_else(|| Value::String("Cette machine n’est plus reliée.".into()))?;
         let l = lien(&app, &m).map_err(Value::String)?;
         // Une création de serveur ou une sauvegarde peut durer : jusqu'à 30 minutes.

@@ -1,0 +1,28 @@
+[package]
+name = "bhost-plus"
+version = "0.1.0"
+description = "BHOST+ : ce que Polar ne dit pas à l'appli (les autres PC, le paiement en retard) et le jeton du relais prioritaire."
+authors = ["Thomas"]
+edition = "2024"
+
+[[bin]]
+name = "bhost-plus"
+path = "src/main.rs"
+
+[dependencies]
+# Un petit serveur HTTP, derrière Caddy (HTTPS) sur plus.bhost.app.
+tiny_http = "0.12"
+# Les demandes à Polar (HTTPS).
+ureq = { version = "3", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Le jeton du relais prioritaire : signé ici, vérifié par le relais.
+ed25519-dalek = "2.1"
+getrandom = "0.3"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true
